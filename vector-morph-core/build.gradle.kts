@@ -4,11 +4,6 @@ plugins {
 }
 
 val releaseVersion = providers.gradleProperty("VERSION_NAME").get()
-val pomLicenseName = providers.gradleProperty("POM_LICENSE_NAME").orNull
-val pomLicenseUrl = providers.gradleProperty("POM_LICENSE_URL").orNull
-require(pomLicenseName.isNullOrBlank() == pomLicenseUrl.isNullOrBlank()) {
-    "Set both POM_LICENSE_NAME and POM_LICENSE_URL, or leave both unset until the project license is chosen."
-}
 
 mavenPublishing {
     coordinates("io.github.mohamed-dev-ui", "vector-morph-core", releaseVersion)
@@ -19,14 +14,11 @@ mavenPublishing {
         name.set("ImageVector Morph Core")
         description.set("Geometry normalization, path matching, and animation timelines for ImageVector morphing")
         url.set("https://github.com/Mohamed-dev-ui/IMorpher")
-        pomLicenseName?.takeIf(String::isNotBlank)?.let { licenseName ->
-            pomLicenseUrl?.let { licenseUrl ->
-                licenses {
-                    license {
-                        name.set(licenseName)
-                        url.set(licenseUrl)
-                    }
-                }
+        licenses {
+            license {
+                name.set("The Apache License, Version 2.0")
+                url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+                distribution.set("repo")
             }
         }
         developers {

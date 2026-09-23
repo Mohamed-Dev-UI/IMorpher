@@ -13,19 +13,29 @@ The repository is split into two Android library modules:
 
 ## Installation
 
-This repository currently builds as a Gradle multi-module project and does not publish Maven
-coordinates. In a consuming Android project, include both modules and add:
+Add Maven Central to the repositories used by your Android project and depend on the Compose
+artifact:
 
 ```kotlin
+repositories {
+    google()
+    mavenCentral()
+}
+
 dependencies {
-    implementation(project(":vector-morph-compose"))
-    // The Compose module exposes core APIs transitively.
+    implementation("io.github.mohamed-dev-ui:vector-morph-compose:<version>")
 }
 ```
 
-The Compose module targets Android API 23+ and uses the Compose BOM declared in
-`gradle/libs.versions.toml`. The modules are Kotlin/Android libraries, so consumers also need
-the Kotlin Compose compiler plugin enabled in their app module.
+The Compose artifact exposes core APIs transitively. It targets Android API 23+ and uses Jetpack
+Compose. Replace `<version>` with the latest release available from Maven Central. Enable the
+Kotlin Compose compiler plugin in the consuming Android app module.
+
+## Demo app
+
+The `app` module contains a runnable showcase for state-driven morphs, manual progress, directional
+stroke drawing, keyframe timelines, group transforms, gradient interpolation, and reduced motion.
+Open the project in Android Studio and run the `app` configuration.
 
 ## Basic morph
 
@@ -301,64 +311,6 @@ the viewport aspect ratios differ, that normalization stretches target geometry 
 matching aspect ratios when that is not desired. Intrinsic layout dimensions remain caller
 controlled.
 
-## Publishing to Maven Central
-
-Publish the two Android library modules (`vector-morph-core` and `vector-morph-compose`); the demo
-`app` is not published. Both library modules are configured with the
-`com.vanniktech.maven.publish` plugin and the verified group ID `io.github.mohamed-dev-ui`. They
-publish as `vector-morph-core` and `vector-morph-compose`, with the shared version read from
-`VERSION_NAME` in `gradle.properties`. The Compose module exposes core through an API dependency,
-so consumers can usually depend on `vector-morph-compose` alone.
-
-The project URL and SCM metadata currently point at
-`https://github.com/Mohamed-dev-ui/IMorpher`; update these in both library build scripts if the
-public repository uses a different URL. Maven Central requires the project's actual license in
-both its source tree and POM metadata. Once you choose a license, add the matching `LICENSE` file
-and set both properties in your user Gradle properties file:
-
-```properties
-POM_LICENSE_NAME=The license's official name
-POM_LICENSE_URL=https://the-license-url
-```
-
-Central Portal requires a verified namespace, valid POM metadata, and signed release files. Create a
-Central Portal account and user token, create and publish a GPG public key, and keep the publishing
-token and private signing key outside the repository. For example, set these in
-`%USERPROFILE%\.gradle\gradle.properties` on Windows:
-
-Create a Central Portal account, register/verify the namespace, and generate a Portal user token.
-Create and publish a GPG signing key as required by Central. Keep the token and private key outside
-the repository, for example in `%USERPROFILE%\.gradle\gradle.properties` on Windows:
-
-```properties
-mavenCentralUsername=PORTAL_TOKEN_USERNAME
-mavenCentralPassword=PORTAL_TOKEN_PASSWORD
-signingInMemoryKey=ARMORED_PRIVATE_KEY
-signingInMemoryKeyPassword=PRIVATE_KEY_PASSWORD
-signingInMemoryKeyId=GPG_KEY_ID
-```
-
-First publish locally and verify the generated artifacts and dependency metadata. The local publish
-tasks are available now; the POM license entries are omitted until the license properties above
-are set:
-
-```shell
-./gradlew :vector-morph-core:publishToMavenLocal :vector-morph-compose:publishToMavenLocal
-```
-
-For a release, change `VERSION_NAME` to a non-SNAPSHOT version, run the tests and release builds,
-then upload a deployment:
-
-```shell
-./gradlew :vector-morph-core:testDebugUnitTest :vector-morph-compose:compileReleaseKotlin
-./gradlew publishToMavenCentral
-```
-
-Review the deployment in the Central Portal and publish it after validation succeeds. Once released,
-a version is immutable; publish a new version for fixes. Allow time for Central's sync before testing
-the consumer dependency. For an initial release, prefer manual Portal release so you can inspect
-validation results before publishing.
-
 ## Tests
 
 Core regression tests cover path command normalization, cubic subdivision, winding/start-point
@@ -374,5 +326,7 @@ semantics. Run the JVM and compile checks with:
 ```
 
 Run the device-side screenshot test with `./gradlew :vector-morph-compose:connectedDebugAndroidTest`.
-There is no standalone benchmark module yet; the core suite includes a repeated-evaluation smoke
-test to protect the allocation-reuse path.
+
+## License
+
+This project is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for the full text.
