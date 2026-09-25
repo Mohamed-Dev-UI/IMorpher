@@ -38,6 +38,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontFamily
@@ -102,6 +103,7 @@ private fun MorphShowcaseScreen() {
             }
 
             StateMorphShowcase()
+            TintShowcase()
             ManualMorphShowcase()
             DrawRevealShowcase()
             TimelineShowcase()
@@ -150,10 +152,57 @@ private fun StateMorphShowcase() {
 }
 
 @Composable
+private fun TintShowcase() {
+    var selected by remember { mutableStateOf(false) }
+    ShowcaseCard(
+        number = "02",
+        title = "Color and gradient tint",
+        subtitle = "Tints transition between from/to endpoints and replace the icon's paint.",
+        api = "MorphIcon(from, to, selected, tintFrom, tintTo)",
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            IconTile {
+                MorphIcon(
+                    from = ShowcaseVectors.HomeOutline,
+                    to = ShowcaseVectors.HomeFilled,
+                    selected = selected,
+                    tintFrom = Color(0xFF536DFE),
+                    tintTo = Color(0xFF00BCD4),
+                    contentDescription = if (selected) "Home selected" else "Home not selected",
+                    width = 48.dp,
+                    height = 48.dp,
+                )
+            }
+            IconTile {
+                MorphIcon(
+                    from = ShowcaseVectors.HomeOutline,
+                    to = ShowcaseVectors.HomeFilled,
+                    selected = selected,
+                    tintFrom = Brush.linearGradient(
+                        colors = listOf(Color(0xFF536DFE), Color(0xFF00BCD4)),
+                    ),
+                    tintTo = Brush.linearGradient(
+                        colors = listOf(Color(0xFFFFC107), Color(0xFFFF5722)),
+                    ),
+                    contentDescription = "Gradient tinted home",
+                    width = 48.dp,
+                    height = 48.dp,
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Solid tint · gradient tint", fontWeight = FontWeight.SemiBold)
+                Text(if (selected) "Selected" else "Not selected", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(checked = selected, onCheckedChange = { selected = it })
+        }
+    }
+}
+
+@Composable
 private fun ManualMorphShowcase() {
     var progress by remember { mutableStateOf(0f) }
     ShowcaseCard(
-        number = "02",
+        number = "03",
         title = "Manually scrub a morph",
         subtitle = "Use MorphVector when a gesture, pager, or scroll position owns progress.",
         api = "MorphVector(from, to, progress)",
@@ -184,7 +233,7 @@ private fun ManualMorphShowcase() {
 private fun DrawRevealShowcase() {
     var replayKey by remember { mutableIntStateOf(0) }
     ShowcaseCard(
-        number = "03",
+        number = "04",
         title = "Draw an icon with a pen",
         subtitle = "Named paths get their own reveal interval, anchor, and direction.",
         api = "DrawIcon + path(…).strokeReveal(…)",
@@ -220,7 +269,7 @@ private fun TimelineShowcase() {
     val definition = remember { VectorAnimationDefinition(ShowcaseVectors.LayeredSpark, LayeredTimelineAnimation) }
 
     ShowcaseCard(
-        number = "04",
+        number = "05",
         title = "Keyframes, groups, gradients, transforms",
         subtitle = "One reusable definition combines vector keyframes with named path and group tracks.",
         api = "VectorAnimator(definition, progress)",
@@ -267,7 +316,7 @@ private fun TimelineShowcase() {
 private fun ReducedMotionShowcase() {
     var selected by remember { mutableStateOf(false) }
     ShowcaseCard(
-        number = "05",
+        number = "06",
         title = "Reduced-motion behavior",
         subtitle = "The caller keeps touch and semantics; only visual motion changes.",
         api = "MorphIcon(motionPreference = …)",

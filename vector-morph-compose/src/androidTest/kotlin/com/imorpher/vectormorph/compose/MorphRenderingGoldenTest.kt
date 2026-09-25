@@ -2,6 +2,7 @@ package com.imorpher.vectormorph.compose
 
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.toPixelMap
@@ -219,6 +220,111 @@ class MorphRenderingGoldenTest {
         composeRule.mainClock.advanceTimeBy(400)
         composeRule.waitForIdle()
         assertEquals("retarget must settle on the from-icon", Color.Red, centerPixel())
+    }
+
+    @Test
+    fun colorTintTransitionsBetweenEndpoints() {
+        composeRule.mainClock.autoAdvance = false
+        val vector = solidVector("tinted", Color.Red)
+        val tintFrom = Color(0xFF12A4D9)
+        val tintTo = Color(0xFF00C853)
+        val animation = vectorAnimationSpec {
+            at(0f) { alpha = 0.5f }
+            at(1f) { alpha = 0.5f }
+        }
+
+        composeRule.setContent {
+            VectorAnimator(
+                animation = VectorAnimationDefinition(vector, animation),
+                progress = 0.5f,
+                tintFrom = tintFrom,
+                tintTo = tintTo,
+                contentDescription = "tinted icon",
+                width = 24.dp,
+                height = 24.dp,
+            )
+        }
+        composeRule.waitForIdle()
+
+        val pixels = composeRule.onNodeWithContentDescription("tinted icon").captureToImage().toPixelMap()
+        val background = pixels[1, 1]
+        val center = pixels[pixels.width / 2, pixels.height / 2]
+        // At progress 0.5 the tint sits halfway between the endpoints: the center pixel must
+        // project halfway between the surface color and that midpoint (alpha preserved), and
+        // never show the icon's own red paint.
+        val midpoint = Color(
+            tintFrom.red * 0.5f + tintTo.red * 0.5f,
+            tintFrom.green * 0.5f + tintTo.green * 0.5f,
+            tintFrom.blue * 0.5f + tintTo.blue * 0.5f,
+        )
+        val projected = blendFraction(center, background, midpoint)
+        assertEquals("tint must transition between endpoint colors at the icon's alpha", 0.5f, projected, 0.05f)
+        assertTrue("tinted icon must not show red paint", center.red < midpoint.red + 0.1f)
+    }
+
+    @Test
+    fun defaultGradientBrushTintsWithInfiniteSentinelEndpoints() {
+        val vector = solidVector("sentinel-tinted", Color.Red)
+
+        composeRule.setContent {
+            // Brush.linearGradient(colors) leaves start/end at Compose's infinite sentinels;
+            // interpolating them raw used to crash LinearGradient.nativeCreate.
+            MorphVector(
+                from = vector,
+                to = vector,
+                progress = 0.25f,
+                tintFrom = Brush.linearGradient(listOf(Color.Red, Color.Blue)),
+                tintTo = Brush.linearGradient(listOf(Color.Green, Color.Cyan)),
+                contentDescription = "sentinel tinted icon",
+                width = 24.dp,
+                height = 24.dp,
+            )
+        }
+        composeRule.waitForIdle()
+
+        val pixels = composeRule.onNodeWithContentDescription("sentinel tinted icon").captureToImage().toPixelMap()
+        val center = pixels[pixels.width / 2, pixels.height / 2]
+        // Center of a red→blue axis is mid-blend; tintTo's green pulls the blend toward it
+        // at progress 0.25 — assert a purple-ish, green-tinted mix rather than any endpoint.
+        assertTrue("center must sample the resolved gradient: $center", center.red in 0.3f..0.7f)
+        assertTrue("center must sample the resolved gradient: $center", center.blue in 0.3f..0.7f)
+    }
+
+    @Test
+    fun brushTintTransitionsBetweenEndpointBrushes() {
+        val vector = solidVector("gradient-tinted", Color.Red)
+
+        composeRule.setContent {
+            MorphVector(
+                from = vector,
+                to = vector,
+                progress = 0.5f,
+                tintFrom = Brush.horizontalGradient(listOf(Color.Red, Color.Blue)),
+                tintTo = Brush.horizontalGradient(listOf(Color.Yellow, Color.Black)),
+                contentDescription = "gradient tinted icon",
+                width = 24.dp,
+                height = 24.dp,
+            )
+        }
+        composeRule.waitForIdle()
+
+        val pixels = composeRule.onNodeWithContentDescription("gradient tinted icon").captureToImage().toPixelMap()
+        val center = pixels[pixels.width / 2, pixels.height / 2]
+        // Same-kind gradients interpolate per stop, so the center samples the lerp of both
+        // gradients' midpoints (red↔yellow, blue↔black) — never the icon's solid red paint
+        // and never either endpoint look.
+        assertTrue("center must blend both gradient endpoints: $center", center.red in 0.6f..1f)
+        assertTrue("center must blend both gradient endpoints: $center", center.green in 0.2f..0.65f)
+        assertTrue("center must blend both gradient endpoints: $center", center.blue < 0.55f)
+    }
+
+    /** Projects [pixel] onto the background→tint axis: 0 = background, 1 = full tint. */
+    private fun blendFraction(pixel: Color, background: Color, tint: Color): Float {
+        val delta = listOf(tint.red - background.red, tint.green - background.green, tint.blue - background.blue)
+        val denom = delta.map { it * it }.sum()
+        if (denom <= 1e-6f) return 0f
+        val channels = listOf(pixel.red - background.red, pixel.green - background.green, pixel.blue - background.blue)
+        return channels.zip(delta) { c, d -> c * d }.sum() / denom
     }
 
     private fun centerPixel(): Color {

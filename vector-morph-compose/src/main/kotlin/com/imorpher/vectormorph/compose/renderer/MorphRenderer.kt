@@ -1,14 +1,18 @@
 package com.imorpher.vectormorph.compose.renderer
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.Color
+import com.imorpher.vectormorph.core.gradients.BrushSpec
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -83,13 +87,36 @@ class MorphRenderer {
     private var cachedRenderOrderKeep = true
     private var cachedRenderOrder: IntArray = IntArray(0)
 
-    /** Draws one frame. */
+    /** Reused paint for the tint saveLayer (kept here so tinting allocates nothing per frame). */
+    private val tintLayerPaint = Paint()
+
+    // Tint endpoint specs are derived from caller values (Color/Brush); cache them so the
+    // reflective BrushSpec extraction runs once per distinct (value, draw size) pair.
+    private var cachedTintFromSource: Any? = null
+    private var cachedTintFromSize: Long = 0L
+    private var cachedTintFromSpec: BrushSpec? = null
+    private var cachedTintToSource: Any? = null
+    private var cachedTintToSize: Long = 0L
+    private var cachedTintToSpec: BrushSpec? = null
+
+    /**
+     * Draws one frame.
+     *
+     * When endpoint tints are present ([tintFrom]/[tintTo]: [Color] or [Brush] values, null
+     * disables that endpoint), the icon is drawn into an offscreen layer and repainted with the
+     * tint interpolated between the endpoints at the current progress: every painted pixel takes
+     * the tint color/brush while the icon's own alpha (fades, crossfades, reveals, antialiased
+     * edges) is preserved. Tint gradient coordinates resolve against the icon's layout bounds,
+     * matching `Modifier.background(brush)`.
+     */
     fun render(
         drawScope: DrawScope,
         plan: MorphPlan,
         frame: EvaluatedFrame,
         progress: Float,
         config: MorphConfiguration,
+        tintFrom: Any? = null,
+        tintTo: Any? = null,
     ) {
         val p = progress.coerceIn(0f, 1f)
         ensurePlanScratch(plan)
@@ -103,19 +130,166 @@ class MorphRenderer {
         val dx = (drawScope.size.width - vw * uniform) / 2f
         val dy = (drawScope.size.height - vh * uniform) / 2f
 
-        drawScope.withTransform({
-            translate(dx, dy)
-            scale(uniform, uniform, pivot = Offset.Zero)
-        }) {
-            val vAlpha = frame.vectorProps[PropKey.ALPHA.ordinal].takeUnless { it.isNaN() } ?: 1f
-            applyVectorTransform(frame, vw, vh) {
-                val order = renderOrder(plan, config)
-                for (pairIndex in order) {
-                    drawPair(plan.pairs[pairIndex], plan, frame, p, config, vAlpha)
+        val vAlpha = frame.vectorProps[PropKey.ALPHA.ordinal].takeUnless { it.isNaN() } ?: 1f
+        val tintFromSpec = tintSpecOf(tintFrom, drawScope.size, fromEndpoint = true)
+        val tintToSpec = tintSpecOf(tintTo, drawScope.size, fromEndpoint = false)
+        val tintResult = if (tintFromSpec != null || tintToSpec != null) {
+            GradientInterpolator.interpolate(tintFromSpec, tintToSpec, p, config.colorSpace)
+        } else null
+        val order = renderOrder(plan, config)
+
+        fun drawIconContents() {
+            drawScope.withTransform({
+                translate(dx, dy)
+                scale(uniform, uniform, pivot = Offset.Zero)
+            }) {
+                applyVectorTransform(frame, vw, vh) {
+                    for (pairIndex in order) {
+                        drawPair(plan.pairs[pairIndex], plan, frame, p, config, vAlpha)
+                    }
                 }
-                config.debug?.let { drawDebugOverlay(plan, it) }
             }
         }
+
+        fun drawDebug() {
+            val debug = config.debug ?: return
+            drawScope.withTransform({
+                translate(dx, dy)
+                scale(uniform, uniform, pivot = Offset.Zero)
+            }) {
+                applyVectorTransform(frame, vw, vh) { drawDebugOverlay(plan, debug) }
+            }
+        }
+
+        if (tintResult == null) {
+            drawIconContents()
+            drawDebug()
+            return
+        }
+
+        // Offscreen layer: draw the icon, then repaint it with the tint while preserving
+        // per-pixel alpha, so fades, reveals, and edges survive. The layer is created before
+        // any transform is applied and the tint rects are drawn after withTransform has
+        // restored the canvas matrix, so tint gradient coordinates resolve against the icon's
+        // layout bounds — the same convention as Modifier.background(brush). Padding covers
+        // strokes/group transforms that leave the viewport.
+        //
+        // Crossfading endpoint tints (mismatched gradient kinds, custom brushes, or a null
+        // endpoint) uses SrcIn for the from-tint and SrcAtop for the to-tint so the two legs
+        // premultiply exactly (mix of colors at the icon's own alpha) instead of the
+        // double-attenuation two SrcIn passes would produce.
+        val canvas = drawScope.drawContext.canvas
+        val layerRect = Rect(
+            -dx - uniform * vw,
+            -dy - uniform * vh,
+            drawScope.size.width + uniform * vw,
+            drawScope.size.height + uniform * vh,
+        )
+        canvas.saveLayer(layerRect, tintLayerPaint)
+        try {
+            drawIconContents()
+            when (tintResult) {
+                is GradientInterpolator.Result.Interpolated -> drawScope.drawRect(
+                    brush = tintResult.brush,
+                    topLeft = Offset.Zero,
+                    size = drawScope.size,
+                    alpha = tintResult.alpha,
+                    blendMode = BlendMode.SrcIn,
+                )
+                is GradientInterpolator.Result.Crossfade -> {
+                    drawScope.drawRect(
+                        brush = tintResult.fromBrush,
+                        topLeft = Offset.Zero,
+                        size = drawScope.size,
+                        blendMode = BlendMode.SrcIn,
+                    )
+                    drawScope.drawRect(
+                        brush = tintResult.toBrush,
+                        topLeft = Offset.Zero,
+                        size = drawScope.size,
+                        alpha = tintResult.progress,
+                        blendMode = BlendMode.SrcAtop,
+                    )
+                }
+                GradientInterpolator.Result.None -> Unit
+            }
+        } finally {
+            canvas.restore()
+        }
+        drawDebug()
+    }
+
+    /**
+     * Resolves a caller tint endpoint ([Color], [Brush], or null) into an interpolatable spec.
+     *
+     * Compose callers routinely pass default-parameter gradient brushes whose coordinates are
+     * sentinels — `Brush.linearGradient(colors)` ends at [Offset.Infinite],
+     * `Brush.radialGradient(colors)` centers at [Offset.Unspecified] (NaN) with an infinite
+     * radius. Interpolating those raw values lerps Inf→NaN and crashes
+     * `LinearGradient.nativeCreate`, so every non-finite coordinate is resolved against the
+     * draw size here, before caching and interpolation.
+     */
+    private fun tintSpecOf(value: Any?, drawSize: Size, fromEndpoint: Boolean): BrushSpec? {
+        val sizeKey = drawSize.packedValue
+        if (fromEndpoint) {
+            if (value === cachedTintFromSource && sizeKey == cachedTintFromSize) return cachedTintFromSpec
+            cachedTintFromSource = value
+            cachedTintFromSize = sizeKey
+            cachedTintFromSpec = resolveSpec(value, drawSize)
+            return cachedTintFromSpec
+        }
+        if (value === cachedTintToSource && sizeKey == cachedTintToSize) return cachedTintToSpec
+        cachedTintToSource = value
+        cachedTintToSize = sizeKey
+        cachedTintToSpec = resolveSpec(value, drawSize)
+        return cachedTintToSpec
+    }
+
+    private fun resolveSpec(value: Any?, drawSize: Size): BrushSpec? = when (value) {
+        null -> null
+        is Color -> BrushSpec.Solid(value)
+        is Brush -> BrushSpec.from(value)?.let { resolveFiniteCoordinates(it, drawSize) }
+        else -> null
+    }
+
+    /**
+     * Substitutes non-finite gradient geometry with layout-sized values, axis by axis and
+     * direction preserving: a lone infinite endpoint extends the other by one full span, and
+     * two infinite endpoints on an axis span the area (0 → w/h), mirroring how Compose itself
+     * resolves `Offset.Infinite` defaults when painting.
+     */
+    private fun resolveFiniteCoordinates(spec: BrushSpec, drawSize: Size): BrushSpec {
+        val w = drawSize.width
+        val h = drawSize.height
+        return when (spec) {
+            is BrushSpec.Linear -> {
+                val startX = resolveAxis(spec.startX, spec.endX, w)
+                val endX = resolveAxis(spec.endX, spec.startX, w)
+                val startY = resolveAxis(spec.startY, spec.endY, h)
+                val endY = resolveAxis(spec.endY, spec.startY, h)
+                spec.copy(startX = startX, endX = endX, startY = startY, endY = endY)
+            }
+            is BrushSpec.Radial -> spec.copy(
+                centerX = spec.centerX.takeIf { it.isFinite() } ?: w * 0.5f,
+                centerY = spec.centerY.takeIf { it.isFinite() } ?: h * 0.5f,
+                radius = spec.radius.takeIf { it.isFinite() && it > 0f } ?: (hypot(w, h) * 0.5f),
+            )
+            is BrushSpec.Sweep -> spec.copy(
+                centerX = spec.centerX.takeIf { it.isFinite() } ?: w * 0.5f,
+                centerY = spec.centerY.takeIf { it.isFinite() } ?: h * 0.5f,
+            )
+            else -> spec
+        }
+    }
+
+    /**
+     * Resolves one gradient axis: the coordinate [primary] is non-finite while the opposite
+     * endpoint [other] may be finite or not. Both non-finite span `0..span`; a lone non-finite
+     * endpoint extends its finite partner by one full span, preserving the gradient direction.
+     */
+    private fun resolveAxis(primary: Float, other: Float, span: Float): Float {
+        if (primary.isFinite()) return primary
+        return if (other.isFinite()) other + span else span
     }
 
     private fun renderOrder(plan: MorphPlan, config: MorphConfiguration): IntArray {

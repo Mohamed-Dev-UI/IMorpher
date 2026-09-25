@@ -84,6 +84,48 @@ MorphIcon(
 The animation canvas does not consume pointer input; the caller owns click handling and touch
 targets. A provided `contentDescription` is exposed as Compose semantics.
 
+## Tinting
+
+Every public composable (`MorphIcon`, `MorphVector`, `VectorAnimation`, `VectorAnimator`,
+`DrawIcon`) has two tinted overloads: one taking colors, one taking brushes. Each overload takes
+**two endpoint tints** — `tintFrom` and `tintTo` — and interpolates between them as the morph
+progresses, so the tint itself transitions cleanly from the unselected to the selected look:
+
+```kotlin
+MorphIcon(
+    from = Icons.Outlined.Home,
+    to = Icons.Filled.Home,
+    selected = selected,
+    tintFrom = MaterialTheme.colorScheme.onSurfaceVariant,
+    tintTo = MaterialTheme.colorScheme.primary,
+    contentDescription = "Home",
+)
+```
+
+`tintTo` defaults to `tintFrom`, so a single-color call keeps one constant tint. Pass a
+[Compose `Brush`](https://developer.android.com/reference/kotlin/androidx/compose/ui/graphics/Brush)
+to the brush overloads for gradients (`Brush.linearGradient`, `Brush.radialGradient`,
+`Brush.sweepGradient`, or any custom `Brush`). Built-in brushes of the same kind interpolate
+smoothly — geometry, colors, and stops — while mismatched kinds, custom brushes, and null
+endpoints crossfade (a null endpoint fades the tint in or out from transparency):
+
+```kotlin
+MorphVector(
+    from = Icons.Outlined.Home,
+    to = Icons.Filled.Home,
+    progress = dragProgress,
+    tintFrom = Brush.linearGradient(listOf(Color(0xFF536DFE), Color(0xFF00BCD4))),
+    tintTo = Brush.linearGradient(listOf(Color(0xFFFFC107), Color(0xFFFF5722))),
+)
+```
+
+Either way, the tint replaces whatever paint the icons carry — fills, strokes, and animated
+gradients — while preserving each pixel's alpha, so fades, stroke reveals, and antialiased edges
+stay intact. Tint gradient coordinates resolve against the icon's layout bounds, matching
+`Modifier.background(brush)`. Color tints interpolate in the configuration's
+`ColorInterpolationSpace`. Tinting adds one offscreen layer pass per frame, so use the untinted
+overloads when the icons' own paint is wanted.
+
 ## A single vector and manual progress
 
 ```kotlin
