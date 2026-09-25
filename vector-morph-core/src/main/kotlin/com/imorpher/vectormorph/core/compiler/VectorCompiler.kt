@@ -50,6 +50,7 @@ object VectorCompiler {
             inheritedClip = emptyList(),
             paths = paths,
             nameCount = nameCount,
+            isRoot = true,
         )
         return PreparedVector(
             viewportWidth = vector.viewportWidth,
@@ -70,6 +71,7 @@ object VectorCompiler {
         inheritedClip: List<ContourData>,
         paths: MutableList<PreparedPath>,
         nameCount: MutableMap<String, Int>,
+        isRoot: Boolean = false,
     ) {
         when (node) {
             is VectorGroup -> {
@@ -83,7 +85,10 @@ object VectorCompiler {
                     inheritedClip
                 }
 
-                val childNames = groupNames + listOf(node.name)
+                // The ImageVector root is an implementation detail of ImageVector.Builder, not a
+                // user-declared scope: opaque vectors put every path straight under it, and treating
+                // it as a group would make each path report a group it was never grouped into.
+                val childNames = if (isRoot) groupNames else groupNames + listOf(node.name)
                 for (child in node) {
                     walk(child, childMatrix, childNames, childClip, paths, nameCount)
                 }

@@ -40,12 +40,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.key
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.PathNode
 import com.imorpher.vectormorph.compose.DrawIcon
 import com.imorpher.vectormorph.compose.MorphIcon
 import com.imorpher.vectormorph.compose.MorphVector
@@ -62,6 +63,7 @@ import com.imorpher.vectormorph.core.model.MorphConfiguration
 import com.imorpher.vectormorph.core.model.MotionPreference
 import com.imorpher.vectormorph.core.model.PathMatchingStrategy
 import com.imorpher.vectormorph.core.model.PathStart
+import com.imorpher.vectormorph.core.model.TimingMode
 import com.mohamed.dev.ui.imorpher.ui.theme.IMorpherTheme
 import kotlinx.coroutines.launch
 
@@ -149,7 +151,7 @@ private fun StateMorphShowcase() {
 
 @Composable
 private fun ManualMorphShowcase() {
-    var progress by remember { mutableStateOf(0.25f) }
+    var progress by remember { mutableStateOf(0f) }
     ShowcaseCard(
         number = "02",
         title = "Manually scrub a morph",
@@ -194,6 +196,7 @@ private fun DrawRevealShowcase() {
                         vector = ShowcaseVectors.Spark,
                         animation = remember { SparkDrawAnimation },
                         animationSpec = tween(1100),
+                        configuration = MorphConfiguration(timing = TimingMode.UNIFORM),
                         contentDescription = "Spark drawing animation",
                         modifier = Modifier.size(54.dp),
                     )
@@ -201,8 +204,8 @@ private fun DrawRevealShowcase() {
             }
             Spacer(Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text("Top-right to bottom-left", fontWeight = FontWeight.SemiBold)
-                Text("Arc-length timing keeps the pen speed even.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Every ray draws from the hub out", fontWeight = FontWeight.SemiBold)
+                Text("The rays cascade clockwise around the hub; the core brightens and fills as the wave passes.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Button(onClick = { replayKey++ }) { Text("Replay") }
         }
@@ -253,7 +256,7 @@ private fun TimelineShowcase() {
             Button(onClick = { coroutineScope.launch { playhead.snapTo(0f) } }) { Text("Reset") }
         }
         Text(
-            "The ray group staggers and rotates; the center fades, scales, and changes from a solid fill to a gradient.",
+            "The ray group sweeps open and rotates as one; the center fades, scales, and changes from a solid fill to a gradient.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -342,23 +345,27 @@ private fun IconTile(content: @Composable () -> Unit) {
     }
 }
 
-private val SparkDrawAnimation = vectorAnimation {
+// Rays are authored hub→tip in addRays(), so PathStart.START + FORWARD strokes each
+// ray from the hub to its tip. Every ray has the same length, so UNIFORM timing gives
+// them all the same pen speed, and the CLOCKWISE stagger fans their clocks around the
+// hub; the last ray hands off to the core's fill just before the tween ends.
+internal val SparkDrawAnimation = vectorAnimation {
     allPaths {
         strokeReveal(
-            start = PathStart.TOP_RIGHT,
-            direction = DrawDirection.TOP_RIGHT_TO_BOTTOM_LEFT,
-            interval = 0f..0.75f,
+            start = PathStart.START,
+            direction = DrawDirection.AUTO,
+            interval = 0f..1f,
             mode = DrawMode.FORWARD,
         )
     }
     path("core") {
-        alpha(from = 0.15f, to = 1f, interval = 0.45f..1f)
-        fill(mode = FillMode.RADIAL, interval = 0.5f..1f)
+        alpha(from = 0.15f, to = 1f, interval = 0.55f..0.85f)
+        fill(mode = FillMode.RADIAL, interval = 0.68f..1f)
     }
-    stagger(delay = 0.045f, order = DrawOrderStrategy.TOP_RIGHT_TO_BOTTOM_LEFT)
+    stagger(delay = 0.08f, order = DrawOrderStrategy.CLOCKWISE)
 }
 
-private val LayeredTimelineAnimation = vectorAnimation {
+internal val LayeredTimelineAnimation = vectorAnimation {
     at(0f) { alpha = 0.25f; scale = 0.72f; rotation = -28f }
     at(0.28f) { alpha = 1f; scale = 1.08f; rotation = 12f }
     at(1f) { alpha = 1f; scale = 1f; rotation = 0f }
@@ -368,6 +375,7 @@ private val LayeredTimelineAnimation = vectorAnimation {
             start = PathStart.CENTER,
             direction = DrawDirection.CENTER_OUT,
             interval = 0f..0.7f,
+            mode = DrawMode.CENTER_OUT,
         )
         strokeWidth(from = 0.7f, to = 1.7f, interval = 0f..0.8f)
         rotation(from = -12f, to = 12f, interval = 0.15f..0.8f)
@@ -390,7 +398,7 @@ private val LayeredTimelineAnimation = vectorAnimation {
     stagger(delay = 0.055f, order = DrawOrderStrategy.TOP_LEFT_TO_BOTTOM_RIGHT)
 }
 
-private object ShowcaseVectors {
+internal object ShowcaseVectors {
     private val ink = Color(0xFF536DFE)
 
     val HomeOutline = ImageVectorBuilder("home-outline").apply {
@@ -444,7 +452,7 @@ private object ShowcaseVectors {
 }
 
 private class ImageVectorBuilder(name: String) {
-    private val builder = androidx.compose.ui.graphics.vector.ImageVector.Builder(
+    private val builder = ImageVector.Builder(
         name = name,
         defaultWidth = 24.dp,
         defaultHeight = 24.dp,
@@ -454,7 +462,7 @@ private class ImageVectorBuilder(name: String) {
 
     fun path(
         name: String,
-        data: List<androidx.compose.ui.graphics.vector.PathNode>,
+        data: List<PathNode>,
         fill: Color? = null,
         stroke: Color? = null,
         strokeWidth: Float = 1f,
@@ -472,13 +480,15 @@ private class ImageVectorBuilder(name: String) {
 
     fun addRays() {
         val ink = Color(0xFF536DFE)
+        // Every segment runs hub → tip so a PathStart.START pen reveal strokes outward
+        // from the center on all eight rays regardless of their position.
         val segments = listOf(
             listOf(move(12f, 1.8f), line(12f, 6f)),
-            listOf(move(12f, 18f), line(12f, 22.2f)),
+            listOf(move(12f, 22.2f), line(12f, 18f)),
             listOf(move(1.8f, 12f), line(6f, 12f)),
             listOf(move(18f, 12f), line(22.2f, 12f)),
             listOf(move(4.5f, 4.5f), line(7.5f, 7.5f)),
-            listOf(move(16.5f, 16.5f), line(19.5f, 19.5f)),
+            listOf(move(19.5f, 19.5f), line(16.5f, 16.5f)),
             listOf(move(19.5f, 4.5f), line(16.5f, 7.5f)),
             listOf(move(7.5f, 16.5f), line(4.5f, 19.5f)),
         )
@@ -519,11 +529,11 @@ private class ImageVectorBuilder(name: String) {
     fun build() = builder.build()
 }
 
-private fun move(x: Float, y: Float) = androidx.compose.ui.graphics.vector.PathNode.MoveTo(x, y)
-private fun line(x: Float, y: Float) = androidx.compose.ui.graphics.vector.PathNode.LineTo(x, y)
+private fun move(x: Float, y: Float) = PathNode.MoveTo(x, y)
+private fun line(x: Float, y: Float) = PathNode.LineTo(x, y)
 private fun curve(x1: Float, y1: Float, x2: Float, y2: Float, x3: Float, y3: Float) =
-    androidx.compose.ui.graphics.vector.PathNode.CurveTo(x1, y1, x2, y2, x3, y3)
-private val close = androidx.compose.ui.graphics.vector.PathNode.Close
+    PathNode.CurveTo(x1, y1, x2, y2, x3, y3)
+private val close = PathNode.Close
 private fun rect(left: Float, top: Float, right: Float, bottom: Float) = listOf(
     move(left, top), line(right, top), line(right, bottom), line(left, bottom), close,
 )

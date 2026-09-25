@@ -1,10 +1,13 @@
 package com.imorpher.vectormorph.compose
 
 import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
@@ -27,6 +30,7 @@ import com.imorpher.vectormorph.core.plan.MorphPlan
 import com.imorpher.vectormorph.core.plan.MorphPlanCache
 import com.imorpher.vectormorph.core.plan.MorphPlanner
 import com.imorpher.vectormorph.compose.renderer.MorphRenderer
+import com.imorpher.vectormorph.core.model.FallbackStrategy
 import java.util.WeakHashMap
 
 /** A reusable single-vector animation definition. */
@@ -122,7 +126,7 @@ fun MorphIcon(
         motionPreference = motionPreference,
     )
     val renderConfiguration = if (motionPreference == MotionPreference.CROSSFADE_ONLY) {
-        effectiveConfiguration.copy(fallback = com.imorpher.vectormorph.core.model.FallbackStrategy.CROSSFADE)
+        effectiveConfiguration.copy(fallback = FallbackStrategy.CROSSFADE)
     } else effectiveConfiguration
     val plan = rememberPlan(from, to, renderConfiguration)
     VectorPlanCanvas(
@@ -151,19 +155,45 @@ fun VectorAnimation(
     width: Dp = vector.defaultWidth,
     height: Dp = vector.defaultHeight,
 ) {
-    val animatedProgress by rememberVectorAnimation(
-        targetProgress = 1f,
+    val automaticProgress by rememberAutoPlayProgress(
+        vector = vector,
+        animation = animation,
         animationSpec = animationSpec,
         motionPreference = motionPreference,
+        enabled = progress == null,
     )
     VectorAnimator(
         animation = VectorAnimationDefinition(vector, animation, configuration),
-        progress = progress ?: animatedProgress,
+        progress = progress ?: automaticProgress,
         modifier = modifier,
         contentDescription = contentDescription,
         width = width,
         height = height,
     )
+}
+
+/** Starts one-shot vector animations at zero, then plays them once for each definition. */
+@Composable
+private fun rememberAutoPlayProgress(
+    vector: ImageVector,
+    animation: VectorAnimationSpec,
+    animationSpec: AnimationSpec<Float>,
+    motionPreference: MotionPreference,
+    enabled: Boolean,
+): State<Float> {
+    val effectiveSpec = when (motionPreference) {
+        MotionPreference.REDUCED -> tween<Float>(durationMillis = 120)
+        else -> animationSpec
+    }
+    val progress = remember(vector, animation) { Animatable(0f) }
+    val fallback = rememberUpdatedState(if (motionPreference == MotionPreference.INSTANT) 1f else 0f)
+    val animatedProgress = remember(progress) { derivedStateOf { progress.value } }
+    LaunchedEffect(vector, animation, animationSpec, motionPreference, enabled) {
+        if (!enabled || motionPreference == MotionPreference.INSTANT) return@LaunchedEffect
+        progress.snapTo(0f)
+        progress.animateTo(1f, effectiveSpec)
+    }
+    return if (enabled && motionPreference != MotionPreference.INSTANT) animatedProgress else fallback
 }
 
 /** Fully manual animation driver: the caller owns progress and can seek deterministically. */

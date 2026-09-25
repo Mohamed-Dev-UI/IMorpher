@@ -324,21 +324,28 @@ class TimelineEvaluator(
 
     private fun progressForPair(progress: Float, pairIndex: Int): Float {
         if (pairIndex !in staggerOffsets.indices) return progress
-        val timed = when (timingMode) {
+        // Stagger shifts this path's own clock first (the docs call it "offsets path timelines"),
+        // then the timing mode maps that clock onto travel distance. Applying the offset after
+        // the mode mapping silently cancels the stagger whenever a short path has already
+        // saturated its schedule, which is the common case for pen-drawing many short paths.
+        val staggered = if (maxStaggerOffset <= 0f) {
+            progress
+        } else {
+            val duration = (1f - maxStaggerOffset).coerceAtLeast(0.05f)
+            ((progress - staggerOffsets[pairIndex]) / duration).coerceIn(0f, 1f)
+        }
+        return when (timingMode) {
             TimingMode.BY_PATH_LENGTH -> {
                 val length = pathLengths[pairIndex]
-                if (length <= 1e-5f || maxPathLength <= 1e-5f) progress
-                else (progress * maxPathLength / length).coerceIn(0f, 1f)
+                if (length <= 1e-5f || maxPathLength <= 1e-5f) staggered
+                else (staggered * maxPathLength / length).coerceIn(0f, 1f)
             }
             TimingMode.BY_PATH -> {
                 val count = pathOrderRanks.size.coerceAtLeast(1)
-                ((progress * count) - pathOrderRanks[pairIndex]).coerceIn(0f, 1f)
+                ((staggered * count) - pathOrderRanks[pairIndex]).coerceIn(0f, 1f)
             }
-            TimingMode.BY_COMMAND, TimingMode.UNIFORM -> progress
+            TimingMode.BY_COMMAND, TimingMode.UNIFORM -> staggered
         }
-        if (maxStaggerOffset <= 0f) return timed
-        val duration = (1f - maxStaggerOffset).coerceAtLeast(0.05f)
-        return ((timed - staggerOffsets[pairIndex]) / duration).coerceIn(0f, 1f)
     }
 
     /** Group tracks share one clock across all descendants so the group stays rigid. */

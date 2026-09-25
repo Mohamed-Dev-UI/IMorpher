@@ -153,7 +153,7 @@ class VectorAnimation internal constructor(
 /** Scratch evaluation buffers, reused across frames (no per-frame allocation of the arrays). */
 class PathFrameValues {
     /** Reused scalar overrides, indexed by [PropKey]. NaN means use the vector's own value. */
-    val props = FloatArray(PropKey.COUNT)
+    val props = FloatArray(PropKey.COUNT) { Float.NaN }
     /** Active reveal/fill configuration attached to the property's currently active segment. */
     val drawConfigs: Array<VectorAnimation.DrawConfig?> = arrayOfNulls(PropKey.COUNT)
     /** Shared named-group bounds in viewport coordinates, set for group transform tracks. */

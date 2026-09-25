@@ -274,8 +274,10 @@ class MorphRenderer {
         val pivotX = px * vw
         val pivotY = py * vh
         withTransform({
+            // rotate must pivot on the just-translated origin (Compose's default pivot is
+            // the draw-area center, which would orbit the whole vector off-canvas).
             translate(pivotX + tx, pivotY + ty)
-            rotate(rot)
+            rotate(rot, Offset.Zero)
             scale(sx, sy, pivot = Offset.Zero)
             translate(-pivotX, -pivotY)
         }) { block() }
@@ -389,7 +391,9 @@ class MorphRenderer {
         val px = minX + (maxX - minX) * (props[PropKey.PIVOT_X.ordinal].takeUnless { it.isNaN() } ?: 0.5f)
         val py = minY + (maxY - minY) * (props[PropKey.PIVOT_Y.ordinal].takeUnless { it.isNaN() } ?: 0.5f)
         withTransform({
-            translate(px + tx, py + ty); rotate(rotation); scale(sx, sy, pivot = Offset.Zero); translate(-px, -py)
+            // rotate/scale must pivot on the just-translated origin: Compose's default
+            // rotate pivot is the draw-area center, which would orbit content off-canvas.
+            translate(px + tx, py + ty); rotate(rotation, Offset.Zero); scale(sx, sy, pivot = Offset.Zero); translate(-px, -py)
         }) { block() }
     }
 
@@ -788,6 +792,7 @@ class MorphRenderer {
                     }
                 } else for ((ci, cp) in pair.contourPairs.withIndex()) {
                     val path = morphContourPath(pair.index, ci, cp, morphT)
+                    if (drawProgress != null && drawProgress <= 0f) continue
                     if (drawProgress != null && drawProgress < 1f) {
                         val mode = drawCfg?.mode ?: DrawMode.FORWARD
                         val start = drawCfg?.start ?: PathStart.START
@@ -1087,9 +1092,21 @@ class MorphRenderer {
                 val end = s + p * len
                 if (end <= len) {
                     measure.getSegment(s, end, strokePath, true)
+                } else if (s >= len - 1e-3f) {
+                    // Anchor sits at the contour end: only the wrap leg exists. Calling
+                    // getSegment with a zero-length range can still emit a stray moveTo,
+                    // so skip straight to the wrap leg with its own moveTo.
+                    measure.getSegment(0f, end - len, strokePath, true)
                 } else {
-                    measure.getSegment(s, len, strokePath, true)
-                    measure.getSegment(0f, end - len, strokePath, false)
+                    // When the anchor sits at the contour end the first leg produces nothing;
+                    // the follow-up leg must then open its own contour or Android implicitly
+                    // starts it at (0,0) and paints a stray line from the canvas origin.
+                    val opened = measure.getSegment(s, len, strokePath, true)
+                    if (opened) {
+                        measure.getSegment(0f, end - len, strokePath, false)
+                    } else {
+                        measure.getSegment(0f, end - len, strokePath, true)
+                    }
                 }
             }
             DrawMode.REVERSE -> {
@@ -1097,31 +1114,46 @@ class MorphRenderer {
                 val begin = s - p * len
                 if (begin >= 0f) {
                     measure.getSegment(begin, s, strokePath, true)
+                } else if (s <= 1e-3f) {
+                    // Anchor sits at the contour start: only the wrap leg exists.
+                    measure.getSegment(len + begin, len, strokePath, true)
                 } else {
-                    measure.getSegment(0f, s, strokePath, true)
-                    measure.getSegment(len + begin, len, strokePath, false)
+                    val opened = measure.getSegment(0f, s, strokePath, true)
+                    if (opened) {
+                        measure.getSegment(len + begin, len, strokePath, false)
+                    } else {
+                        measure.getSegment(len + begin, len, strokePath, true)
+                    }
                 }
             }
             DrawMode.CENTER_OUT -> {
                 // grows from the start anchor outwards in both directions
                 val half = p * len / 2f
+                if (half * 2f >= len) return source
                 val lo = s - half
                 val hi = s + half
-                if (lo >= 0f && hi <= len) {
-                    measure.getSegment(lo, hi, strokePath, true)
-                } else {
-                    if (hi <= len) measure.getSegment(0f, hi, strokePath, true) else {
-                        measure.getSegment(0f, len, strokePath, true)
+                when {
+                    hi <= lo -> Unit // degenerate window: nothing to draw yet
+                    lo >= 0f && hi <= len -> measure.getSegment(lo, hi, strokePath, true)
+                    lo < 0f -> {
+                        // wraps the contour start: [len+lo..len] then [0..hi], joined at the wrap
+                        val opened = if (len + lo >= len - 1e-3f) false else
+                            measure.getSegment(len + lo, len, strokePath, true)
+                        if (hi > 1e-3f) measure.getSegment(0f, hi, strokePath, !opened)
                     }
-                    if (lo < 0f) measure.getSegment(len + lo, len, strokePath, false)
-                    if (hi > len) measure.getSegment(0f, hi - len, strokePath, false)
+                    else -> {
+                        // wraps the contour end: [lo..len] then [0..hi-len], joined at the wrap
+                        val opened = if (lo >= len - 1e-3f) false else
+                            measure.getSegment(lo, len, strokePath, true)
+                        if (hi - len > 1e-3f) measure.getSegment(0f, hi - len, strokePath, !opened)
+                    }
                 }
             }
             DrawMode.OUTSIDE_IN -> {
-                // both ends draw towards the anchor
+                // both ends draw towards the anchor; the two arcs stay separate contours
                 val quarter = p * len / 2f
                 measure.getSegment(0f, quarter, strokePath, true)
-                measure.getSegment(len - quarter, len, strokePath, false)
+                measure.getSegment(len - quarter, len, strokePath, true)
             }
             DrawMode.RADIAL -> error("Radial stroke reveals must be rendered through a radial clip")
             DrawMode.CUSTOM -> error("Custom stroke reveals require CustomVectorPathOverrides.strokeRevealContours")

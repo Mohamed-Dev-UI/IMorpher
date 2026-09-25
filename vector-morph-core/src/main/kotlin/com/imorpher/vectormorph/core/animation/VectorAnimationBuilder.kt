@@ -251,8 +251,10 @@ class VectorAnimationBuilder internal constructor() {
         easing: Easing,
         channel: BrushChannel = BrushChannel.FILL,
     ) {
-        if (end <= start) return
-        brushes.add(BrushRequest(target, channel, start, end, from, to, easing))
+        val normalizedStart = start.coerceIn(0f, 1f)
+        val normalizedEnd = end.coerceIn(0f, 1f)
+        if (normalizedStart.isNaN() || normalizedEnd.isNaN() || normalizedEnd <= normalizedStart) return
+        brushes.add(BrushRequest(target, channel, normalizedStart, normalizedEnd, from, to, easing))
     }
 
     internal fun build(): VectorAnimation {
