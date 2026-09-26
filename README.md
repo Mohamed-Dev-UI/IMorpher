@@ -1,4 +1,5 @@
 # ImageVector Morph
+[![Release](https://jitpack.io/v/Mohamed-Dev-UI/IMorpher.svg)](https://jitpack.io/#Mohamed-Dev-UI/IMorpher)
 
 An ImageVector-first vector morphing and drawing engine for Jetpack Compose. It compiles
 `ImageVector` hierarchies once into normalized cubic geometry, plans path correspondence and
