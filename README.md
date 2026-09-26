@@ -17,12 +17,18 @@ The repository is split into two Android library modules:
 Add Maven Central to the repositories used by your Android project and depend on the Compose
 artifact:
 
+### Step 1. Add it in your settings.gradle.kts at the end of repositories:
 ```kotlin
-repositories {
-    google()
-    mavenCentral()
-}
-
+dependencyResolutionManagement {
+		repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+		repositories {
+			mavenCentral()
+			maven { url = uri("https://jitpack.io") }
+		}
+	}
+```
+### Step 2. Add the dependency
+```kotlin
 dependencies {
     implementation("io.github.mohamed-dev-ui:vector-morph-compose:<version>")
 }
