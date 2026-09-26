@@ -116,5 +116,5 @@ internal fun flattenCubic(
 }
 
 /** Absolute value helper kept local so geometry has zero dependencies. */
-internal inline fun fastAbs(v: Float): Float = if (v < 0f) -v else v
-internal inline fun isClose(a: Float, b: Float, eps: Float = 1e-4f): Boolean = abs(a - b) <= eps
+internal fun fastAbs(v: Float): Float = if (v < 0f) -v else v
+internal fun isClose(a: Float, b: Float, eps: Float = 1e-4f): Boolean = abs(a - b) <= eps

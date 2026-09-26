@@ -15,7 +15,13 @@
 .cxx
 local.properties
 
+# built application files
+*.apk
+*.ap_
+*.aab
+
 # Project exclude paths
 /vector-morph-compose/build/
 /vector-morph-core/build/
 /tools/screen-analyzer/
+/.freebuff
