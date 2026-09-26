@@ -18,3 +18,4 @@ local.properties
 # Project exclude paths
 /vector-morph-compose/build/
 /vector-morph-core/build/
+/tools/screen-analyzer/

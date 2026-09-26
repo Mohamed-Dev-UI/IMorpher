@@ -307,7 +307,21 @@ object MorphPlanner {
         val toOnly = ArrayList<ContourData>()
         val pairWarnings = ArrayList<String>()
 
-        val contourMatches = matchContours(f.contours, t.contours)
+        var contourMatches = matchContours(f.contours, t.contours)
+        // A path whose contours encode fill-rule holes (an enclosing contour with
+        // opposite-winding contours inside it, e.g. a solid icon's disc + inner symbols)
+        // only renders correctly when its contours stay in ONE fill path. If matching
+        // pairs only some of them, the unpaired contours fill separately and the holes
+        // stop cancelling — the icon tears into solid lumps at the morph endpoints. Such
+        // paths therefore morph all-or-nothing: either every contour finds a partner, or
+        // the whole path fades through the unmatched-contour legs.
+        if (hasFillRuleHole(f.contours) || hasFillRuleHole(t.contours)) {
+            val fromComplete = f.contours.isEmpty() || contourMatches.size == f.contours.size
+            val toComplete = t.contours.isEmpty() || contourMatches.size == t.contours.size
+            val fromOk = !hasFillRuleHole(f.contours) || fromComplete
+            val toOk = !hasFillRuleHole(t.contours) || toComplete
+            if (!fromOk || !toOk) contourMatches = emptyList()
+        }
         if (f.contours.size != t.contours.size) {
             pairWarnings.add(
                 "contour count differs (${f.contours.size} → ${t.contours.size}); " +
@@ -315,12 +329,23 @@ object MorphPlanner {
             )
         }
 
+        // A target path that contains fill-rule holes (e.g. the solid icon path holding
+        // the enclosing disc AND the inner-symbol contours) must keep its internal
+        // relative winding intact at the target endpoint — otherwise NonZero no longer
+        // cancels the symbols and they paint over the fill. Winding alignment therefore
+        // preserves EVERY contour of such a path: flipping only the matched enclosing
+        // contour (to untwist against its source partner) would break parity against the
+        // preserved holes, and flipping holes alone breaks it the other way. Endpoint
+        // fill-rule integrity wins over twist-free correspondence under AUTO.
+        val preserveTargetWinding = config.pathDirection == PathDirectionStrategy.AUTO &&
+            t.contours.any { ContourAligner.isFillRuleHole(it, t.contours) }
+
         val matchedFrom = BooleanArray(f.contours.size)
         val matchedTo = BooleanArray(t.contours.size)
         for ((fromIndex, toIndex) in contourMatches) {
             matchedFrom[fromIndex] = true
             matchedTo[toIndex] = true
-            contourPairs.add(alignContours(f, fromIndex, t, toIndex, config))
+            contourPairs.add(alignContours(f, fromIndex, t, toIndex, config, preserveTargetWinding))
         }
         for (index in f.contours.indices) if (!matchedFrom[index]) fromOnly.add(f.contours[index])
         for (index in t.contours.indices) if (!matchedTo[index]) toOnly.add(t.contours[index])
@@ -340,6 +365,10 @@ object MorphPlanner {
             warnings = pairWarnings,
         )
     }
+
+    /** Whether any closed contour of the set winds opposite to its enclosing contour. */
+    private fun hasFillRuleHole(contours: List<ContourData>): Boolean =
+        contours.any { ContourAligner.isFillRuleHole(it, contours) }
 
     /** Greedy minimum-cost contour assignment; matching by centroid/area/length avoids index-only
      * mismatches for multi-contour icons while keeping unmatched contours available for fades. */
@@ -391,12 +420,14 @@ object MorphPlanner {
         t: com.imorpher.vectormorph.core.model.PreparedPath,
         ti: Int,
         config: MorphConfiguration,
+        preserveTargetWinding: Boolean,
     ): ContourPairPlan {
         var source = f.contours[ci]
         var target = t.contours[ti]
 
-        // 1) winding normalization
-        val (s, u, reversed) = ContourAligner.normalizeDirection(source, target, config.pathDirection)
+        // 1) winding normalization (see the path-level parity guard in [planMorphPair]).
+        val strategy = if (preserveTargetWinding) PathDirectionStrategy.PRESERVE else config.pathDirection
+        val (s, u, reversed) = ContourAligner.normalizeDirection(source, target, strategy)
         source = s; target = u
 
         // 2) start-point alignment

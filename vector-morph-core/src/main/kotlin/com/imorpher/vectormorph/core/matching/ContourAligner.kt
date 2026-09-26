@@ -1,6 +1,7 @@
 package com.imorpher.vectormorph.core.matching
 
 import com.imorpher.vectormorph.core.geometry.ContourData
+import com.imorpher.vectormorph.core.geometry.bounds
 import com.imorpher.vectormorph.core.geometry.measureContour
 import com.imorpher.vectormorph.core.geometry.signedArea
 import com.imorpher.vectormorph.core.model.PathDirectionStrategy
@@ -247,6 +248,46 @@ object ContourAligner {
         }
         return 0f
     }
+
+    /**
+     * Whether [contour] is a fill-rule hole within [universe]: it winds opposite to the
+     * smallest-area contour of [universe] that bounds-contains it (its enclosing shape).
+     * Icon families disagree on the absolute winding convention (some author outer CW +
+     * holes CCW, others the reverse), so hole-ness is judged by relative winding against
+     * the encloser, never an absolute sign. Contours with no encloser, or contained in a
+     * same-winding encloser (islands inside holes), are not holes. Renderers and the
+     * planner share this test: the planner must never flip such a contour's parity, or
+     * the inner symbols of solid icons paint over the fill and vanish.
+     */
+    fun isFillRuleHole(contour: ContourData, universe: List<ContourData>): Boolean {
+        val winding = signedAreaSign(contour)
+        if (winding == 0) return false
+        val b = bounds(contour)
+        var encloser: ContourData? = null
+        var encloserArea = Float.MAX_VALUE
+        for (other in universe) {
+            if (other === contour) continue
+            val ob = bounds(other)
+            val contains = ob[0] - CONTAINMENT_EPSILON <= b[0] && ob[1] - CONTAINMENT_EPSILON <= b[1] &&
+                ob[2] + CONTAINMENT_EPSILON >= b[2] && ob[3] + CONTAINMENT_EPSILON >= b[3]
+            if (!contains) continue
+            val area = kotlin.math.abs(signedArea(other))
+            if (area > AREA_EPSILON && area < encloserArea) {
+                encloserArea = area
+                encloser = other
+            }
+        }
+        val encloserWinding = encloser?.let { signedAreaSign(it) } ?: return false
+        return encloserWinding != winding
+    }
+
+    private fun signedAreaSign(contour: ContourData): Int {
+        val area = signedArea(contour)
+        return if (area > AREA_EPSILON) 1 else if (area < -AREA_EPSILON) -1 else 0
+    }
+
+    private const val CONTAINMENT_EPSILON = 1e-3f
+    private const val AREA_EPSILON = 1e-6f
 
     /** Distance between arc-corresponding samples; used by tests to assert alignment quality. */
     fun correspondenceError(a: ContourData, b: ContourData, count: Int = 24): Float {

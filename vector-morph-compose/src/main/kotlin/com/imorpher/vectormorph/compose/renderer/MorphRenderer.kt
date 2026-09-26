@@ -76,6 +76,7 @@ class MorphRenderer {
 
     // per-contour rebuilt-from-scratch caches keyed by pairIndex*contour slot
     private val contourPathCache = HashMap<Long, Path>()
+    private val combinedFillPathCache = HashMap<Int, Path>()
     private val staticContourCache = HashMap<ContourData, Path>()
     private val reversedContourCache = HashMap<ContourData, ContourData>()
     private var scratchPlan: MorphPlan? = null
@@ -89,6 +90,14 @@ class MorphRenderer {
 
     /** Reused paint for the tint saveLayer (kept here so tinting allocates nothing per frame). */
     private val tintLayerPaint = Paint()
+
+    /** Layer paint for the per-path isolation saveLayer used by tint compositing. */
+    private val isolatePaint = Paint()
+
+    // Per-pair unmatched contours per side (rebuilt with plan scratch state): each side's
+    // leg path carries its own extras so fill-rule holes cancel within the complete set.
+    private var fromExtras: Array<List<ContourData>> = emptyArray()
+    private var toExtras: Array<List<ContourData>> = emptyArray()
 
     // Tint endpoint specs are derived from caller values (Color/Brush); cache them so the
     // reflective BrushSpec extraction runs once per distinct (value, draw size) pair.
@@ -318,6 +327,9 @@ class MorphRenderer {
         }
         mergedPathProps = Array(plan.pairs.size) { com.imorpher.vectormorph.core.animation.PathFrameValues() }
         contourPathCache.clear()
+        combinedFillPathCache.clear()
+        fromExtras = Array(plan.pairs.size) { i -> plan.pairs[i].fromOnlyContours }
+        toExtras = Array(plan.pairs.size) { i -> plan.pairs[i].toOnlyContours }
     }
 
     /** Development-only geometry overlays. Coordinates are already in viewport space here. */
@@ -723,16 +735,18 @@ class MorphRenderer {
             val contents: DrawScope.() -> Unit = {
                 val fillContours = custom.fillContours ?: contours
                 val fillBox = customBounds(fillContours)
-                for (contour in fillContours) {
-                    val path = staticPath(contour).apply { fillType = side.pathFillType }
-                    if (custom.fillContours != null) paintFillDirect(path, fillResult, fillAlpha)
-                    else paintFillWithReveal(
-                            path, fillResult, fillAlpha, fillP,
-                            fillCfg?.fillMode ?: config.defaultFillMode,
-                            fillCfg?.fillDirection ?: config.defaultFillDirection,
-                            fillBox[0], fillBox[1], fillBox[2], fillBox[3], morph, width, side, props,
-                        )
-                }
+                // Fill all contours together so fill-rule holes (inner symbols of solid
+                // icons) survive, including when custom contours replace the geometry.
+                fillPath.rewind()
+                fillPath.fillType = side.pathFillType
+                fillContours.forEach { fillPath.addPath(staticPath(it)) }
+                if (custom.fillContours != null) paintFillDirect(fillPath, fillResult, fillAlpha)
+                else paintFillWithReveal(
+                        fillPath, fillResult, fillAlpha, fillP,
+                        fillCfg?.fillMode ?: config.defaultFillMode,
+                        fillCfg?.fillDirection ?: config.defaultFillDirection,
+                        fillBox[0], fillBox[1], fillBox[2], fillBox[3], morph, width, side, props,
+                    )
                 val strokeContours = custom.strokeRevealContours ?: contours
                 for (contour in strokeContours) {
                     val path = staticPath(contour)
@@ -905,46 +919,80 @@ class MorphRenderer {
         withPairTransform(transform) {
             // ---- fill pass
             if (fillResult !is GradientInterpolator.Result.None && fillAlpha > 0.003f) {
+                // A stroke reveal with no explicit fill track owns the WHOLE path: the fill
+                // follows the same reveal progress, otherwise a filled icon (AdditemSolid)
+                // stays fully painted at draw progress 0 — the pen draws the outline of a
+                // shape that should still be invisible.
                 val effectiveFill = fillProgress
-                    ?: if (pair.strokeFillDraw) ((morphT - 0.45f) / 0.55f).coerceIn(0f, 1f) else 1f
+                    ?: when {
+                        pair.strokeFillDraw -> ((morphT - 0.45f) / 0.55f).coerceIn(0f, 1f)
+                        drawProgress != null -> drawProgress
+                        else -> 1f
+                    }
                 val fillMode = fillCfg?.fillMode ?: drawCfg?.fillMode ?: config.defaultFillMode
                 val fillDir = fillCfg?.fillDirection ?: drawCfg?.fillDirection ?: config.defaultFillDirection
 
                 val customFillContours = props.customOverrides?.fillContours
                 if (customFillContours != null) {
                     val customBox = customBounds(customFillContours)
-                    customFillContours.forEach { contour ->
-                        withClipReveal(clipContours, clipProgress, clipDirection) {
-                            if (props.customOverrides?.fillContours != null) {
-                                paintFillDirect(staticPath(contour), fillResult, fillAlpha)
-                            } else paintFillWithReveal(
-                                staticPath(contour), fillResult, fillAlpha, effectiveFill, fillMode, fillDir,
-                                customBox[0], customBox[1], customBox[2], customBox[3], morphT,
-                                strokeWidth, t, props,
-                            )
-                        }
-                    }
-                } else for ((ci, cp) in pair.contourPairs.withIndex()) {
-                    val path = morphContourPath(pair.index, ci, cp, morphT)
+                    // Custom replacement geometry is also filled as one combined path so a
+                    // custom contour that punches a hole keeps working (same fill rule).
+                    val combined = contoursFillPath(customFillContours, t.pathFillType)
                     withClipReveal(clipContours, clipProgress, clipDirection) {
                         paintFillWithReveal(
-                            path, fillResult, fillAlpha, effectiveFill, fillMode, fillDir,
-                            bMinX, bMinY, bMaxX, bMaxY, morphT,
+                            combined, fillResult, fillAlpha, effectiveFill, fillMode, fillDir,
+                            customBox[0], customBox[1], customBox[2], customBox[3], morphT,
                             strokeWidth, t, props,
                         )
                     }
-                }
-                // contour-count asymmetries
-                if (customFillContours == null) pair.fromOnlyContours.forEach { c ->
-                    val path = staticPath(c)
+                } else {
+                    // Fill-rule correctness needs each side's COMPLETE contour set in one
+                    // path: solid icons encode inner symbols as contours winding opposite
+                    // to their enclosing shape, and unmatched contours belong to exactly
+                    // one side. The fill is therefore painted as two complementary legs of
+                    // the same interpolated geometry — the from leg carries the from side's
+                    // full set (paired geometry + its unmatched contours) at (1 - t) alpha,
+                    // the to leg carries the to side's full set at t alpha. Each leg's fill
+                    // rule cancels its own holes, so both endpoints render their icons
+                    // exactly, unmatched shapes dissolve in place, and shared regions stay
+                    // fully covered because the leg alphas sum to one. Crossfading brush
+                    // results fade through their own progress instead.
+                    val isCrossfade = fillResult is GradientInterpolator.Result.Crossfade
+                    val componentFrom =
+                        if (fillResult is GradientInterpolator.Result.Crossfade) 1f - fillResult.progress else 1f
+                    val componentTo =
+                        if (fillResult is GradientInterpolator.Result.Crossfade) fillResult.progress else 1f
+                    val fromLegAlpha = (fillAlpha * componentFrom * if (isCrossfade) 1f else 1f - morphT).coerceIn(0f, 1f)
+                    val toLegAlpha = (fillAlpha * componentTo * if (isCrossfade) 1f else morphT).coerceIn(0f, 1f)
+                    val fromExtrasList = fromExtras.getOrNull(pair.index).orEmpty()
+                    val toExtrasList = toExtras.getOrNull(pair.index).orEmpty()
+                    val revealActive = effectiveFill < 0.997f
                     withClipReveal(clipContours, clipProgress, clipDirection) {
-                        paintFillSimple(path, fillResult, fillAlpha * (1f - morphT), effectiveFill, t.pathFillType)
-                    }
-                }
-                if (customFillContours == null) pair.toOnlyContours.forEach { c ->
-                    val path = staticPath(c)
-                    withClipReveal(clipContours, clipProgress, clipDirection) {
-                        paintFillSimple(path, fillResult, fillAlpha * morphT, effectiveFill, t.pathFillType)
+                        // A leg paints whenever its side has ANY geometry: paired contours,
+                        // unmatched contours, or both (fully unmatched pairs fade entirely
+                        // through the legs).
+                        if (fromLegAlpha > 0.003f && (pair.contourPairs.isNotEmpty() || fromExtrasList.isNotEmpty())) {
+                            val leg = combinedMorphFillPath(pair, morphT, f.pathFillType, slot = 0, extras = fromExtrasList)
+                            if (revealActive) {
+                                // The pen owns the whole path: the fill sweeps in with the
+                                // same reveal (directional clip keeps fill-rule holes safe).
+                                withFillRevealClip(effectiveFill, fillMode, fillDir, bMinX, bMinY, bMaxX, bMaxY) {
+                                    paintFillLegDirect(leg, fillResult, fromLeg = true, alpha = fromLegAlpha)
+                                }
+                            } else {
+                                paintFillLegDirect(leg, fillResult, fromLeg = true, alpha = fromLegAlpha)
+                            }
+                        }
+                        if (toLegAlpha > 0.003f && (pair.contourPairs.isNotEmpty() || toExtrasList.isNotEmpty())) {
+                            val leg = combinedMorphFillPath(pair, morphT, t.pathFillType, slot = 1, extras = toExtrasList)
+                            if (revealActive) {
+                                withFillRevealClip(effectiveFill, fillMode, fillDir, bMinX, bMinY, bMaxX, bMaxY) {
+                                    paintFillLegDirect(leg, fillResult, fromLeg = false, alpha = toLegAlpha)
+                                }
+                            } else {
+                                paintFillLegDirect(leg, fillResult, fromLeg = false, alpha = toLegAlpha)
+                            }
+                        }
                     }
                 }
             }
@@ -986,6 +1034,7 @@ class MorphRenderer {
                             val revealed = buildRevealedStrokePath(
                                 strokeGeometry, drawProgress, mode, start, direction, cp, customStart,
                                 config.timing, ci, pair.contourPairs.size, max(f.totalLength, t.totalLength),
+                                closed = cp.from.closed && cp.to.closed,
                             )
                             if (revealed.isEmpty) continue
                             withClipReveal(clipContours, clipProgress, clipDirection) {
@@ -1185,6 +1234,7 @@ class MorphRenderer {
                             strokeDraw?.start ?: PathStart.START,
                             drawDirection,
                             null,
+                            closed = t.contours.all { it.closed },
                         )
                     )
                 }
@@ -1235,6 +1285,7 @@ class MorphRenderer {
         contourCount: Int = 1,
         totalPathLength: Float = cp?.from?.totalLength ?: 0f,
         staticArc: com.imorpher.vectormorph.core.geometry.ArcLengthData? = null,
+        closed: Boolean = true,
     ): Path {
         measure.setPath(source, false)
         val len = measure.length
@@ -1277,7 +1328,11 @@ class MorphRenderer {
                     // starts it at (0,0) and paints a stray line from the canvas origin.
                     val opened = measure.getSegment(s, len, strokePath, true)
                     if (opened) {
-                        measure.getSegment(0f, end - len, strokePath, false)
+                        // Legs may continue each other only on a CLOSED contour: on an
+                        // open one the continuation draws a straight connector between
+                        // the two open ends (e.g. linking a chevron's feet), inventing
+                        // geometry the icon never had.
+                        measure.getSegment(0f, end - len, strokePath, !opened || !closed)
                     } else {
                         measure.getSegment(0f, end - len, strokePath, true)
                     }
@@ -1294,7 +1349,8 @@ class MorphRenderer {
                 } else {
                     val opened = measure.getSegment(0f, s, strokePath, true)
                     if (opened) {
-                        measure.getSegment(len + begin, len, strokePath, false)
+                        // See FORWARD: no leg continuation across an open contour's gap.
+                        measure.getSegment(len + begin, len, strokePath, !opened || !closed)
                     } else {
                         measure.getSegment(len + begin, len, strokePath, true)
                     }
@@ -1313,13 +1369,13 @@ class MorphRenderer {
                         // wraps the contour start: [len+lo..len] then [0..hi], joined at the wrap
                         val opened = if (len + lo >= len - 1e-3f) false else
                             measure.getSegment(len + lo, len, strokePath, true)
-                        if (hi > 1e-3f) measure.getSegment(0f, hi, strokePath, !opened)
+                        if (hi > 1e-3f) measure.getSegment(0f, hi, strokePath, !opened || !closed)
                     }
                     else -> {
                         // wraps the contour end: [lo..len] then [0..hi-len], joined at the wrap
                         val opened = if (lo >= len - 1e-3f) false else
                             measure.getSegment(lo, len, strokePath, true)
-                        if (hi - len > 1e-3f) measure.getSegment(0f, hi - len, strokePath, !opened)
+                        if (hi - len > 1e-3f) measure.getSegment(0f, hi - len, strokePath, !opened || !closed)
                     }
                 }
             }
@@ -1454,12 +1510,10 @@ class MorphRenderer {
         alpha: Float,
     ) {
         if (fillResult !is GradientInterpolator.Result.None && side.fillAlpha > 0f) {
-            val fillAlpha = alpha * side.fillAlpha
-            side.contours.forEach {
-                val path = staticPath(it)
-                path.fillType = side.pathFillType
-                paintFillDirect(path, fillResult, fillAlpha)
-            }
+            // One fill path for every contour: solid icons rely on the fill rule to punch
+            // their inner symbol out of the fill (the plus inside AddCircleSolid is a hole,
+            // not painted geometry), which only works when contours are filled together.
+            paintFillDirect(staticFillPath(side), fillResult, alpha * side.fillAlpha)
         }
         if (strokeResult !is GradientInterpolator.Result.None && side.strokeAlpha > 0f && side.strokeWidth > 0f) {
             val strokeAlpha = alpha * side.strokeAlpha
@@ -1559,11 +1613,10 @@ class MorphRenderer {
         withPairTransform(transform) {
             side.contours.forEachIndexed { contourIndex, contour ->
                 val path = staticPath(contour)
-                path.fillType = side.pathFillType
                 if (fillResult !is GradientInterpolator.Result.None) {
                     withClipReveal(side.clipContours, clipProgress, clipDirection) {
                         paintFillWithReveal(
-                            path,
+                            staticFillPath(side),
                             fillResult,
                             pathAlpha * side.fillAlpha,
                             fillProgress,
@@ -1609,6 +1662,7 @@ class MorphRenderer {
                             side.contours.size,
                             side.totalLength,
                             side.arcLengths.getOrNull(contourIndex),
+                            closed = contour.closed,
                         )
                         withClipReveal(side.clipContours, clipProgress, clipDirection) {
                             paintStroke(revealed, strokeResultWithAnimation, pathAlpha * side.strokeAlpha, style)
@@ -1655,8 +1709,133 @@ class MorphRenderer {
                 }
             }
         }
-        if (cp.from.closed) path.close()
+        // Closure follows the active side: closed-ness can differ across a pair (a filled
+        // solid contour morphing into an open stroke contour), and closing from the wrong
+        // side paints a ghost segment (a stroke across the open end) at that endpoint.
+        if (if (morphT < 0.5f) cp.from.closed else cp.to.closed) path.close()
         return path
+    }
+
+    /**
+     * Builds one side's fill geometry for a morphing path as one combined path: every
+     * morphing contour plus [extras] (that side's paintable unmatched contours), carrying
+     * the side's fill type so its fill rule can punch holes (see [drawMorphPair]).
+     * Contours are appended in pair order, keeping each contour's winding sign intact.
+     */
+    private fun combinedMorphFillPath(
+        pair: PathPairPlan,
+        morphT: Float,
+        fillType: PathFillType,
+        slot: Int,
+        extras: List<ContourData>,
+    ): Path {
+        val path = combinedFillPathCache.getOrPut(pair.index * 2 + slot) { Path() }
+        path.rewind()
+        path.fillType = fillType
+        for ((ci, cp) in pair.contourPairs.withIndex()) {
+            path.addPath(morphContourPath(pair.index, ci, cp, morphT))
+        }
+        extras.forEach { path.addPath(staticPath(it)) }
+        return path
+    }
+
+    /**
+     * Clips [block] to the portion of the path box already reached by a fill reveal at
+     * [progress]: directional/sweep masks grow across the interpolated bounds, radial
+     * grows from the center. Used when a stroke reveal owns the whole path — the fill
+     // sweeps in behind the pen without touching the brush itself (gradients stay true).
+     */
+    private inline fun DrawScope.withFillRevealClip(
+        progress: Float,
+        mode: FillMode,
+        direction: DrawDirection,
+        bMinX: Float, bMinY: Float, bMaxX: Float, bMaxY: Float,
+        crossinline block: DrawScope.() -> Unit,
+    ) {
+        val p = progress.coerceIn(0f, 1f)
+        if (p >= 0.997f) { block(); return }
+        if (p <= 0.003f) return
+        val w = (bMaxX - bMinX).coerceAtLeast(1e-3f)
+        val h = (bMaxY - bMinY).coerceAtLeast(1e-3f)
+        when (mode) {
+            FillMode.RADIAL -> {
+                val cx = (bMinX + bMaxX) / 2f
+                val cy = (bMinY + bMaxY) / 2f
+                val r = p * (hypot(w, h) / 2f)
+                maskPath.rewind()
+                maskPath.addOval(androidx.compose.ui.geometry.Rect(cx - r, cy - r, cx + r, cy + r))
+                clipPath(maskPath) { block() }
+            }
+            FillMode.SWEEP -> {
+                val cx = (bMinX + bMaxX) / 2f
+                val cy = (bMinY + bMaxY) / 2f
+                val r = hypot(w, h)
+                val clockwise = direction != DrawDirection.COUNTER_CLOCKWISE
+                maskPath.rewind()
+                maskPath.moveTo(cx, cy)
+                maskPath.arcTo(
+                    rect = androidx.compose.ui.geometry.Rect(cx - r, cy - r, cx + r, cy + r),
+                    startAngleDegrees = -90f,
+                    sweepAngleDegrees = (if (clockwise) 1f else -1f) * 360f * p,
+                    forceMoveTo = false,
+                )
+                maskPath.close()
+                clipPath(maskPath) { block() }
+            }
+            FillMode.FADE -> block()
+            else -> {
+                val axis = DirectionMath.axisFor(direction)
+                val ax0 = bMinX + axis[0] * w; val ay0 = bMinY + axis[1] * h
+                val ax1 = bMinX + axis[2] * w; val ay1 = bMinY + axis[3] * h
+                val ex = ax0 + (ax1 - ax0) * p
+                val ey = ay0 + (ay1 - ay0) * p
+                var nx = -(ay1 - ay0); var ny = (ax1 - ax0)
+                val nLen = hypot(nx, ny).coerceAtLeast(1e-6f)
+                nx /= nLen; ny /= nLen
+                val reach = hypot(w, h) * 2f
+                maskPath.rewind()
+                maskPath.moveTo(ex, ey)
+                maskPath.lineTo(ex + nx * reach, ey + ny * reach)
+                maskPath.lineTo(ex + (ax0 - ax1) * 4f + nx * reach, ey + (ay0 - ay1) * 4f + ny * reach)
+                maskPath.lineTo(ex + (ax0 - ax1) * 4f - nx * reach, ey + (ay0 - ay1) * 4f - ny * reach)
+                maskPath.lineTo(ex - nx * reach, ey - ny * reach)
+                maskPath.close()
+                clipPath(maskPath) { block() }
+            }
+        }
+    }
+
+    /**
+     * Direct (no reveal) fill paint for one leg of the asymmetric composite. The caller's
+     * [alpha] already carries the component weight ([GradientInterpolator.Result]
+     * interpolation/crossfade progress), so the brush is drawn as-is.
+     */
+    private fun DrawScope.paintFillLegDirect(
+        path: Path,
+        result: GradientInterpolator.Result,
+        fromLeg: Boolean,
+        alpha: Float,
+    ) {
+        if (alpha <= 0.003f) return
+        when (result) {
+            is GradientInterpolator.Result.Interpolated ->
+                drawPath(path, result.brush, alpha = alpha)
+            is GradientInterpolator.Result.Crossfade ->
+                drawPath(path, if (fromLeg) result.fromBrush else result.toBrush, alpha = alpha)
+            GradientInterpolator.Result.None -> Unit
+        }
+    }
+
+    /** One fill path for every contour of a static side so fill-rule holes survive. */
+    private fun staticFillPath(side: PreparedPath): Path =
+        contoursFillPath(side.contours, side.pathFillType)
+
+    /** One fill path for a set of standalone contours so fill-rule holes survive. */
+    private fun contoursFillPath(contours: List<ContourData>, fillType: PathFillType): Path {
+        fillPath.rewind()
+        fillPath.fillType = fillType
+        contours.forEach { fillPath.addPath(staticPath(it)) }
+        return fillPath
     }
 
     private fun staticPath(contour: ContourData): Path {

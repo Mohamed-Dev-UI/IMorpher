@@ -72,8 +72,8 @@ clickable if that is where the action belongs):
 
 ```kotlin
 MorphIcon(
-    from = TidIcons.Home.Outlined,
-    to = TidIcons.Home.Filled,
+    from = IMorpherIcons.Home.Outlined,
+    to = IMorpherIcons.Home.Filled,
     selected = selected,
     contentDescription = "Home",
     motionPreference = MotionPreference.REDUCED,
@@ -130,7 +130,7 @@ overloads when the icons' own paint is wanted.
 
 ```kotlin
 val definition = VectorAnimationDefinition(
-    vector = TidIcons.Automation,
+    vector = IMorpherIcons.Automation,
     animation = VectorAnimation {
         reveal(
             direction = DrawDirection.TOP_RIGHT_TO_BOTTOM_LEFT,
@@ -167,7 +167,7 @@ val animation = VectorAnimation {
     }
 }
 
-DrawIcon(vector = TidIcons.Automation, animation = animation)
+DrawIcon(vector = IMorpherIcons.Automation, animation = animation)
 ```
 
 `DrawMode` includes forward, reverse, center-out, outside-in, and radial-style center-out.

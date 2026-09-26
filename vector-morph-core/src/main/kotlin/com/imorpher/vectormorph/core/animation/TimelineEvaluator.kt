@@ -64,6 +64,11 @@ class TimelineEvaluator(
     private val tracks: List<VectorAnimation.Track> = animation.tracks
     private val brushTracks: List<VectorAnimation.BrushTrack> = animation.brushTracks
 
+    /** Per-pair fill presence, for FILL tracks that must not invent paint on stroke-only paths. */
+    private val pairHasFill: BooleanArray = BooleanArray(plan.pairs.size) { i ->
+        plan.pairs[i].fromPath?.fill != null || plan.pairs[i].toPath?.fill != null
+    }
+
     /** target → pair indices (built once). */
     private val targetIndexCache = HashMap<AnimationTarget, IntArray>()
     private val staggerOffsets = FloatArray(plan.pairs.size)
@@ -273,6 +278,11 @@ class TimelineEvaluator(
                             val localProgress = if (target is AnimationTarget.Group) progressForGroup(p, target.name)
                                 else progressForPair(p, i)
                             val result = evaluateBrush(bt, localProgress) ?: continue
+                            // A FILL track may only recolor paint that exists: applying it
+                            // to a stroke-only path would INVENT a fill (a stroked chevron
+                            // would render as a filled triangle — the path's implicit
+                            // close becomes visible). Such paths only take STROKE tracks.
+                            if (bt.channel == BrushChannel.FILL && !pairHasFill[i]) continue
                             val values = if (target is AnimationTarget.Group) {
                                 frame.pathProps[i].groupProps.getOrPut(target.name) { PathFrameValues() }
                             } else frame.pathProps[i]

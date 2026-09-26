@@ -474,7 +474,7 @@ fun VectorAnimator(
     width: Dp = animation.vector.defaultWidth,
     height: Dp = animation.vector.defaultHeight,
 ) {
-    VectorAnimator(
+    VectorAnimatorCore(
         animation = animation,
         progress = progress,
         tintFrom = null,
@@ -502,7 +502,7 @@ fun VectorAnimator(
     width: Dp = animation.vector.defaultWidth,
     height: Dp = animation.vector.defaultHeight,
 ) {
-    VectorAnimator(
+    VectorAnimatorCore(
         animation = animation,
         progress = progress,
         tintFrom = tintFrom,
@@ -531,7 +531,7 @@ fun VectorAnimator(
     width: Dp = animation.vector.defaultWidth,
     height: Dp = animation.vector.defaultHeight,
 ) {
-    VectorAnimator(
+    VectorAnimatorCore(
         animation = animation,
         progress = progress,
         tintFrom = tintFrom,
@@ -553,6 +553,8 @@ fun DrawIcon(
     configuration: MorphConfiguration = MorphConfiguration.Default,
     contentDescription: String? = null,
     motionPreference: MotionPreference = MotionPreference.FULL,
+    width: Dp = vector.defaultWidth,
+    height: Dp = vector.defaultHeight,
 ) = VectorAnimation(
     vector = vector,
     animation = animation,
@@ -561,6 +563,8 @@ fun DrawIcon(
     configuration = configuration,
     contentDescription = contentDescription,
     motionPreference = motionPreference,
+    width = width,
+    height = height
 )
 
 /** Convenience drawing entry point with a color tint that transitions from [tintFrom] to [tintTo]. */
@@ -575,6 +579,8 @@ fun DrawIcon(
     configuration: MorphConfiguration = MorphConfiguration.Default,
     contentDescription: String? = null,
     motionPreference: MotionPreference = MotionPreference.FULL,
+    width: Dp = vector.defaultWidth,
+    height: Dp = vector.defaultHeight,
 ) = VectorAnimation(
     vector = vector,
     animation = animation,
@@ -585,6 +591,8 @@ fun DrawIcon(
     configuration = configuration,
     contentDescription = contentDescription,
     motionPreference = motionPreference,
+    width = width,
+    height = height
 )
 
 /** Convenience drawing entry point with a gradient tint that transitions from [tintFrom] to [tintTo]. */
@@ -599,6 +607,8 @@ fun DrawIcon(
     configuration: MorphConfiguration = MorphConfiguration.Default,
     contentDescription: String? = null,
     motionPreference: MotionPreference = MotionPreference.FULL,
+    width: Dp = vector.defaultWidth,
+    height: Dp = vector.defaultHeight,
 ) = VectorAnimation(
     vector = vector,
     animation = animation,
@@ -609,13 +619,20 @@ fun DrawIcon(
     configuration = configuration,
     contentDescription = contentDescription,
     motionPreference = motionPreference,
+    width = width,
+    height = height
 )
 
 // ------------------------------------------------------------------ shared plumbing
 
-/** Untinted manual driver all public overloads funnel into; null tints disable tinting. */
+/**
+ * Untinted manual driver all public overloads funnel into; null tints disable tinting.
+ * Named distinctly from the public [VectorAnimator] overloads: with `Any?` tint parameters
+ * sharing the name, Kotlin's overload resolution would send the typed overloads' own
+ * delegation calls back to themselves and recurse until the stack overflows.
+ */
 @Composable
-private fun VectorAnimator(
+private fun VectorAnimatorCore(
     animation: VectorAnimationDefinition,
     progress: Float,
     tintFrom: Any?,

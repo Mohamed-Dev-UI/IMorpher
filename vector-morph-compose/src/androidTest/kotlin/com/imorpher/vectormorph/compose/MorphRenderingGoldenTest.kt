@@ -318,6 +318,163 @@ class MorphRenderingGoldenTest {
         assertTrue("center must blend both gradient endpoints: $center", center.blue < 0.55f)
     }
 
+    @Test
+    fun solidIconInnerSymbolStaysHollowWhileMorphing() {
+        val fill = Color(0xFF12A4D9)
+        val vector = holedVector("holed", fill)
+
+        composeRule.setContent {
+            MorphVector(
+                from = vector,
+                to = vector,
+                progress = 0.5f,
+                contentDescription = "holed icon",
+                width = 24.dp,
+                height = 24.dp,
+            )
+        }
+        composeRule.waitForIdle()
+
+        val pixels = composeRule.onNodeWithContentDescription("holed icon").captureToImage().toPixelMap()
+        val background = pixels[1, 1]
+        // Solid icons encode their inner symbol as an opposite-winding contour: the symbol
+        // must stay a transparent hole in the fill, not painted geometry on top of it.
+        val center = pixels[pixels.width / 2, pixels.height / 2]
+        assertEquals("inner symbol must stay a transparent hole: $center", background, center)
+        val ring = pixels[pixels.width / 4, pixels.height / 2]
+        assertEquals("outer ring must stay filled: $ring", fill, ring)
+    }
+
+    @Test
+    fun tintPreservesSolidIconInnerSymbolHole() {
+        val tint = Color(0xFFE2574C)
+        val vector = holedVector("holed-tinted", Color(0xFF12A4D9))
+
+        composeRule.setContent {
+            MorphVector(
+                from = vector,
+                to = vector,
+                progress = 0.5f,
+                tintFrom = tint,
+                tintTo = tint,
+                contentDescription = "holed tinted icon",
+                width = 24.dp,
+                height = 24.dp,
+            )
+        }
+        composeRule.waitForIdle()
+
+        val pixels = composeRule.onNodeWithContentDescription("holed tinted icon").captureToImage().toPixelMap()
+        val background = pixels[1, 1]
+        // Tint repaints every painted pixel but must preserve per-pixel alpha: the symbol
+        // inside a solid icon is alpha (a hole), so it must remain background under tint.
+        val center = pixels[pixels.width / 2, pixels.height / 2]
+        assertEquals("tint must keep the inner symbol transparent: $center", background, center)
+        val ring = pixels[pixels.width / 4, pixels.height / 2]
+        assertEquals("tint must fully paint the outer ring: $ring", 1f, blendFraction(ring, background, tint), 0.02f)
+    }
+
+    @Test
+    fun outlineToSolidMorphKeepsInnerSymbolHoleOnBothSides() {
+        val fill = Color(0xFF12A4D9)
+        // Outline style: one contour wound so the shape reads as a ring. Solid style:
+        // outer contour (opposite winding) + inner symbol contour punching the hole.
+        val outline = outlinedVector("outline", fill)
+        val solid = solidHoledVector("solid-holed", fill)
+
+        composeRule.setContent {
+            MorphVector(
+                from = outline,
+                to = solid,
+                progress = 0.5f,
+                contentDescription = "cross-style icon",
+                width = 24.dp,
+                height = 24.dp,
+            )
+        }
+        composeRule.waitForIdle()
+
+        val pixels = composeRule.onNodeWithContentDescription("cross-style icon").captureToImage().toPixelMap()
+        val background = pixels[1, 1]
+        // The inner symbol is an unmatched hole contour on the solid side: it is CARVED
+        // out of the fill (never painted). The morphing geometry covers the symbol region
+        // throughout, so the carve dissolves it linearly: a 50% blend mid-morph, exactly
+        // transparent at the solid endpoint (asserted below).
+        val center = pixels[pixels.width / 2, pixels.height / 2]
+        assertEquals(
+            "symbol region must dissolve via the carve, not paint over: $center",
+            0.5f, blendFraction(center, background, fill), 0.05f,
+        )
+        val ring = pixels[pixels.width / 4, pixels.height / 2]
+        assertEquals("outer ring must stay filled mid-morph: $ring", fill, ring)
+
+        // Endpoint: the solid side must render with its complete hole, not a filled symbol.
+        composeRule.setContent {
+            MorphVector(
+                from = outline,
+                to = solid,
+                progress = 1f,
+                contentDescription = "cross-style icon end",
+                width = 24.dp,
+                height = 24.dp,
+            )
+        }
+        composeRule.waitForIdle()
+
+        val endPixels = composeRule.onNodeWithContentDescription("cross-style icon end").captureToImage().toPixelMap()
+        val endBackground = endPixels[1, 1]
+        val endCenter = endPixels[endPixels.width / 2, endPixels.height / 2]
+        assertEquals("solid endpoint must keep the inner symbol transparent: $endCenter", endBackground, endCenter)
+        val endRing = endPixels[endPixels.width / 4, endPixels.height / 2]
+        assertEquals("solid endpoint must keep the ring filled: $endRing", fill, endRing)
+    }
+
+    /** A single filled path of two contours: outer square (CW) + inner square hole (CCW). */
+    private fun holedVector(name: String, color: Color): ImageVector {
+        val builder = ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f)
+        builder.addPath(
+            pathData = listOf(
+                PathNode.MoveTo(4f, 4f), PathNode.LineTo(20f, 4f),
+                PathNode.LineTo(20f, 20f), PathNode.LineTo(4f, 20f), PathNode.Close,
+                PathNode.MoveTo(9f, 9f), PathNode.LineTo(9f, 15f),
+                PathNode.LineTo(15f, 15f), PathNode.LineTo(15f, 9f), PathNode.Close,
+            ),
+            fill = SolidColor(color),
+            name = "body",
+        )
+        return builder.build()
+    }
+
+    /** One contour only (no hole), wound like the solid style's enclosing contour. */
+    private fun outlinedVector(name: String, color: Color): ImageVector {
+        val builder = ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f)
+        builder.addPath(
+            pathData = listOf(
+                PathNode.MoveTo(4f, 4f), PathNode.LineTo(20f, 4f),
+                PathNode.LineTo(20f, 20f), PathNode.LineTo(4f, 20f), PathNode.Close,
+            ),
+            fill = SolidColor(color),
+            name = "body",
+        )
+        return builder.build()
+    }
+
+    /** Solid style with a hole: outer contour CW + inner square contour CCW. */
+    private fun solidHoledVector(name: String, color: Color): ImageVector {
+        val builder = ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f)
+        builder.addPath(
+            pathData = listOf(
+                PathNode.MoveTo(4f, 4f), PathNode.LineTo(20f, 4f),
+                PathNode.LineTo(20f, 20f), PathNode.LineTo(4f, 20f), PathNode.Close,
+                PathNode.MoveTo(9f, 9f), PathNode.LineTo(9f, 15f),
+                PathNode.LineTo(15f, 15f), PathNode.LineTo(15f, 9f), PathNode.Close,
+            ),
+            fill = SolidColor(color),
+            name = "body",
+        )
+        return builder.build()
+    }
+
     /** Projects [pixel] onto the background→tint axis: 0 = background, 1 = full tint. */
     private fun blendFraction(pixel: Color, background: Color, tint: Color): Float {
         val delta = listOf(tint.red - background.red, tint.green - background.green, tint.blue - background.blue)
