@@ -28,7 +28,8 @@ object MorphValidator {
     }
 
     /**
-     * Validates an already-planned pair set (used by [MorphPlanner] to fill
+     * Validates an already-planned pair set (used by
+     * [com.imorpher.vectormorph.core.plan.MorphPlanner] to fill
      * [com.imorpher.vectormorph.core.plan.MorphReport.issues]). Emits per-pair findings —
      * contour-count mismatches, winding/start-point notes, gradient and clip mismatches,
      * quality warnings — plus vector-level viewport notes. Never throws.

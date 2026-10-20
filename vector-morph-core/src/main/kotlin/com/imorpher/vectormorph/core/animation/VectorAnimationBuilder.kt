@@ -38,7 +38,8 @@ import com.imorpher.vectormorph.core.model.PathStart
  * ```
  *
  * All times are normalized 0..1 fractions of the driving animation (the `AnimationSpec`
- * passed to [com.imorpher.vectormorph.compose.MorphIcon] or the driver behind [DrawIcon]).
+ * passed to the `com.imorpher.vectormorph.compose.MorphIcon` composable or the driver
+ * behind its `DrawIcon`).
  */
 class VectorAnimationBuilder internal constructor() {
 
@@ -129,7 +130,7 @@ class VectorAnimationBuilder internal constructor() {
     fun path(name: String, occurrence: Int = 0, block: PathAnimationScope.() -> Unit) =
         PathAnimationScope(AnimationTarget.Path(name, occurrence), this).apply(block)
 
-    /** Tracks for the path at declaration [index] (see [PreparedPath.index]). */
+    /** Tracks for the path at declaration [index] (see [com.imorpher.vectormorph.core.model.PreparedPath.index]). */
     fun pathIndex(index: Int, block: PathAnimationScope.() -> Unit) =
         PathAnimationScope(AnimationTarget.PathIndex(index), this).apply(block)
 

@@ -8,7 +8,8 @@ import kotlin.math.atan2
 /**
  * Computes the order in which paths reveal/draw and the stagger offsets between them.
  * Order affects only *timing* (which path starts drawing first); rendering order stays
- * the vector's declaration order unless [MorphConfiguration.keepRenderOrder] is false.
+ * the vector's declaration order unless
+ * [com.imorpher.vectormorph.core.model.MorphConfiguration.keepRenderOrder] is false.
  */
 object DrawOrder {
 

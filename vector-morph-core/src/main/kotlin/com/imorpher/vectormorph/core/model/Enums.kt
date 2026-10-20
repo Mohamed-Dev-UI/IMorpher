@@ -17,7 +17,7 @@ enum class DrawMode {
     OUTSIDE_IN,
     /** Revealed through an expanding circular clip centred on the path centroid. */
     RADIAL,
-    /** Supplied by a custom [CustomVectorAnimation]. */
+    /** Supplied by a custom [com.imorpher.vectormorph.core.animation.CustomVectorAnimation]. */
     CUSTOM,
 }
 
@@ -122,7 +122,7 @@ enum class MissingPathBehavior {
     MORPH_FROM_NEAREST,
     /** Keep rendering the existing side while the other fades in on top. */
     KEEP,
-    /** Supplied by a [CustomVectorAnimation]. */
+    /** Supplied by a [com.imorpher.vectormorph.core.animation.CustomVectorAnimation]. */
     CUSTOM,
 }
 

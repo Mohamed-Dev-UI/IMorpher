@@ -449,7 +449,7 @@ fun VectorAnimation(
 /**
  * Starts one-shot vector animations at zero, then plays them once to 1 for each definition.
  *
- * The returned state follows [progress]'s own `Animatable` when [enabled] and the motion
+ * The returned state follows its own internal `Animatable` when [enabled] and the motion
  * preference allows animation; INSTANT returns a constant 1f and a disabled caller gets a
  * constant 0f. Re-composing with a new [vector]/[animation] restarts the one-shot.
  */
@@ -672,7 +672,7 @@ private fun VectorAnimatorCore(
 
 /**
  * Draws [plan] at [progress] on a sized canvas, wiring the timeline evaluator (when
- * [animation] or [configuration.animation] is present) to the shared [MorphRenderer].
+ * [animation] or a [configuration]-embedded animation is present) to the shared [MorphRenderer].
  *
  * The evaluator is remembered per (plan, animation, color space, stagger) pair and the
  * frame buffers per plan, so repeated frames reuse every allocation.

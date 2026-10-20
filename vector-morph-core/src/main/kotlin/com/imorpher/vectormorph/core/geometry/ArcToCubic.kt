@@ -15,7 +15,8 @@ import kotlin.math.sqrt
 object ArcToCubic {
 
     /**
-     * @param rx, ry    ellipse radii
+     * @param rxIn      ellipse x-radius
+     * @param ryIn      ellipse y-radius
      * @param thetaDeg  x-axis rotation of the ellipse in degrees
      * @param largeArc  choose the arc > 180° when true
      * @param sweep     positive-angle (clockwise in Y-down screens) direction when true

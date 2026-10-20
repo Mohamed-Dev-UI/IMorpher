@@ -175,7 +175,7 @@ class TimelineEvaluator(
         }
     }
 
-    /** Name matcher shared with [VectorAnimation]; repeated names compile to "name[n]". */
+    /** Name matcher shared with [VectorAnimation]; repeated names compile to `"name[n]"`. */
     private fun matchesPathName(actual: String?, requested: String, occurrence: Int): Boolean {
         if (actual == null) return false
         val expected = if (occurrence == 0) requested else "$requested[$occurrence]"
@@ -456,7 +456,7 @@ class TimelineEvaluator(
             PropKey.TRANSLATION_X, PropKey.TRANSLATION_Y, PropKey.PIVOT_X, PropKey.PIVOT_Y,
         )
         /**
-         * Resolves the effective morph fraction for pair [pairIndex]: an explicit
+         * Resolves the effective morph fraction for a path pair: an explicit
          * MORPH_PROGRESS override if present, otherwise the global progress.
          */
         fun morphFraction(props: FloatArray, globalProgress: Float): Float {

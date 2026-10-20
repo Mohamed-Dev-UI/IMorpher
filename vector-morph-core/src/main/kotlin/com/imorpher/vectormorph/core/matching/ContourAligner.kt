@@ -59,9 +59,10 @@ object ContourAligner {
     /**
      * Aligns the start point of a closed contour pair.
      *
-     * [AUTO] evaluates every candidate start vertex on the target and keeps the rotation that
-     * minimizes the summed distance between arc-length-corresponding sample points — the direct
-     * cure for rotational deformation. [BEST_GEOMETRIC_MATCH] aligns by dominant feature
+     * [StartPointStrategy.AUTO] evaluates every candidate start vertex on the target and keeps
+     * the rotation that minimizes the summed distance between arc-length-corresponding sample
+     * points — the direct cure for rotational deformation. [StartPointStrategy.BEST_GEOMETRIC_MATCH]
+     * aligns by dominant feature
      * (topmost point) which is more robust when the shapes themselves rotate.
      *
      * Returns (source, target, appliedOffsetFraction).
