@@ -52,12 +52,11 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # GitHub runner images ship a preinstalled Android SDK; accept licenses and
-      # install the exact platform this project compiles against (AGP 9.4, SDK 37).
-      - name: Prepare Android SDK
-        run: |
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager --install "platforms;android-37"
+      # Installs Android cmdline-tools, accepts all licenses, and makes sdkmanager
+      # available; AGP then auto-downloads the exact platform/build-tools it needs
+      # (SDK 37 here), not relying on the runner image's preinstalled SDK.
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
       # A release must never publish without tests passing
       - name: Run unit tests
