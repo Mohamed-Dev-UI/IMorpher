@@ -42,6 +42,11 @@ enum class DrawDirection {
 
 /** Where a path's drawing/reveal begins. */
 enum class PathStart {
+    /**
+     * Derived from `DrawDirection` (top-left when direction is AUTO).
+     * Never a literal anchor itself.
+     */
+    AUTO,
     /** The contour's own first point (after start-point normalization). */
     START,
     END,

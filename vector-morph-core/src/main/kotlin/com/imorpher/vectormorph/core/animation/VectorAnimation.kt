@@ -137,7 +137,7 @@ class VectorAnimation internal constructor(
     /** Extra parameters attached to draw/reveal tracks. */
     class DrawConfig(
         val mode: com.imorpher.vectormorph.core.model.DrawMode = com.imorpher.vectormorph.core.model.DrawMode.FORWARD,
-        val start: com.imorpher.vectormorph.core.model.PathStart = com.imorpher.vectormorph.core.model.PathStart.START,
+        val start: com.imorpher.vectormorph.core.model.PathStart = com.imorpher.vectormorph.core.model.PathStart.AUTO,
         val direction: com.imorpher.vectormorph.core.model.DrawDirection = com.imorpher.vectormorph.core.model.DrawDirection.AUTO,
         /** Fill reveal to pair with the reveal (mode + direction); null = no fill coupling. */
         val fillMode: com.imorpher.vectormorph.core.model.FillMode? = null,

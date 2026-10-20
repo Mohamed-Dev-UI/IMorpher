@@ -850,7 +850,7 @@ class MorphRenderer {
                 for (contour in strokeContours) {
                     val path = staticPath(contour)
                     val shown = if (custom.strokeRevealContours != null) path else buildRevealedStrokePath(
-                        path, drawP, drawCfg?.mode ?: DrawMode.FORWARD, drawCfg?.start ?: PathStart.START,
+                        path, drawP, drawCfg?.mode ?: DrawMode.FORWARD, drawCfg?.start ?: PathStart.AUTO,
                         drawCfg?.direction ?: DrawDirection.AUTO, null, config.customStartOffsets[side.name] ?: 0f,
                         config.timing,
                     )
@@ -1133,7 +1133,7 @@ class MorphRenderer {
                     if (drawProgress != null && drawProgress <= 0f) continue
                     if (drawProgress != null && drawProgress < 1f) {
                         val mode = drawCfg?.mode ?: DrawMode.FORWARD
-                        val start = drawCfg?.start ?: PathStart.START
+                        val start = drawCfg?.start ?: PathStart.AUTO
                         val direction = drawCfg?.direction ?: DrawDirection.AUTO
                         if (mode == DrawMode.RADIAL) {
                             withClipReveal(clipContours, clipProgress, clipDirection) {
@@ -1353,7 +1353,7 @@ class MorphRenderer {
                     else -> paintTraversal(
                         buildRevealedStrokePath(
                             path, prog, drawMode,
-                            strokeDraw?.start ?: PathStart.START,
+                            strokeDraw?.start ?: PathStart.AUTO,
                             drawDirection,
                             null,
                             closed = t.contours.all { it.closed },
@@ -1527,7 +1527,9 @@ class MorphRenderer {
         customStartFraction: Float,
     ): Float {
         if (start == PathStart.CUSTOM) return customStartFraction.coerceIn(0f, 1f)
-        val resolvedStart = if (start != PathStart.START) start else when (direction) {
+        // START and the AUTO sentinel both derive the anchor from DrawDirection — the AUTO
+        // sentinel means "direction decides", mirroring today's default behavior.
+        val resolvedStart = if (start == PathStart.AUTO || start == PathStart.START) when (direction) {
             DrawDirection.AUTO -> PathStart.TOP_LEFT
             DrawDirection.TOP_RIGHT_TO_BOTTOM_LEFT -> PathStart.TOP_RIGHT
             DrawDirection.BOTTOM_LEFT_TO_TOP_RIGHT -> PathStart.BOTTOM_LEFT
@@ -1539,7 +1541,7 @@ class MorphRenderer {
             DrawDirection.BOTTOM_TO_TOP -> PathStart.BOTTOM
             DrawDirection.CLOCKWISE, DrawDirection.COUNTER_CLOCKWISE -> PathStart.TOP
             else -> PathStart.START
-        }
+        } else start
         if (resolvedStart == PathStart.START) return 0f
         if (resolvedStart == PathStart.END) return 1f
         if (resolvedStart == PathStart.CENTER) return 0.5f
@@ -1807,7 +1809,7 @@ class MorphRenderer {
                             strokeSource,
                             drawProgress,
                             strokeMode,
-                            drawConfig?.start ?: PathStart.START,
+                            drawConfig?.start ?: PathStart.AUTO,
                             strokeDirection,
                             null,
                             config.customStartOffsets[side.name] ?: 0f,

@@ -510,7 +510,7 @@ class PathAnimationScope internal constructor(
         interval: ClosedFloatingPointRange<Float> = 0f..1f,
         easing: Easing? = null,
         mode: DrawMode = DrawMode.FORWARD,
-        start: PathStart = PathStart.START,
+        start: PathStart = PathStart.AUTO,
         direction: DrawDirection = DrawDirection.AUTO,
     ) {
         builder.addScalar(
@@ -521,7 +521,7 @@ class PathAnimationScope internal constructor(
 
     /** Alias of [drawProgress] expressing stroke intent. */
     fun strokeReveal(
-        start: PathStart = PathStart.START,
+        start: PathStart = PathStart.AUTO,
         direction: DrawDirection = DrawDirection.AUTO,
         interval: ClosedFloatingPointRange<Float> = 0f..1f,
         easing: Easing? = null,
