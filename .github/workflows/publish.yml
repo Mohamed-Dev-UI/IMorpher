@@ -52,11 +52,27 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # Installs Android cmdline-tools, accepts all licenses, and makes sdkmanager
-      # available; AGP then auto-downloads the exact platform/build-tools it needs
-      # (SDK 37 here), not relying on the runner image's preinstalled SDK.
+      # ubuntu-latest no longer ships the Android SDK (and the setup-android
+      # action is broken: "Failed to find package 'tools'"), so set it up
+      # ourselves: cmdline-tools + accepted licenses + the platform AGP needs.
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        env:
+          SDK_ZIP_URL: https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
+        run: |
+          set -e
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          if [ ! -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            curl -fsSL "$SDK_ZIP_URL" -o /tmp/cmdline-tools.zip
+            unzip -q /tmp/cmdline-tools.zip -d /tmp/clt
+            mkdir -p "$ANDROID_HOME/cmdline-tools"
+            rm -rf "$ANDROID_HOME/cmdline-tools/latest"
+            mv /tmp/clt/cmdline-tools "$ANDROID_HOME/cmdline-tools/latest"
+          fi
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+          sdkmanager --version
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager --install "platforms;android-37"
 
       # A release must never publish without tests passing
       - name: Run unit tests
