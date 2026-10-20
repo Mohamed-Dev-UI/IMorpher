@@ -39,7 +39,7 @@
 - `VectorAnimationCodec` encodes enums by name (`VectorAnimationCodec.kt:53`); no schema/version change — new enum constants round-trip by name, `DrawConfig` keeps its 5 fields.
 - No new dependency. JUnit4 for core; Robolectric already used by compose/app tests.
 - Compatibility: default rendering output must be pixel-identical for existing API usage (Task 1 probe pins this). Behavior changes ship behind `directionTraversal` and the `customDrawAnchors` fallback this release.
-- Test commands (Windows): `.\gradlew :vector-morph-core:test`, `.\gradlew :vector-morph-compose:testDebugUnitTest --tests "..."`, `.\gradlew :app:testDebugUnitTest --tests "..."`.
+- Test commands (Windows): `.\gradlew :vector-morph-core:testDebugUnitTest --tests "..."` for filtered core runs (plain `:vector-morph-core:test` for the full suite), `.\gradlew :vector-morph-compose:testDebugUnitTest --tests "..."`, `.\gradlew :app:testDebugUnitTest --tests "..."`.
 - Commit style: conventional (`feat:`, `test:`, `refactor:`, `docs:`).
 
 ## Review Focus
@@ -81,7 +81,7 @@
 
 - [ ] **Step 2: Run — expect compile FAIL** (`Unresolved reference: AUTO`)
 
-`.\gradlew :vector-morph-core:test --tests "com.imorpher.vectormorph.core.model.PathStartAutoTest"`
+`.\gradlew :vector-morph-core:testDebugUnitTest --tests "com.imorpher.vectormorph.core.model.PathStartAutoTest"`
 
 - [ ] **Step 3: Implement**
 
@@ -165,7 +165,7 @@ Resolution rules (pure, no path measurement): `start == AUTO` → anchor from di
 
 `DirectionMath.anchorPathStartOf(direction: DrawDirection): PathStart` = the mapping currently inlined at MorphRenderer.kt:1531–1541, extracted to core (public; reuse from Task 3).
 
-- [ ] **Step 2: Run — expect FAIL** — `.\gradlew :vector-morph-core:test --tests "com.imorpher.vectormorph.core.reveal.DirectionResolverTest"`
+- [ ] **Step 2: Run — expect FAIL** — `.\gradlew :vector-morph-core:testDebugUnitTest --tests "com.imorpher.vectormorph.core.reveal.DirectionResolverTest"`
 
 - [ ] **Step 3: Implement `DirectionMath.resolve` + `anchorPathStartOf` in DrawOrder.kt** (extract table from MorphRenderer.kt:1531–1541 verbatim; renderer imports it — no copy)
 
@@ -243,7 +243,7 @@ Rule: when `HONOR_DIRECTION` and `mode == FORWARD` and drawProgress is mid-revea
 @Test fun honorFlagSurvivesEquality() = assertEquals(MorphConfiguration(), MorphConfiguration())
 ```
 
-- [ ] **Step 2: Run — FAIL (Unresolved reference)** — `.\gradlew :vector-morph-core:test --tests "com.imorpher.vectormorph.core.model.DirectionTraversalConfigTest"`
+- [ ] **Step 2: Run — FAIL (Unresolved reference)** — `.\gradlew :vector-morph-core:testDebugUnitTest --tests "com.imorpher.vectormorph.core.model.DirectionTraversalConfigTest"`
 
 - [ ] **Step 3: Implement enum + field** (`val directionTraversal: DirectionTraversal = DirectionTraversal.LEGACY`)
 
@@ -331,7 +331,7 @@ Rule (implemented in `build()` step 2): for every compiled `PropKey.FILL_PROGRES
 }
 ```
 
-- [ ] **Step 2: Run — FAIL** — `.\gradlew :vector-morph-core:test --tests "com.imorpher.vectormorph.core.animation.FillDirectionInheritanceTest"`
+- [ ] **Step 2: Run — FAIL** — `.\gradlew :vector-morph-core:testDebugUnitTest --tests "com.imorpher.vectormorph.core.animation.FillDirectionInheritanceTest"`
 
 - [ ] **Step 3: Implement** — maker `fill()`/`PathAnimationScope.fill` parameter `direction: DrawDirection?` (callers passing nothing compile unchanged because default changes from a constant to null); apply the inheritance rule in `build()` before segment compilation; `reveal()` (builder line 179) already couples explicitly and is untouched.
 
