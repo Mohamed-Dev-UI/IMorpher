@@ -72,7 +72,10 @@ jobs:
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
           sdkmanager --version
           yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager --install "platforms;android-37"
+          # Platform ids are minor-versioned now (android-37.0, not android-37);
+          # anything else missing is fetched automatically by AGP, which has
+          # licenses accepted and ANDROID_HOME set from this step.
+          sdkmanager --install "platforms;android-37.0" || echo "platform install delegated to AGP auto-download"
 
       # A release must never publish without tests passing
       - name: Run unit tests
