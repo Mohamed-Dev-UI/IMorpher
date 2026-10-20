@@ -64,28 +64,66 @@ import kotlin.math.sin
  */
 class MorphRenderer {
 
+    /** Reused packed-coordinate buffer for the per-frame control-point lerp. */
     private var coords = FloatArray(512)
 
     // scratch paths (never escape this class)
+
+    /** Combined fill geometry for the frame currently being painted. */
     private val fillPath = Path()
+
+    /** Revealed stroke geometry for the segment currently being extracted. */
     private val strokePath = Path()
+
+    /** Clip mask for directional/radial/sweep fill reveals. */
     private val maskPath = Path()
+
+    /** Clip wedge for directional clip reveals. */
     private val wedgePath = Path()
+
+    /** Clip circle for radial clip reveals. */
     private val radialPath = Path()
+    /** Arc-length engine behind every stroke reveal. */
     private val measure = PathMeasure()
 
     // per-contour rebuilt-from-scratch caches keyed by pairIndex*contour slot
+
+    /** Interpolated contour geometry per (pair, contour); rewritten each frame. */
     private val contourPathCache = HashMap<Long, Path>()
+
+    /** One leg of the asymmetric composite fill per (pair, from/to slot). */
     private val combinedFillPathCache = HashMap<Int, Path>()
+
+    /** Immutable source/target contour geometry built once per plan. */
     private val staticContourCache = HashMap<ContourData, Path>()
+
+    /** Reversed contours for direction-ordered reveals, built once per plan. */
     private val reversedContourCache = HashMap<ContourData, ContourData>()
+
+    /** Plan whose per-plan scratch state (below) is currently built. */
     private var scratchPlan: MorphPlan? = null
+
+    /** Distinct named-group scopes per pair, in outermost-first order. */
     private var pairGroupNames: Array<List<String>> = emptyArray()
+
+    /** Per-pair scratch values merging path + group overrides for the current frame. */
     private var mergedPathProps: Array<com.imorpher.vectormorph.core.animation.PathFrameValues> = emptyArray()
+
+    // render-order memo: recomputed only when the plan or the order configuration changes
+
+    /** Plan the cached order was computed for (identity comparison). */
     private var cachedRenderOrderPlan: MorphPlan? = null
+
+    /** Draw-order strategy the cached order was computed for. */
     private var cachedRenderOrderStrategy = configOrderDefault()
+
+    /** Custom order list the cached order was computed for. */
     private var cachedRenderOrderCustom: List<String> = emptyList()
+
+    /** keepRenderOrder value the cached order was computed for. */
     private var cachedRenderOrderKeep = true
+
+    /** The memoized pair draw order; see [renderOrder]. */
     private var cachedRenderOrder: IntArray = IntArray(0)
 
     /** Reused paint for the tint saveLayer (kept here so tinting allocates nothing per frame). */
@@ -96,16 +134,31 @@ class MorphRenderer {
 
     // Per-pair unmatched contours per side (rebuilt with plan scratch state): each side's
     // leg path carries its own extras so fill-rule holes cancel within the complete set.
+    /** Per-pair unmatched source contours (the from leg's extra geometry). */
     private var fromExtras: Array<List<ContourData>> = emptyArray()
+
+    /** Per-pair unmatched target contours (the to leg's extra geometry). */
     private var toExtras: Array<List<ContourData>> = emptyArray()
 
     // Tint endpoint specs are derived from caller values (Color/Brush); cache them so the
     // reflective BrushSpec extraction runs once per distinct (value, draw size) pair.
+
+    /** Last from-endpoint tint value seen (identity comparison). */
     private var cachedTintFromSource: Any? = null
+
+    /** Draw size the from-endpoint spec was resolved against (packed floats). */
     private var cachedTintFromSize: Long = 0L
+
+    /** Resolved from-endpoint spec, reused while [cachedTintFromSource] and size are stable. */
     private var cachedTintFromSpec: BrushSpec? = null
+
+    /** Last to-endpoint tint value seen (identity comparison). */
     private var cachedTintToSource: Any? = null
+
+    /** Draw size the to-endpoint spec was resolved against (packed floats). */
     private var cachedTintToSize: Long = 0L
+
+    /** Resolved to-endpoint spec, reused while [cachedTintToSource] and size are stable. */
     private var cachedTintToSpec: BrushSpec? = null
 
     /**
@@ -236,7 +289,8 @@ class MorphRenderer {
      * `Brush.radialGradient(colors)` centers at [Offset.Unspecified] (NaN) with an infinite
      * radius. Interpolating those raw values lerps Inf→NaN and crashes
      * `LinearGradient.nativeCreate`, so every non-finite coordinate is resolved against the
-     * draw size here, before caching and interpolation.
+     * draw size here, before caching and interpolation. Results are memoized per
+     * (value identity, draw size) so the reflective extraction runs once.
      */
     private fun tintSpecOf(value: Any?, drawSize: Size, fromEndpoint: Boolean): BrushSpec? {
         val sizeKey = drawSize.packedValue
@@ -254,6 +308,7 @@ class MorphRenderer {
         return cachedTintToSpec
     }
 
+    /** Maps a tint endpoint value to a spec: colors/brushes interpolate, anything else is ignored. */
     private fun resolveSpec(value: Any?, drawSize: Size): BrushSpec? = when (value) {
         null -> null
         is Color -> BrushSpec.Solid(value)
@@ -301,6 +356,11 @@ class MorphRenderer {
         return if (other.isFinite()) other + span else span
     }
 
+    /**
+     * Pair indices in draw order. By default ([MorphConfiguration.keepRenderOrder]) that is
+     * declaration order — order strategies only affect stagger timing — but with
+     * keepRenderOrder = false the configured strategy reorders rendering (z-order) too.
+     */
     private fun renderOrder(plan: MorphPlan, config: MorphConfiguration): IntArray {
         if (cachedRenderOrderPlan === plan && cachedRenderOrderStrategy == config.drawOrder &&
             cachedRenderOrderCustom == config.customDrawOrder && cachedRenderOrderKeep == config.keepRenderOrder
@@ -318,6 +378,7 @@ class MorphRenderer {
         fun configOrderDefault() = com.imorpher.vectormorph.core.model.DrawOrderStrategy.BY_INDEX
     }
 
+    /** Rebuilds the per-plan scratch state (group names, merged props, contour extras). */
     private fun ensurePlanScratch(plan: MorphPlan) {
         if (scratchPlan === plan) return
         scratchPlan = plan
@@ -332,7 +393,10 @@ class MorphRenderer {
         toExtras = Array(plan.pairs.size) { i -> plan.pairs[i].toOnlyContours }
     }
 
-    /** Development-only geometry overlays. Coordinates are already in viewport space here. */
+    /**
+     * Development-only geometry overlays (bounds, centroids, points, matching lines,
+     * numbered labels) drawn in viewport space from [MorphConfiguration.debug].
+     */
     private fun DrawScope.drawDebugOverlay(
         plan: MorphPlan,
         options: com.imorpher.vectormorph.core.model.MorphDebugOptions,
@@ -438,6 +502,10 @@ class MorphRenderer {
 
     // ------------------------------------------------------------------ vector transform
 
+    /**
+     * Applies the vector-level timeline transform (scale/rotate/translate around a
+     * fractional pivot) before [block]. Identity transforms draw in place with no canvas ops.
+     */
     private inline fun DrawScope.applyVectorTransform(
         frame: EvaluatedFrame,
         vw: Float,
@@ -471,6 +539,11 @@ class MorphRenderer {
 
     // ------------------------------------------------------------------ pair dispatch
 
+    /**
+     * Draws one path pair: merges its named-group overrides into the frame values, applies
+     * each enclosing group's animated transform around the path, and restores the frame
+     * values afterwards so merged state never leaks into the next pair.
+     */
     private fun DrawScope.drawPair(
         pair: PathPairPlan,
         plan: MorphPlan,
@@ -497,6 +570,12 @@ class MorphRenderer {
         }
     }
 
+    /**
+     * Folds one named group's overrides into [into]: alpha multipliers multiply (nested
+     * groups compose), other scalars and draw configs fill in when unset, and group paints
+     * apply only when the path has none of its own kind. Transform properties are skipped —
+     * groups apply those geometrically via [withGroupTransform].
+     */
     private fun mergeGroupVisuals(
         into: com.imorpher.vectormorph.core.animation.PathFrameValues,
         group: com.imorpher.vectormorph.core.animation.PathFrameValues,
@@ -532,6 +611,7 @@ class MorphRenderer {
         }
     }
 
+    /** Recurses through the pair's named groups (outermost first), transforming at each level. */
     private fun DrawScope.drawThroughGroups(
         pair: PathPairPlan,
         plan: MorphPlan,
@@ -557,6 +637,10 @@ class MorphRenderer {
         }
     }
 
+    /**
+     * Applies one group's animated scale/rotation/translation around a pivot resolved
+     * inside the group's shared viewport-space bounds before [block]. Identity is a no-op.
+     */
     private inline fun DrawScope.withGroupTransform(
         values: com.imorpher.vectormorph.core.animation.PathFrameValues,
         crossinline block: DrawScope.() -> Unit,
@@ -583,6 +667,11 @@ class MorphRenderer {
         }) { block() }
     }
 
+    /**
+     * The pair-level draw dispatch: runs the custom callback (if any), resolves reveal
+     * configurations, validates custom-mode requirements, and routes to the right painter
+     * for the pair's [PairKind] and fallback strategy.
+     */
     private fun DrawScope.drawPairContents(
         pair: PathPairPlan,
         plan: MorphPlan,
@@ -671,6 +760,7 @@ class MorphRenderer {
         }
     }
 
+    /** Writes a custom callback's overrides into the frame values; alpha fields multiply. */
     private fun applyCustomOverrides(props: com.imorpher.vectormorph.core.animation.PathFrameValues, custom: CustomVectorPathOverrides) {
         custom.alpha?.let { props.props[PropKey.ALPHA.ordinal] = multiplyOverride(props.props[PropKey.ALPHA.ordinal], it) }
         custom.fillAlpha?.let { props.props[PropKey.FILL_ALPHA.ordinal] = multiplyOverride(props.props[PropKey.FILL_ALPHA.ordinal], it) }
@@ -693,9 +783,15 @@ class MorphRenderer {
         }
     }
 
+    /** Combines a stacked alpha multiplier with the existing override (or 1 when unset). */
     private fun multiplyOverride(existing: Float, multiplier: Float): Float =
         (if (existing.isNaN()) 1f else existing) * multiplier
 
+    /**
+     * Renders a pair whose geometry came from [CustomVectorPathOverrides.contours]: fill and
+     * stroke draw from the replacement contours, honoring reveal progress, clip reveals, and
+     * every scalar/paint override the callback supplied.
+     */
     private fun DrawScope.drawCustomGeometry(
         pair: PathPairPlan,
         frame: EvaluatedFrame,
@@ -724,7 +820,10 @@ class MorphRenderer {
         val alpha = vectorAlpha * (alphaOverride ?: 1f)
         val fillAlpha = alpha * (props.props[PropKey.FILL_ALPHA.ordinal].takeUnless { it.isNaN() } ?: 1f) * side.fillAlpha
         val strokeAlpha = alpha * (props.props[PropKey.STROKE_ALPHA.ordinal].takeUnless { it.isNaN() } ?: 1f) * side.strokeAlpha
-        val width = custom.strokeWidth ?: side.strokeWidth
+        // precedence: explicit custom override > timeline STROKE_WIDTH track > authored width
+        val width = custom.strokeWidth
+            ?: props.props[PropKey.STROKE_WIDTH.ordinal].takeUnless { it.isNaN() }
+            ?: side.strokeWidth
         val contours = custom.contours.orEmpty()
         val drawP = props.props[PropKey.DRAW_PROGRESS.ordinal].takeUnless { it.isNaN() } ?: progress
         val fillP = props.props[PropKey.FILL_PROGRESS.ordinal].takeUnless { it.isNaN() } ?: progress
@@ -773,6 +872,7 @@ class MorphRenderer {
         }
     }
 
+    /** Tight (minX, minY, maxX, maxY) of the contours' control points; zeros when empty. */
     private fun customBounds(contours: List<ContourData>): FloatArray {
         var minX = Float.POSITIVE_INFINITY; var minY = Float.POSITIVE_INFINITY
         var maxX = Float.NEGATIVE_INFINITY; var maxY = Float.NEGATIVE_INFINITY
@@ -786,7 +886,11 @@ class MorphRenderer {
         return floatArrayOf(minX, minY, maxX, maxY)
     }
 
-    /** Applies inherited group clips and optionally reveals the clip mask from one edge. */
+    /**
+     * Clips [block] to the pair's inherited group clip paths, optionally revealing the clip
+     * itself along a directional moving edge when [progress] is mid-reveal. No contours or
+     * full progress draw unclipped.
+     */
     private inline fun DrawScope.withClipReveal(
         contours: List<ContourData>,
         progress: Float,
@@ -826,6 +930,10 @@ class MorphRenderer {
 
     // ------------------------------------------------------------------ morph pair
 
+    /**
+     * Clips [block] to an expanding circle centered in the given bounds — the fill-mode
+     * RADIAL and DrawMode.RADIAL reveal implementation.
+     */
     private inline fun DrawScope.withRadialClip(
         minX: Float,
         minY: Float,
@@ -847,6 +955,11 @@ class MorphRenderer {
         clipPath(radialPath) { block() }
     }
 
+    /**
+     * Draws a fully matched path pair: interpolated paint, interpolated stroke width, the
+     * two complementary fill legs (each side's complete contour set so fill-rule holes
+     * survive), and the per-contour stroke pass with reveal support.
+     */
     private fun DrawScope.drawMorphPair(
         pair: PathPairPlan,
         frame: EvaluatedFrame,
@@ -962,8 +1075,11 @@ class MorphRenderer {
                         if (fillResult is GradientInterpolator.Result.Crossfade) 1f - fillResult.progress else 1f
                     val componentTo =
                         if (fillResult is GradientInterpolator.Result.Crossfade) fillResult.progress else 1f
-                    val fromLegAlpha = (fillAlpha * componentFrom * if (isCrossfade) 1f else 1f - morphT).coerceIn(0f, 1f)
-                    val toLegAlpha = (fillAlpha * componentTo * if (isCrossfade) 1f else morphT).coerceIn(0f, 1f)
+                    // FADE reveals the fill by alpha, not by a clipping mask (the clip
+                    // helpers cannot express it), so the legs carry the progress directly.
+                    val fadeAlpha = if (fillMode == FillMode.FADE) effectiveFill.coerceIn(0f, 1f) else 1f
+                    val fromLegAlpha = (fillAlpha * componentFrom * fadeAlpha * if (isCrossfade) 1f else 1f - morphT).coerceIn(0f, 1f)
+                    val toLegAlpha = (fillAlpha * componentTo * fadeAlpha * if (isCrossfade) 1f else morphT).coerceIn(0f, 1f)
                     val fromExtrasList = fromExtras.getOrNull(pair.index).orEmpty()
                     val toExtrasList = toExtras.getOrNull(pair.index).orEmpty()
                     val revealActive = effectiveFill < 0.997f
@@ -1063,6 +1179,10 @@ class MorphRenderer {
 
     // ------------------------------------------------------------------ painting helpers
 
+    /**
+     * Resolves the effective paint for one pass: path-level brush overrides win over
+     * vector-level ones; when neither exists the caller's interpolated fallback is used.
+     */
     private fun animatedBrushResult(
         pathMode: Int,
         pathPrimary: Brush?,
@@ -1087,6 +1207,7 @@ class MorphRenderer {
         }
     }
 
+    /** Strokes [path] with the resolved paint (one draw for interpolated, two for a crossfade). */
     private fun DrawScope.paintStroke(
         path: Path,
         result: GradientInterpolator.Result,
@@ -1104,6 +1225,7 @@ class MorphRenderer {
         }
     }
 
+    /** Alpha-guarded stroke draw: alphas at or below the visibility floor skip the op. */
     private fun DrawScope.drawPathP(path: Path, brush: Brush, alpha: Float, style: Stroke) {
         if (alpha <= 0.003f) return
         drawPath(path, brush, alpha = alpha.coerceIn(0f, 1f), style = style)
@@ -1242,6 +1364,7 @@ class MorphRenderer {
         }
     }
 
+    /** Fills [path] with the resolved paint (one draw for interpolated, two for a crossfade). */
     private fun DrawScope.paintFillDirect(path: Path, result: GradientInterpolator.Result, alpha: Float) {
         when (result) {
             is GradientInterpolator.Result.Interpolated ->
@@ -1254,6 +1377,7 @@ class MorphRenderer {
         }
     }
 
+    /** Minimal fade-only fill used where reveal masking is unnecessary or already applied. */
     private fun DrawScope.paintFillSimple(
         path: Path,
         result: GradientInterpolator.Result,
@@ -1347,13 +1471,15 @@ class MorphRenderer {
                     // Anchor sits at the contour start: only the wrap leg exists.
                     measure.getSegment(len + begin, len, strokePath, true)
                 } else {
-                    val opened = measure.getSegment(0f, s, strokePath, true)
-                    if (opened) {
-                        // See FORWARD: no leg continuation across an open contour's gap.
-                        measure.getSegment(len + begin, len, strokePath, !opened || !closed)
-                    } else {
-                        measure.getSegment(len + begin, len, strokePath, true)
-                    }
+                    // The visible arc walks backwards from the anchor: [0..s], then through
+                    // the wrap, [len+begin..len]. Drawing the wrap leg FIRST lets the second
+                    // leg continue from the wrap point (len == contour start) with no moveTo
+                    // on a CLOSED contour — appending it after [0..s] joins the legs in path
+                    // order and paints a straight chord across the gap (verified by pixel
+                    // probe: ~500 interior pixels on a closed circle at p=0.55). Open
+                    // contours keep the two arcs as separate sub-paths instead.
+                    val wrapped = measure.getSegment(len + begin, len, strokePath, true)
+                    measure.getSegment(0f, s, strokePath, !wrapped || !closed)
                 }
             }
             DrawMode.CENTER_OUT -> {
@@ -1466,6 +1592,10 @@ class MorphRenderer {
 
     // ------------------------------------------------------------------ static paths
 
+    /**
+     * Draws one endpoint's path unchanged (crossfade pairs and KEEP/SCALE missing paths),
+     * with the path's own geometry, paint, clip contours, and any timeline style overrides.
+     */
     private fun DrawScope.drawStaticSide(
         pair: PathPairPlan,
         side: PreparedPath,
@@ -1488,37 +1618,47 @@ class MorphRenderer {
             frame.vectorStrokeBrushProgress,
             strokeBrush?.let { GradientInterpolator.Result.Interpolated(it, 1f) } ?: GradientInterpolator.Result.None,
         )
+        // Timeline fill/stroke-alpha and stroke-width overrides apply to static sides
+        // (crossfades, KEEP/SCALE missing paths) exactly as they do to MORPH pairs.
+        val fillAlphaOverride = props.props[PropKey.FILL_ALPHA.ordinal].takeUnless { it.isNaN() } ?: 1f
+        val strokeAlphaOverride = props.props[PropKey.STROKE_ALPHA.ordinal].takeUnless { it.isNaN() } ?: 1f
+        val strokeWidthOverride = props.props[PropKey.STROKE_WIDTH.ordinal].takeUnless { it.isNaN() }
         val transform = PairTransform.from(props, side, side, 0f)
         withPairTransform(transform) {
             val clipProgress = props.props[PropKey.CLIP_PROGRESS.ordinal].takeUnless { it.isNaN() } ?: 1f
             val clipDirection = props.drawConfigs[PropKey.CLIP_PROGRESS.ordinal]?.direction
                 ?: DrawDirection.TOP_LEFT_TO_BOTTOM_RIGHT
             if (side.clipContours.isEmpty()) {
-                drawStaticContents(side, fillResult, strokeResult, alpha)
+                drawStaticContents(side, fillResult, strokeResult, alpha, fillAlphaOverride, strokeAlphaOverride, strokeWidthOverride)
             } else {
                 withClipReveal(side.clipContours, clipProgress, clipDirection) {
-                    drawStaticContents(side, fillResult, strokeResult, alpha)
+                    drawStaticContents(side, fillResult, strokeResult, alpha, fillAlphaOverride, strokeAlphaOverride, strokeWidthOverride)
                 }
             }
         }
     }
 
+    /** Fill + stroke of a static side; contours fill together so fill-rule holes survive. */
     private fun DrawScope.drawStaticContents(
         side: PreparedPath,
         fillResult: GradientInterpolator.Result,
         strokeResult: GradientInterpolator.Result,
         alpha: Float,
+        fillAlphaOverride: Float = 1f,
+        strokeAlphaOverride: Float = 1f,
+        strokeWidthOverride: Float? = null,
     ) {
         if (fillResult !is GradientInterpolator.Result.None && side.fillAlpha > 0f) {
             // One fill path for every contour: solid icons rely on the fill rule to punch
             // their inner symbol out of the fill (the plus inside AddCircleSolid is a hole,
             // not painted geometry), which only works when contours are filled together.
-            paintFillDirect(staticFillPath(side), fillResult, alpha * side.fillAlpha)
+            paintFillDirect(staticFillPath(side), fillResult, alpha * side.fillAlpha * fillAlphaOverride)
         }
-        if (strokeResult !is GradientInterpolator.Result.None && side.strokeAlpha > 0f && side.strokeWidth > 0f) {
-            val strokeAlpha = alpha * side.strokeAlpha
+        val width = strokeWidthOverride ?: side.strokeWidth
+        if (strokeResult !is GradientInterpolator.Result.None && side.strokeAlpha > 0f && width > 0f) {
+            val strokeAlpha = alpha * side.strokeAlpha * strokeAlphaOverride
             val style = Stroke(
-                width = side.strokeWidth,
+                width = width,
                 cap = side.strokeLineCap,
                 join = side.strokeLineJoin,
                 miter = side.strokeLineMiter,
@@ -1527,6 +1667,10 @@ class MorphRenderer {
         }
     }
 
+    /**
+     * Draws a path that only exists on one side, applying the configured
+     * [MissingPathBehavior]: fade, draw-on, scale/collapse, keep, or a custom callback.
+     */
     private fun DrawScope.drawMissingSide(
         pair: PathPairPlan,
         side: PreparedPath,
@@ -1569,6 +1713,11 @@ class MorphRenderer {
         }
     }
 
+    /**
+     * The DRAW missing-path behavior: the path draws itself on with the stroke reveal
+     * (per contour, winding-ordered) while the fill sweeps in behind it — the appearing
+     * icon gets the pen treatment instead of a plain alpha ramp.
+     */
     private fun DrawScope.drawMissingPathByDrawing(
         pair: PathPairPlan,
         side: PreparedPath,
@@ -1606,30 +1755,35 @@ class MorphRenderer {
             frame.vectorStrokeBrushProgress, strokeResult,
         )
         val pathAlpha = alpha * (props.props[PropKey.ALPHA.ordinal].takeUnless { it.isNaN() } ?: 1f)
+        // Timeline fill/stroke-alpha multipliers apply here too — not just to MORPH pairs.
+        val fillAlphaOverride = props.props[PropKey.FILL_ALPHA.ordinal].takeUnless { it.isNaN() } ?: 1f
+        val strokeAlphaOverride = props.props[PropKey.STROKE_ALPHA.ordinal].takeUnless { it.isNaN() } ?: 1f
         val clipProgress = props.props[PropKey.CLIP_PROGRESS.ordinal].takeUnless { it.isNaN() } ?: 1f
         val clipDirection = props.drawConfigs[PropKey.CLIP_PROGRESS.ordinal]?.direction
             ?: DrawDirection.TOP_LEFT_TO_BOTTOM_RIGHT
         val transform = PairTransform.from(props, side, side, 0f)
         withPairTransform(transform) {
+            // The fill covers the WHOLE side (all contours in one path so fill-rule
+            // holes survive): paint it exactly once, outside the per-contour stroke loop.
+            if (fillResult !is GradientInterpolator.Result.None && side.fillAlpha > 0f) {
+                withClipReveal(side.clipContours, clipProgress, clipDirection) {
+                    paintFillWithReveal(
+                        staticFillPath(side),
+                        fillResult,
+                        pathAlpha * side.fillAlpha * fillAlphaOverride,
+                        fillProgress,
+                        fillConfig?.fillMode ?: config.defaultFillMode,
+                        fillConfig?.fillDirection ?: config.defaultFillDirection,
+                        side.bounds[0], side.bounds[1], side.bounds[2], side.bounds[3],
+                        globalProgress,
+                        side.strokeWidth,
+                        side,
+                        props,
+                    )
+                }
+            }
             side.contours.forEachIndexed { contourIndex, contour ->
                 val path = staticPath(contour)
-                if (fillResult !is GradientInterpolator.Result.None) {
-                    withClipReveal(side.clipContours, clipProgress, clipDirection) {
-                        paintFillWithReveal(
-                            staticFillPath(side),
-                            fillResult,
-                            pathAlpha * side.fillAlpha,
-                            fillProgress,
-                            fillConfig?.fillMode ?: config.defaultFillMode,
-                            fillConfig?.fillDirection ?: config.defaultFillDirection,
-                            side.bounds[0], side.bounds[1], side.bounds[2], side.bounds[3],
-                            globalProgress,
-                            side.strokeWidth,
-                            side,
-                            props,
-                        )
-                    }
-                }
                 if (strokeResultWithAnimation !is GradientInterpolator.Result.None && side.strokeWidth > 0f) {
                     val strokeMode = drawConfig?.mode ?: DrawMode.FORWARD
                     val strokeDirection = drawConfig?.direction ?: DrawDirection.AUTO
@@ -1645,7 +1799,7 @@ class MorphRenderer {
                     if (strokeMode == DrawMode.RADIAL) {
                         withClipReveal(side.clipContours, clipProgress, clipDirection) {
                             withRadialClip(side.bounds[0], side.bounds[1], side.bounds[2], side.bounds[3], drawProgress) {
-                                paintStroke(path, strokeResultWithAnimation, pathAlpha * side.strokeAlpha, style)
+                                paintStroke(path, strokeResultWithAnimation, pathAlpha * side.strokeAlpha * strokeAlphaOverride, style)
                             }
                         }
                     } else {
@@ -1665,7 +1819,7 @@ class MorphRenderer {
                             closed = contour.closed,
                         )
                         withClipReveal(side.clipContours, clipProgress, clipDirection) {
-                            paintStroke(revealed, strokeResultWithAnimation, pathAlpha * side.strokeAlpha, style)
+                            paintStroke(revealed, strokeResultWithAnimation, pathAlpha * side.strokeAlpha * strokeAlphaOverride, style)
                         }
                     }
                 }
@@ -1675,7 +1829,12 @@ class MorphRenderer {
 
     // ------------------------------------------------------------------ path management
 
-    /** Rebuilds the interpolated contour path; cached per (pair, contour) per frame. */
+    /**
+     * Lerps one contour pair's packed coordinates at [morphT] into a Compose [Path],
+     * cached per (pair, contour) and rewritten each frame. [reverse] traverses the same
+     * geometry backwards for direction-ordered reveals; closure follows the active side so
+     * open↔closed transitions never paint a ghost segment at the wrong endpoint.
+     */
     private fun morphContourPath(
         pairIndex: Int,
         contourIndex: Int,
@@ -1743,7 +1902,7 @@ class MorphRenderer {
      * Clips [block] to the portion of the path box already reached by a fill reveal at
      * [progress]: directional/sweep masks grow across the interpolated bounds, radial
      * grows from the center. Used when a stroke reveal owns the whole path — the fill
-     // sweeps in behind the pen without touching the brush itself (gradients stay true).
+     * sweeps in behind the pen without touching the brush itself (gradients stay true).
      */
     private inline fun DrawScope.withFillRevealClip(
         progress: Float,
@@ -1826,7 +1985,11 @@ class MorphRenderer {
         }
     }
 
-    /** One fill path for every contour of a static side so fill-rule holes survive. */
+    /**
+     * One fill path for every contour of a static side so fill-rule holes survive: solid
+     * icons encode their inner symbols as opposite-winding contours that only cancel when
+     * filled together.
+     */
     private fun staticFillPath(side: PreparedPath): Path =
         contoursFillPath(side.contours, side.pathFillType)
 
@@ -1838,6 +2001,7 @@ class MorphRenderer {
         return fillPath
     }
 
+    /** Immutable contour geometry as a Compose [Path], built once per plan and reused. */
     private fun staticPath(contour: ContourData): Path {
         val path = staticContourCache.getOrPut(contour) { Path() }
         path.rewind()
@@ -1851,18 +2015,22 @@ class MorphRenderer {
         return path
     }
 
+    /** The contour traversed end→start, cached so repeated reveals share one instance. */
     private fun reversedContour(contour: ContourData): ContourData =
         reversedContourCache.getOrPut(contour) { contour.reversed() }
 
+    /** Whether a contour must run backwards to honor a CLOCKWISE/COUNTER_CLOCKWISE reveal. */
     private fun shouldReverseWinding(windingSign: Int, direction: DrawDirection): Boolean = when (direction) {
         DrawDirection.CLOCKWISE -> windingSign < 0
         DrawDirection.COUNTER_CLOCKWISE -> windingSign > 0
         else -> false
     }
 
+    /** Grows the lerp buffer geometrically; sized generously so growth is rare. */
     private fun ensureCapacity(buffer: FloatArray, needed: Int): FloatArray =
         if (buffer.size >= needed) buffer else FloatArray(needed * 2)
 
+    /** Linear interpolation helper shared by the paint/geometry paths. */
     private fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t
 
     /** Ease-out-back scale for COLLAPSE missing-path behavior. */
@@ -1876,9 +2044,25 @@ class MorphRenderer {
 
     // ------------------------------------------------------------------ pair transform
 
+    /**
+     * A path-level animated transform (scale/rotation/translation around an interpolated
+     * fractional pivot of the pair's bounds). [Identity] skips all canvas ops.
+     */
     private class PairTransform(
-        val sx: Float, val sy: Float, val rotation: Float,
-        val tx: Float, val ty: Float, val pivotX: Float, val pivotY: Float,
+        /** Uniform X scale; 1 = unchanged. */
+        val sx: Float,
+        /** Y scale (follows [sx] when the timeline only animated SCALE_X). */
+        val sy: Float,
+        /** Clockwise rotation in degrees. */
+        val rotation: Float,
+        /** X translation in viewport units. */
+        val tx: Float,
+        /** Y translation in viewport units. */
+        val ty: Float,
+        /** Absolute pivot X the scale/rotation resolve around. */
+        val pivotX: Float,
+        /** Absolute pivot Y the scale/rotation resolve around. */
+        val pivotY: Float,
     ) {
         val isIdentity: Boolean
             get() = sx == 1f && sy == 1f && rotation == 0f && tx == 0f && ty == 0f
@@ -1913,6 +2097,7 @@ class MorphRenderer {
         }
     }
 
+    /** Applies the path-level transform before [block]; identity transforms draw in place. */
     private inline fun DrawScope.withPairTransform(tr: PairTransform, block: DrawScope.() -> Unit) {
         if (tr.isIdentity) {
             block()

@@ -10,7 +10,9 @@ import kotlin.math.sqrt
 
 /** One resolved source→target path correspondence (either side may be absent). */
 data class PathMatch(
+    /** Source-side path; null when the path only exists on the target side (fade-in). */
     val from: PreparedPath?,
+    /** Target-side path; null when the path only exists on the source side (fade-out). */
     val to: PreparedPath?,
 ) {
     val kindDescriptor: String
@@ -28,6 +30,13 @@ data class PathMatch(
  */
 object PathMatcher {
 
+    /**
+     * Pairs [fromVector]'s paths with [toVector]'s paths according to [strategy] (and
+     * [customMappings] for BY_NAME/CUSTOM/AUTO), returning every pair in a stable order —
+     * matched pairs by source index first, then fade-in targets. Human-readable diagnostics
+     * (unmatched counts, missing mapping targets, count mismatches) come back as warnings;
+     * they never abort matching.
+     */
     fun match(
         fromVector: PreparedVector,
         toVector: PreparedVector,
@@ -62,9 +71,15 @@ object PathMatcher {
 
     // ------------------------------------------------------------------ strategies
 
+    /** Identity mappings: every source path pairs with the same-named target path. */
     private fun nameMappings(fromPaths: List<PreparedPath>, toPaths: List<PreparedPath>): List<PathMapping> =
         fromPaths.map { PathMapping(source = it.name, target = it.name) }
 
+    /**
+     * Pairs sources to targets through explicit [mappings]; a source whose mapping misses
+     * (unknown target or target already taken) fades out, and any still-unclaimed target
+     * fades in.
+     */
     private fun matchByNames(
         fromPaths: List<PreparedPath>,
         toPaths: List<PreparedPath>,
@@ -92,6 +107,7 @@ object PathMatcher {
         return out
     }
 
+    /** Pairs declaration order to declaration order; surplus paths on either side fade. */
     private fun matchByIndex(
         fromPaths: List<PreparedPath>,
         toPaths: List<PreparedPath>,
@@ -111,7 +127,11 @@ object PathMatcher {
         return out
     }
 
-    /** Greedy assignment on a cost matrix (sorted by ascending cost, each path used once). */
+    /**
+     * Greedy one-to-one assignment: all (source, target) edges sorted by ascending [cost],
+     * cheapest edges claim their paths first. Unpaired sources become fade-outs and unpaired
+     * targets fade-ins, appended after the matched pairs.
+     */
     private fun matchByCost(
         fromPaths: List<PreparedPath>,
         toPaths: List<PreparedPath>,
@@ -150,6 +170,12 @@ object PathMatcher {
         return list
     }
 
+    /**
+     * AUTO resolution: explicit [customMappings] first (leftovers re-paired geometrically),
+     * otherwise index matching when the counts agree AND the geometry corroborates —
+     * compared against a pure geometric assignment — falling back to geometric matching
+     * when index pairing would glue dissimilar shapes together.
+     */
     private fun matchAuto(
         fromPaths: List<PreparedPath>,
         toPaths: List<PreparedPath>,
@@ -160,8 +186,6 @@ object PathMatcher {
         val base = if (customMappings.isNotEmpty()) {
             matchByNames(fromPaths, toPaths, customMappings, warnings)
         } else null
-
-        val diag = maxOf(fromVectorDiag(fromPaths), fromVectorDiag(toPaths)).coerceAtLeast(1f)
 
         val result = if (base != null) {
             // re-match unmatched pairs geometrically
@@ -179,15 +203,13 @@ object PathMatcher {
                 } + geo
             }
         } else if (fromPaths.size == toPaths.size) {
-            // try index matching, but reject pairs whose geometry wildly disagrees
+            // try index matching, but fall back to geometry whenever it pairs the paths
+            // measurably better — a plain index pairing happily glues a big square to a
+            // small one just because both sit at the same declaration position.
             val indexMatched = matchByIndex(fromPaths, toPaths, mutableListOf())
-            val needsGeo = indexMatched.any { m ->
-                val f = m.from ?: return@any false
-                val t = m.to ?: return@any false
-                geometryCost(f, t, diag) > 0.8f
-            }
-            if (needsGeo) {
-                matchByCost(fromPaths, toPaths, ::geometryCost, warnings)
+            val geoMatched = matchByCost(fromPaths, toPaths, ::geometryCost, warnings)
+            if (totalGeometryCost(geoMatched) + 1e-4f < totalGeometryCost(indexMatched)) {
+                geoMatched
             } else {
                 indexMatched
             }
@@ -197,8 +219,20 @@ object PathMatcher {
         return result
     }
 
+    /** Sum of per-pair geometry costs; unmatched pairs count as the worst case (1.0 each). */
+    private fun totalGeometryCost(matches: List<PathMatch>): Float =
+        matches.sumOf { match ->
+            val f = match.from
+            val t = match.to
+            when {
+                f != null && t != null -> geometryCost(f, t, 1f).toDouble()
+                else -> 1.0 // an unmatched side is the worst outcome for this comparison
+            }
+        }.toFloat()
+
     // ------------------------------------------------------------------ cost functions (0 = identical, 1 = maximally different)
 
+    /** Viewport-diagonal of the union bounds of [paths] — the normalization base for costs. */
     private fun fromVectorDiag(paths: List<PreparedPath>): Float {
         var minX = Float.MAX_VALUE; var minY = Float.MAX_VALUE
         var maxX = -Float.MAX_VALUE; var maxY = -Float.MAX_VALUE
@@ -213,18 +247,25 @@ object PathMatcher {
         return sqrt((maxX - minX) * (maxX - minX) + (maxY - minY) * (maxY - minY))
     }
 
+    /** Normalized centroid distance: 0 = same position, 1 = viewport-diagonal apart. */
     internal fun centroidCost(f: PreparedPath, t: PreparedPath, diag: Float): Float {
         val dx = f.centroidX - t.centroidX
         val dy = f.centroidY - t.centroidY
         return (sqrt(dx * dx + dy * dy) / diag).coerceIn(0f, 1f)
     }
 
+    /** Filled-area similarity: 0 = identical areas, 1 = one side is empty relative to the other. */
     internal fun areaCost(f: PreparedPath, t: PreparedPath, diag: Float): Float {
         val maxA = maxOf(f.area, t.area)
         if (maxA <= 0f) return if (f.area == t.area) 0f else 1f
         return (1f - min(f.area, t.area) / maxA).coerceIn(0f, 1f)
     }
 
+    /**
+     * Weighted blend of centroid distance, area difference, path-length difference, contour
+     * count difference, and bounds-overlap — the cost [matchByCost] minimizes and AUTO uses
+     * to compare candidate pairings. 0 = visually interchangeable, 1 = maximally different.
+     */
     internal fun geometryCost(f: PreparedPath, t: PreparedPath, diag: Float): Float {
         val centroid = centroidCost(f, t, diag)
         val area = areaCost(f, t, diag)
@@ -243,6 +284,7 @@ object PathMatcher {
         return cost.coerceIn(0f, 1f)
     }
 
+    /** Intersection-over-union of two (minX, minY, maxX, maxY) boxes; 0 when disjoint. */
     private fun overlapRatio(a: FloatArray, b: FloatArray): Float {
         val ix = maxOf(0f, minOf(a[2], b[2]) - maxOf(a[0], b[0]))
         val iy = maxOf(0f, minOf(a[3], b[3]) - maxOf(a[1], b[1]))

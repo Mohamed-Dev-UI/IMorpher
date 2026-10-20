@@ -37,7 +37,14 @@ class AlignedContour(
     val totalLength: Float get() = arcLength.totalLength
 }
 
-/** One contour correspondence within a morphing path pair. */
+/**
+ * One contour correspondence within a morphing path pair.
+ *
+ * @param from The source side, aligned and packed for interpolation.
+ * @param to The target side, aligned and packed for interpolation.
+ * @param normalizedDirection Which side was reversed to normalize winding (diagnostics).
+ * @param startAlignmentOffset Arc fraction the target start was rotated to (diagnostics).
+ */
 class ContourPairPlan(
     val from: AlignedContour,
     val to: AlignedContour,
@@ -47,7 +54,20 @@ class ContourPairPlan(
     val startAlignmentOffset: Float,
 )
 
-/** One source-path ↔ target-path correspondence. */
+/**
+ * One source-path ↔ target-path correspondence.
+ *
+ * @param index Position in [MorphPlan.pairs]; timeline frames index their buffers by it.
+ * @param fromPath Source-side path, or null when the path only exists on the target side.
+ * @param toPath Target-side path, or null when the path only exists on the source side.
+ * @param kind How the pair renders (morph, fade, or crossfade).
+ * @param contourPairs Aligned contour pairs; present only for [PairKind.MORPH].
+ * @param fromOnlyContours Source contours with no partner — drawn from the source leg.
+ * @param toOnlyContours Target contours with no partner — drawn from the target leg.
+ * @param strokeFillDraw Whether the stroke→fill transition uses draw-first choreography.
+ * @param score 0..1 geometric compatibility of the pair (1 = identical structure).
+ * @param warnings Human-readable diagnostics attached to this pair.
+ */
 class PathPairPlan(
     val index: Int,
     val fromPath: PreparedPath?,
@@ -72,12 +92,19 @@ class PathPairPlan(
  * is computed once here. Per-frame work is exclusively float lerps + evaluation of the timeline.
  */
 class MorphPlan(
+    /** Compiled source vector, in its own viewport space. */
     val from: PreparedVector,
+    /** Compiled target vector, normalized into [from]'s viewport. */
     val to: PreparedVector,
+    /** Every source↔target correspondence in stable order (morphs, fades, crossfades). */
     val pairs: List<PathPairPlan>,
     /** Path pairs rendered as a crossfade because geometry morphing was not viable. */
     val usedFallback: Boolean,
+
+    /** Human-readable reason [usedFallback] was forced, or null for clean morphs. */
     val fallbackReason: String?,
+
+    /** Full planning-time diagnostic report (scores, issues, unmatched paths). */
     val report: MorphReport,
 ) {
     val maxViewportWidth: Float get() = maxOf(from.viewportWidth, to.viewportWidth)
@@ -87,7 +114,14 @@ class MorphPlan(
 /** Severity of a [MorphIssue]. */
 enum class IssueSeverity { INFO, WARNING, ERROR }
 
-/** One finding of [com.imorpher.vectormorph.core.validation.MorphValidator]. */
+/**
+ * One finding of [com.imorpher.vectormorph.core.validation.MorphValidator].
+ *
+ * @param severity From informational notes to actionable warnings.
+ * @param category Machine-readable grouping ("contour-count", "gradient", "missing"…).
+ * @param pathNames The involved path names (empty for vector-level findings).
+ * @param message Human-readable description of the finding.
+ */
 data class MorphIssue(
     val severity: IssueSeverity,
     val category: String,
@@ -95,14 +129,30 @@ data class MorphIssue(
     val message: String,
 )
 
-/** Overall morph quality score + warnings, exposed to developers. */
+/**
+ * Overall morph quality score + warnings, exposed to developers.
+ *
+ * @param score 0..1, weighted across path pairs (1.0 = every path pairs up with identical
+ *   structure; below ~0.45 the morph may look elastic).
+ * @param warnings Deduplicated planning warnings worth surfacing in an IDE or log.
+ */
 data class MorphCompatibility(
     /** 0..1, weighted across path pairs (1.0 = every path pairs up with identical structure). */
     val score: Float,
     val warnings: List<String>,
 )
 
-/** Full diagnostic report produced at planning time. */
+/**
+ * Full diagnostic report produced at planning time.
+ *
+ * @param compatibility Aggregate quality score with warnings.
+ * @param issues Every [MorphIssue] found while validating the plan.
+ * @param unmatchedSourcePaths Names of source paths with no target counterpart.
+ * @param unmatchedTargetPaths Names of target paths with no source counterpart.
+ * @param fallbackUsed Whether any pair degraded to a crossfade.
+ * @param fallbackStrategy The strategy that forced the fallback, when explicit.
+ * @param fallbackReason Why the fallback was chosen.
+ */
 data class MorphReport(
     val compatibility: MorphCompatibility,
     val issues: List<MorphIssue>,

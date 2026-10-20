@@ -12,11 +12,15 @@ class ContourData(
     val segments: List<Cubic>,
     val closed: Boolean,
 ) {
+    /** Absolute coordinates of the contour's first point (0,0 when the contour is empty). */
     val startX: Float get() = segments.firstOrNull()?.x0 ?: 0f
     val startY: Float get() = segments.firstOrNull()?.y0 ?: 0f
+
+    /** Absolute coordinates of the contour's last point (0,0 when the contour is empty). */
     val endX: Float get() = segments.lastOrNull()?.x3 ?: 0f
     val endY: Float get() = segments.lastOrNull()?.y3 ?: 0f
 
+    /** True when the contour carries no segments at all. */
     val isEmpty: Boolean get() = segments.isEmpty()
 
     /** Back-to-front points of the contour (start of each segment + final end point). */
@@ -72,7 +76,7 @@ class ContourData(
     }
 }
 
-/** Signed (shoelace) area of a contour; positive = counter-clockwise in a Y-down coordinate system. */
+/** Signed (shoelace) area of a contour; positive = clockwise in a Y-down (screen) system. */
 fun signedArea(contour: ContourData, samplesPerSegment: Int = 8): Float {
     if (contour.segments.isEmpty()) return 0f
     var sum = 0f
@@ -81,13 +85,12 @@ fun signedArea(contour: ContourData, samplesPerSegment: Int = 8): Float {
     var first = true
     for (seg in contour.segments) {
         val n = flattenCubic(seg, buf, 0, samplesPerSegment, includeStart = true)
-        var i = 0
-        while (i < n) {
-            val x = buf[i]; val y = buf[i + 1]
+        // n is the point count; the buffer holds 2 floats per point.
+        for (pointIndex in 0 until n) {
+            val x = buf[2 * pointIndex]; val y = buf[2 * pointIndex + 1]
             if (!first) sum += prevX * y - x * prevY
             prevX = x; prevY = y
             first = false
-            i += 2
         }
     }
     // close back to start
@@ -175,13 +178,21 @@ fun nearestPoint(contour: ContourData, x: Float, y: Float): FloatArray {
  * constant-speed drawing (timing mode BY_PATH_LENGTH) and dash-offset start alignment.
  */
 class ArcLengthData(
+    /** Approximated length of each cubic segment, in order. */
     val segmentLengths: FloatArray,
+    /** Cumulative length at each segment boundary; size is segment count + 1. */
     val cumulativeLength: FloatArray,
+    /** Sum of all [segmentLengths] — the contour's total polyline length. */
     val totalLength: Float,
     /** Cumulative sampled distances within each segment, used to invert cubic arc length. */
     val segmentSampleCumulative: List<FloatArray> = emptyList(),
 )
 
+/**
+ * Measures [contour] into [ArcLengthData] — the arc-length tables every constant-speed
+ * reveal and arc-fraction lookup builds on. More [samplesPerSegment] means smoother speed
+ * on curvy segments at a small up-front cost.
+ */
 fun measureContour(contour: ContourData, samplesPerSegment: Int = 16): ArcLengthData {
     require(samplesPerSegment >= 1) { "samplesPerSegment must be at least 1" }
     val n = contour.segments.size

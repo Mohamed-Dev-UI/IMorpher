@@ -41,9 +41,11 @@ object DrawOrder {
         return idx
     }
 
+    /** The path whose geometry drives this pair's ordering (target preferred). */
     private fun pathOf(pair: com.imorpher.vectormorph.core.plan.PathPairPlan) =
         pair.toPath ?: pair.fromPath
 
+    /** Stable sort of [idx] by a scalar corner key computed from each pair's representative path. */
     private fun sortByCorner(
         idx: IntArray,
         pairs: List<com.imorpher.vectormorph.core.plan.PathPairPlan>,
@@ -53,6 +55,7 @@ object DrawOrder {
         keyed.forEachIndexed { o, v -> idx[o] = v }
     }
 
+    /** Stable sort of [idx] by each pair's rank in the [order] list (unknown names last). */
     private fun sortByNames(
         idx: IntArray,
         pairs: List<com.imorpher.vectormorph.core.plan.PathPairPlan>,
@@ -68,6 +71,10 @@ object DrawOrder {
         keyed.forEachIndexed { o, v -> idx[o] = v }
     }
 
+    /**
+     * Stable sort of [idx] by each pair's polar angle around the viewport center; ascending
+     * atan2 in Y-down space walks the screen clockwise.
+     */
     private fun sortByAngle(idx: IntArray, plan: MorphPlan, clockwise: Boolean) {
         val cx = plan.maxViewportWidth / 2f
         val cy = plan.maxViewportHeight / 2f

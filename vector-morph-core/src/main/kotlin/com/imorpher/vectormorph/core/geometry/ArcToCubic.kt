@@ -136,6 +136,7 @@ object ArcToCubic {
         return out
     }
 
+    /** atan2 normalized to [0, 2π) so arc angles never go negative. */
     private fun angleOf(x: Float, y: Float): Float {
         val angle = kotlin.math.atan2(y, x)
         return if (angle < 0f) angle + 2f * Math.PI.toFloat() else angle

@@ -55,11 +55,15 @@ class PreparedPath(
     /** Static per-path transform overlay extracted from source groups (rare; usually identity). */
     val sourceTransform: Transform2D,
     // ---- precomputed features ----
-    val bounds: FloatArray,          // minX, minY, maxX, maxY
+    /** Path bounds as (minX, minY, maxX, maxY) in viewport coordinates. */
+    val bounds: FloatArray,
+    /** Area-weighted centroid across all contours (weights guard against zero-area shapes). */
     val centroidX: Float,
     val centroidY: Float,
-    val area: Float,                 // |signed area| summed over contours
-    val totalLength: Float,          // summed over contours
+    /** Total |signed area| summed over contours — the fill footprint used for matching. */
+    val area: Float,
+    /** Total polyline length summed over contours — drives constant-speed timing. */
+    val totalLength: Float,
     val contourLengths: FloatArray,
     /** +1 = clockwise on screen (Y-down), -1 = counter-clockwise, 0 = degenerate. Per contour. */
     val windingSigns: IntArray,

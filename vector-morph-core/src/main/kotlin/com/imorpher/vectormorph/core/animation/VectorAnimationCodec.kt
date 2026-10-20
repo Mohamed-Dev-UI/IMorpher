@@ -25,6 +25,11 @@ object VectorAnimationCodec {
     private const val EASING_SAMPLES = 129
     private const val MAX_ITEMS = 100_000
 
+    /**
+     * Serializes [animation] into a versioned, deterministic byte array (magic "VMAN").
+     * Easings are baked into sampled curves and built-in brush specs are stored by value;
+     * custom render callbacks and custom [androidx.compose.ui.graphics.Brush]es are rejected.
+     */
     fun encode(animation: VectorAnimation): ByteArray {
         require(animation.customizer == null) {
             "VectorAnimationCodec cannot serialize CustomVectorAnimation callbacks; define the callback in code."
@@ -65,12 +70,19 @@ object VectorAnimationCodec {
         return bytes.toByteArray()
     }
 
+    /**
+     * Restores a [VectorAnimation] written by [encode]. Validates the header, version, all
+     * counts and enums, and rejects trailing bytes; truncated or corrupt input raises
+     * [IllegalArgumentException]. The decoded animation evaluates identically to the
+     * original (within the easings' sampling tolerance) but carries no customizer.
+     */
     fun decode(bytes: ByteArray): VectorAnimation = try {
         decodeUnchecked(bytes)
     } catch (truncated: EOFException) {
         throw IllegalArgumentException("Truncated vector animation definition", truncated)
     }
 
+    /** Header/structure validation and field decoding shared by [decode]. */
     private fun decodeUnchecked(bytes: ByteArray): VectorAnimation {
         require(bytes.size <= 64 * 1024 * 1024) { "Animation definition exceeds 64 MiB" }
         DataInputStream(ByteArrayInputStream(bytes)).use { input ->
@@ -123,6 +135,7 @@ object VectorAnimationCodec {
         }
     }
 
+    /** Tagged union encoding of [AnimationTarget]; tags 0..4, unknown tags fail decode. */
     private fun writeTarget(out: DataOutputStream, target: AnimationTarget) {
         when (target) {
             AnimationTarget.Vector -> out.writeByte(0)
@@ -133,6 +146,7 @@ object VectorAnimationCodec {
         }
     }
 
+    /** Inverse of [writeTarget]; unknown tags abort the decode. */
     private fun readTarget(input: DataInputStream): AnimationTarget = when (input.readUnsignedByte()) {
         0 -> AnimationTarget.Vector
         1 -> AnimationTarget.AllPaths
@@ -142,6 +156,10 @@ object VectorAnimationCodec {
         else -> error("Unknown animation target tag")
     }
 
+    /**
+     * Tagged union encoding of [BrushSpec]; tags 0..3 (solid, linear, radial, sweep).
+     * [BrushSpec.Unknown] is rejected — a custom Brush implementation cannot be persisted.
+     */
     private fun writeBrush(out: DataOutputStream, brush: BrushSpec) {
         when (brush) {
             is BrushSpec.Solid -> { out.writeByte(0); writeColor(out, brush.color) }
@@ -158,10 +176,13 @@ object VectorAnimationCodec {
                 out.writeByte(3); writeColors(out, brush.colors); writeStops(out, brush.stops)
                 out.writeFloat(brush.centerX); out.writeFloat(brush.centerY)
             }
-            is BrushSpec.Unknown -> error("VectorAnimationCodec cannot serialize a custom Brush implementation")
+            is BrushSpec.Unknown -> throw IllegalArgumentException(
+                "VectorAnimationCodec cannot serialize a custom Brush implementation",
+            )
         }
     }
 
+    /** Inverse of [writeBrush]; unknown tags abort the decode. */
     private fun readBrush(input: DataInputStream): BrushSpec = when (input.readUnsignedByte()) {
         0 -> BrushSpec.Solid(readColor(input))
         1 -> {
@@ -178,23 +199,37 @@ object VectorAnimationCodec {
         else -> error("Unknown brush tag")
     }
 
+    /** Length-prefixed color list. */
     private fun writeColors(out: DataOutputStream, colors: List<Color>) {
         out.writeInt(colors.size); colors.forEach { writeColor(out, it) }
     }
+    /** Inverse of [writeColors]. */
     private fun readColors(input: DataInputStream): List<Color> = List(readCount(input)) { readColor(input) }
+
+    /** Packed 64-bit color value, preserving the exact colorspace/alpha bits. */
     private fun writeColor(out: DataOutputStream, color: Color) = out.writeLong(color.value.toLong())
+
+    /** Inverse of [writeColor]. */
     private fun readColor(input: DataInputStream): Color = Color(input.readLong().toULong())
+
+    /** Null flag + length-prefixed stop list. */
     private fun writeStops(out: DataOutputStream, stops: List<Float>?) {
         out.writeBoolean(stops != null); stops?.let { out.writeInt(it.size); it.forEach(out::writeFloat) }
     }
+    /** Inverse of [writeStops]. */
     private fun readStops(input: DataInputStream): List<Float>? =
         if (!input.readBoolean()) null else List(readCount(input)) { input.readFloat() }
 
+    /**
+     * Bakes [easing] into [EASING_SAMPLES] uniform samples so any Compose easing survives
+     * the round trip with sub-percent visual error and no class-name/reflection dependency.
+     */
     private fun writeEasing(out: DataOutputStream, easing: Easing) {
         out.writeInt(EASING_SAMPLES)
         repeat(EASING_SAMPLES) { i -> out.writeFloat(easing.transform(i.toFloat() / (EASING_SAMPLES - 1))) }
     }
 
+    /** Restores a sampled easing; sample counts outside the accepted range abort the decode. */
     private fun readEasing(input: DataInputStream): Easing {
         val count = readCount(input)
         require(count in 2..4097) { "Invalid serialized easing sample count: $count" }
@@ -202,6 +237,7 @@ object VectorAnimationCodec {
         return SampledEasing(samples)
     }
 
+    /** Linear interpolation over the serialized easing samples; clamps outside 0..1. */
     private class SampledEasing(private val values: FloatArray) : Easing {
         override fun transform(fraction: Float): Float {
             val x = fraction.coerceIn(0f, 1f) * (values.size - 1)
@@ -211,11 +247,17 @@ object VectorAnimationCodec {
         }
     }
 
+    /** Null flag + enum name. */
     private fun writeNullableEnum(out: DataOutputStream, value: String?) {
         out.writeBoolean(value != null); value?.let(out::writeUTF)
     }
+    /** Inverse of [writeNullableEnum]. */
     private fun readNullableEnum(input: DataInputStream): String? = if (input.readBoolean()) input.readUTF() else null
+
+    /** Enum lookup by name; unknown names abort the decode. */
     private inline fun <reified T : Enum<T>> enumValue(name: String): T = enumValueOf(name)
+
+    /** Length prefix validated against [MAX_ITEMS] so corrupt counts fail fast. */
     private fun readCount(input: DataInputStream): Int = input.readInt().also {
         require(it in 0..MAX_ITEMS) { "Invalid item count in vector animation definition: $it" }
     }

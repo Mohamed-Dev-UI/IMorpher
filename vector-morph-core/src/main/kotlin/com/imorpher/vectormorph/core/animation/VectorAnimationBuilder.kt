@@ -42,13 +42,26 @@ import com.imorpher.vectormorph.core.model.PathStart
  */
 class VectorAnimationBuilder internal constructor() {
 
+    /** Easing used by any track or keyframe that does not name its own. */
     internal var defaultEasing: Easing = androidx.compose.animation.core.FastOutSlowInEasing
+
+    /**
+     * Stays true while the DSL only touched appearance (alpha multipliers and paint) —
+     * a hint that the timeline recolors/fades rather than moves geometry.
+     */
     internal var appearanceOnly = true
+
+    /** Application callback installed by [customAnimation]; rejected by the codec. */
     private var customizer: CustomVectorAnimation? = null
 
     // keyframe storage: time -> (prop -> value)
+    /** Keyframe values per normalized time, merged across [at] calls at the same time. */
     private val keyframes = sortedMapOf<Float, MutableMap<PropKey, Float>>()
+
+    /** Easing leaving each keyed time (nulls fall back to [defaultEasing]). */
     private val keyframeEasings = mutableMapOf<Float, Easing>()
+
+    /** Solid color keyframes, forming the paint timeline. */
     private val keyframeColors = sortedMapOf<Float, Color>()
 
     // explicit segments
@@ -73,14 +86,21 @@ class VectorAnimationBuilder internal constructor() {
         val easing: Easing,
     )
 
+    /** Scalar track requests recorded by the DSL scopes. */
     private val scalars = ArrayList<ScalarRequest>()
+
+    /** Paint track requests recorded by the DSL scopes. */
     private val brushes = ArrayList<BrushRequest>()
+    /** Delay between ordered path animations, in normalized timeline units (see [stagger]). */
     internal var staggerDelay: Float = 0f
+
+    /** Order used to assign the stagger offsets (see [stagger]). */
     internal var staggerOrder: com.imorpher.vectormorph.core.model.DrawOrderStrategy =
         com.imorpher.vectormorph.core.model.DrawOrderStrategy.TOP_LEFT_TO_BOTTOM_RIGHT
 
     // ------------------------------------------------------------------ entry points
 
+    /** Sets the easing used by every later track or keyframe that does not name its own. */
     fun defaultEasing(easing: Easing) {
         defaultEasing = easing
     }
@@ -99,21 +119,32 @@ class VectorAnimationBuilder internal constructor() {
         map.putAll(scope.values)
         scope.color?.let { keyframeColors[t] = it }
         if (easing != null) keyframeEasings[t] = easing
-        if (scope.values.isNotEmpty()) appearanceOnly = false
+        // Same rule as addScalar: alpha multipliers are appearance, everything else is geometry.
+        if (scope.values.keys.any { it != PropKey.ALPHA && it != PropKey.FILL_ALPHA && it != PropKey.STROKE_ALPHA }) {
+            appearanceOnly = false
+        }
     }
 
+    /** Tracks for the path named [name]; repeated names need [occurrence] (0-based). */
     fun path(name: String, occurrence: Int = 0, block: PathAnimationScope.() -> Unit) =
         PathAnimationScope(AnimationTarget.Path(name, occurrence), this).apply(block)
 
+    /** Tracks for the path at declaration [index] (see [PreparedPath.index]). */
     fun pathIndex(index: Int, block: PathAnimationScope.() -> Unit) =
         PathAnimationScope(AnimationTarget.PathIndex(index), this).apply(block)
 
+    /** Tracks applied to every path individually (each path evaluates the same intervals). */
     fun allPaths(block: PathAnimationScope.() -> Unit) =
         PathAnimationScope(AnimationTarget.AllPaths, this).apply(block)
 
+    /** Tracks for every path under the named group (any depth), sharing one group clock. */
     fun group(name: String, block: PathAnimationScope.() -> Unit) =
         PathAnimationScope(AnimationTarget.Group(name), this).apply(block)
 
+    /**
+     * Offsets each path's timeline clock by `rank × [delay]` in [order] (rank 0 starts
+     * immediately; the last rank is squeezed to still finish by progress 1).
+     */
     fun stagger(delay: Float, order: com.imorpher.vectormorph.core.model.DrawOrderStrategy) {
         staggerDelay = delay
         staggerOrder = order
@@ -149,14 +180,17 @@ class VectorAnimationBuilder internal constructor() {
         }
     }
 
+    /** Vector-level convenience: the pen effect on every path (see the path-scope overload). */
     fun drawProgress(from: Float = 0f, to: Float = 1f, interval: ClosedFloatingPointRange<Float> = 0f..1f, easing: Easing? = null) {
         allPaths { drawProgress(from, to, interval, easing ?: defaultEasing) }
     }
 
+    /** Vector-level convenience: plain fill reveal progress on every path. */
     fun fillProgress(from: Float = 0f, to: Float = 1f, interval: ClosedFloatingPointRange<Float> = 0f..1f, easing: Easing? = null) {
         allPaths { fillProgress(from, to, interval, easing ?: defaultEasing) }
     }
 
+    /** Vector-level convenience: configured fill reveal on every path (mode + direction). */
     fun fill(
         mode: FillMode = FillMode.DIRECTIONAL,
         direction: DrawDirection = DrawDirection.TOP_RIGHT_TO_BOTTOM_LEFT,
@@ -166,14 +200,17 @@ class VectorAnimationBuilder internal constructor() {
         allPaths { fill(mode, direction, interval, easing ?: defaultEasing) }
     }
 
+    /** Vector-level convenience: overrides every path's morph fraction (see path-scope morph). */
     fun morphProgress(from: Float = 0f, to: Float = 1f, interval: ClosedFloatingPointRange<Float> = 0f..1f, easing: Easing? = null) {
         allPaths { morph(from, to, interval, easing ?: defaultEasing) }
     }
 
+    /** Whole-vector alpha ramp — fades everything, geometry included. */
     fun alpha(from: Float = 1f, to: Float = 1f, interval: ClosedFloatingPointRange<Float> = 0f..1f, easing: Easing? = null) {
         addScalar(AnimationTarget.Vector, PropKey.ALPHA, from, to, interval, easing ?: defaultEasing)
     }
 
+    /** Whole-vector uniform scale around the fractional [origin]. */
     fun scale(from: Float, to: Float, interval: ClosedFloatingPointRange<Float> = 0f..1f, easing: Easing? = null, origin: com.imorpher.vectormorph.core.model.TransformOrigin = com.imorpher.vectormorph.core.model.TransformOrigin.Center) {
         addScalar(AnimationTarget.Vector, PropKey.SCALE_X, from, to, interval, easing ?: defaultEasing)
         addScalar(AnimationTarget.Vector, PropKey.SCALE_Y, from, to, interval, easing ?: defaultEasing)
@@ -181,17 +218,20 @@ class VectorAnimationBuilder internal constructor() {
         addScalar(AnimationTarget.Vector, PropKey.PIVOT_Y, origin.y, origin.y, interval, easing ?: defaultEasing)
     }
 
+    /** Whole-vector rotation around the fractional [pivot]; takes the shortest angular route. */
     fun rotation(from: Float, to: Float, interval: ClosedFloatingPointRange<Float> = 0f..1f, easing: Easing? = null, pivot: com.imorpher.vectormorph.core.model.TransformOrigin = com.imorpher.vectormorph.core.model.TransformOrigin.Center) {
         addScalar(AnimationTarget.Vector, PropKey.ROTATION_DEG, from, to, interval, easing ?: defaultEasing)
         addScalar(AnimationTarget.Vector, PropKey.PIVOT_X, pivot.x, pivot.x, interval, easing ?: defaultEasing)
         addScalar(AnimationTarget.Vector, PropKey.PIVOT_Y, pivot.y, pivot.y, interval, easing ?: defaultEasing)
     }
 
+    /** Whole-vector translation in viewport units. */
     fun translation(fromX: Float, fromY: Float, toX: Float, toY: Float, interval: ClosedFloatingPointRange<Float> = 0f..1f, easing: Easing? = null) {
         addScalar(AnimationTarget.Vector, PropKey.TRANSLATION_X, fromX, toX, interval, easing ?: defaultEasing)
         addScalar(AnimationTarget.Vector, PropKey.TRANSLATION_Y, fromY, toY, interval, easing ?: defaultEasing)
     }
 
+    /** Whole-vector solid fill color ramp (recolors fills; use strokeColor for strokes). */
     fun color(from: Color, to: Color, interval: ClosedFloatingPointRange<Float> = 0f..1f, easing: Easing? = null) {
         brushes.add(
             BrushRequest(
@@ -218,12 +258,17 @@ class VectorAnimationBuilder internal constructor() {
         allPaths { strokeColor(from, to, interval, easing) }
     }
 
+    /** Whole-vector fill gradient ramp; incompatible kinds crossfade instead of interpolating. */
     fun gradient(from: BrushSpec, to: BrushSpec, interval: ClosedFloatingPointRange<Float> = 0f..1f, easing: Easing? = null) {
         brushes.add(BrushRequest(AnimationTarget.Vector, BrushChannel.FILL, interval.start, interval.endInclusive, from, to, easing ?: defaultEasing))
     }
 
     // ------------------------------------------------------------------ compile
 
+    /**
+     * Records one scalar track request; intervals are clamped to 0..1 and degenerate
+     * (non-increasing) intervals are dropped. Geometry properties clear [appearanceOnly].
+     */
     internal fun addScalar(
         target: AnimationTarget,
         prop: PropKey,
@@ -242,6 +287,7 @@ class VectorAnimationBuilder internal constructor() {
         }
     }
 
+    /** Records one paint track request; clamped and dropped like [addScalar]. */
     internal fun addBrush(
         target: AnimationTarget,
         start: Float,
@@ -257,6 +303,13 @@ class VectorAnimationBuilder internal constructor() {
         brushes.add(BrushRequest(target, channel, normalizedStart, normalizedEnd, from, to, easing))
     }
 
+    /**
+     * Compiles the recorded keyframes and track requests into an immutable [VectorAnimation]:
+     * keyframes become per-property vector tracks (a lone key holds its value across the
+     * whole timeline), explicit intervals merge per (target, property) so gaps hold their
+     * previous value, color keyframes form a paint timeline, and brush requests group by
+     * (target, channel).
+     */
     internal fun build(): VectorAnimation {
         val compiledScalars = ArrayList<VectorAnimation.Track>(scalars.size + 8)
 
@@ -351,7 +404,10 @@ class VectorAnimationBuilder internal constructor() {
 
 /** Property setter available inside `at(t) { ... }` keyframes. */
 class KeyframeScope internal constructor() {
+    /** Recorded property values for this keyframe time. */
     internal val values = mutableMapOf<PropKey, Float>()
+
+    /** Solid color override recorded by [fillColor]. */
     internal var color: Color? = null
 
     /** Global alpha (0 = invisible). */
@@ -364,10 +420,12 @@ class KeyframeScope internal constructor() {
         get() = values[PropKey.SCALE_X] ?: 1f
         set(v) { values[PropKey.SCALE_X] = v; values[PropKey.SCALE_Y] = v }
 
+    /** Independent horizontal scale (1 = unchanged). */
     var scaleX: Float
         get() = values[PropKey.SCALE_X] ?: 1f
         set(v) { values[PropKey.SCALE_X] = v }
 
+    /** Independent vertical scale; defaults to -1 ("follow [scaleX]"). */
     var scaleY: Float
         get() = values[PropKey.SCALE_Y] ?: -1f
         set(v) { values[PropKey.SCALE_Y] = v }
@@ -377,10 +435,12 @@ class KeyframeScope internal constructor() {
         get() = values[PropKey.ROTATION_DEG] ?: 0f
         set(v) { values[PropKey.ROTATION_DEG] = v }
 
+    /** Horizontal translation in viewport units. */
     var translationX: Float
         get() = values[PropKey.TRANSLATION_X] ?: 0f
         set(v) { values[PropKey.TRANSLATION_X] = v }
 
+    /** Vertical translation in viewport units. */
     var translationY: Float
         get() = values[PropKey.TRANSLATION_Y] ?: 0f
         set(v) { values[PropKey.TRANSLATION_Y] = v }
@@ -390,18 +450,22 @@ class KeyframeScope internal constructor() {
         get() = values[PropKey.DRAW_PROGRESS] ?: 1f
         set(v) { values[PropKey.DRAW_PROGRESS] = v }
 
+    /** Alias of [reveal] expressing stroke intent. */
     var drawProgress: Float
         get() = reveal
         set(v) { reveal = v }
 
+    /** Fill reveal progress at this keyframe (1 = fully filled). */
     var fillProgress: Float
         get() = values[PropKey.FILL_PROGRESS] ?: 1f
         set(v) { values[PropKey.FILL_PROGRESS] = v }
 
+    /** Geometry morph fraction at this keyframe (0 = source, 1 = target). */
     var morphProgress: Float
         get() = values[PropKey.MORPH_PROGRESS] ?: 0f
         set(v) { values[PropKey.MORPH_PROGRESS] = v }
 
+    /** Stroke width override in viewport units at this keyframe. */
     var strokeWidth: Float
         get() = values[PropKey.STROKE_WIDTH] ?: Float.NaN
         set(v) { values[PropKey.STROKE_WIDTH] = v }
@@ -421,7 +485,11 @@ class PathAnimationScope internal constructor(
     private val target: AnimationTarget,
     private val builder: VectorAnimationBuilder,
 ) {
-    /** Default easing for tracks declared in this scope. */
+    /**
+     * Default easing for tracks declared in this scope. Seeding it from the builder lets a
+     * `defaultEasing(...)` call before the scope apply here, while per-scope assignment
+     * (`easing = SpringEasing.MediumBouncy`) overrides it for everything below.
+     */
     var easing: Easing = builder.defaultEasing
 
     private fun cfg(
@@ -469,7 +537,7 @@ class PathAnimationScope internal constructor(
         builder.addScalar(target, PropKey.FILL_PROGRESS, from, to, interval, easing ?: this.easing)
     }
 
-    /** Fill reveal with an explicit mode + direction (attached to the FILL_PROGRESS track). */
+    /** Vector-level convenience: configured fill reveal on every path (mode + direction). */
     fun fill(
         mode: FillMode = FillMode.DIRECTIONAL,
         direction: DrawDirection = DrawDirection.TOP_RIGHT_TO_BOTTOM_LEFT,
@@ -507,6 +575,7 @@ class PathAnimationScope internal constructor(
         builder.addScalar(target, PropKey.MORPH_PROGRESS, from, to, interval, easing ?: this.easing)
     }
 
+    /** Whole-vector alpha ramp — fades everything, geometry included. */
     fun alpha(from: Float = 1f, to: Float = 1f, interval: ClosedFloatingPointRange<Float> = 0f..1f, easing: Easing? = null) {
         builder.addScalar(target, PropKey.ALPHA, from, to, interval, easing ?: this.easing)
     }

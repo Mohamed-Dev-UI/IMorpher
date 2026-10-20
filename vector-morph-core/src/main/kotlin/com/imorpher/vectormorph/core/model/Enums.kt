@@ -218,7 +218,12 @@ enum class MotionPreference {
     INSTANT,
 }
 
-/** Per-path transform origin. */
+/**
+ * Per-path transform origin.
+ *
+ * @param x Fractional X within the target's bounds (0 = left, 1 = right).
+ * @param y Fractional Y within the target's bounds (0 = top, 1 = bottom).
+ */
 data class TransformOrigin(val x: Float, val y: Float) {
     companion object {
         val Center = TransformOrigin(0.5f, 0.5f)

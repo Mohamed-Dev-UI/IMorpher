@@ -19,6 +19,10 @@ import kotlin.math.sqrt
  */
 object ColorInterpolator {
 
+    /**
+     * Interpolates [from] to [to] at fraction [t] (0 = from, 1 = to) in [space]. Alpha always
+     * interpolates linearly regardless of the color space.
+     */
     fun lerp(from: Color, to: Color, t: Float, space: ColorInterpolationSpace): Color = when (space) {
         ColorInterpolationSpace.SRGB -> lerpSrgb(from, to, t)
         ColorInterpolationSpace.LINEAR_SRGB -> lerpLinearSrgb(from, to, t)
@@ -28,6 +32,7 @@ object ColorInterpolator {
 
     // ------------------------------------------------------------------ sRGB
 
+    /** Component-wise sRGB interpolation; the result keeps [a]'s colorspace. */
     private fun lerpSrgb(a: Color, b: Color, t: Float): Color {
         val aSrgb = a.convert(ColorSpaces.Srgb)
         val bSrgb = b.convert(ColorSpaces.Srgb)
@@ -40,6 +45,7 @@ object ColorInterpolator {
         ).convert(a.colorSpace)
     }
 
+    /** Physically-linear interpolation — brighter midpoints than sRGB, ideal for light. */
     private fun lerpLinearSrgb(a: Color, b: Color, t: Float): Color {
         val ar = a.convert(ColorSpaces.LinearSrgb)
         val br = b.convert(ColorSpaces.LinearSrgb)
@@ -55,6 +61,10 @@ object ColorInterpolator {
 
     // ------------------------------------------------------------------ OKLab
 
+    /**
+     * Converts [c] to OKLab (L, a, b) through linear sRGB using Ottosson's reference matrices.
+     * L is perceptual lightness (0 = black, 1 = white); a/b are the chromatic axes.
+     */
     fun srgbToOklab(c: Color): FloatArray {
         val lin = c.convert(ColorSpaces.LinearSrgb)
         val r = lin.red; val g = lin.green; val b = lin.blue
@@ -73,6 +83,10 @@ object ColorInterpolator {
         return floatArrayOf(L, A, B)
     }
 
+    /**
+     * Converts an OKLab triple back to a color in sRGB with explicit [alpha]. Out-of-gamut
+     * channels are clamped, so round-trips of saturated colors may lose a little chroma.
+     */
     fun oklabToSrgb(lab: FloatArray, alpha: Float): Color {
         val L = lab[0]
         val A = lab[1]
@@ -98,6 +112,7 @@ object ColorInterpolator {
         ).convert(ColorSpaces.Srgb)
     }
 
+    /** Perceptual OKLab interpolation — hue and lightness move together, no gray banding. */
     private fun lerpOklab(a: Color, b: Color, t: Float): Color {
         val la = srgbToOklab(a)
         val lb = srgbToOklab(b)
@@ -113,6 +128,7 @@ object ColorInterpolator {
 
     // ------------------------------------------------------------------ OKLCH
 
+    /** Converts OKLab (L, a, b) to OKLCH (L, C, H) — H is radians in [0, 2π). */
     fun oklabToOklch(lab: FloatArray): FloatArray {
         val L = lab[0]
         val A = lab[1]
@@ -123,6 +139,7 @@ object ColorInterpolator {
         return floatArrayOf(L, C, H)
     }
 
+    /** Converts OKLCH (L, C, H radians) back to OKLab (L, a, b). */
     fun oklchToOklab(lch: FloatArray): FloatArray {
         val h = lch[2]
         return floatArrayOf(
@@ -132,6 +149,7 @@ object ColorInterpolator {
         )
     }
 
+    /** OKLCH interpolation with shortest-path hue travel (red → violet does not cross green). */
     private fun lerpOklch(a: Color, b: Color, t: Float): Color {
         val la = oklabToOklch(srgbToOklab(a))
         val lb = oklabToOklch(srgbToOklab(b))
@@ -149,10 +167,15 @@ object ColorInterpolator {
 
     // ------------------------------------------------------------------ utils
 
+    /** Real cube root (negative inputs keep a negative result). */
     private fun cbrt(x: Float): Float =
         if (x >= 0f) x.pow(1f / 3f) else -((-x).pow(1f / 3f))
 
-    /** Shortest-path angular interpolation in degrees (350° → 10° goes through 360°, not backwards). */
+    /**
+     * Shortest-path angular interpolation in degrees (350° → 10° goes through 360°, not
+     * backwards). The result is not wrapped to [0, 360) — 350° → 10° at t = 1 is 370°, which
+     * is the same direction — so multi-turn animations keep spinning through the short arc.
+     */
     fun lerpAngleDeg(from: Float, to: Float, t: Float): Float {
         var delta = (to - from) % 360f
         if (delta > 180f) delta -= 360f

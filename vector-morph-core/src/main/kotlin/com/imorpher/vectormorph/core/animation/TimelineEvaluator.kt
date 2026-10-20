@@ -22,14 +22,28 @@ class EvaluatedFrame(pairCount: Int) {
     /** Per-pair property values; index matches [MorphPlan.pairs]. */
     val pathProps: Array<PathFrameValues> = Array(pairCount) { PathFrameValues() }
 
-    /** Brush override at vector level, if any track applies. */
+    /** Vector-level fill brush override mode ([PathFrameValues.BRUSH_NONE] when unset). */
     var vectorBrushMode: Int = PathFrameValues.BRUSH_NONE
+
+    /** Primary fill brush when [vectorBrushMode] is active; crossfades also use the secondary. */
     var vectorPrimaryBrush: androidx.compose.ui.graphics.Brush? = null
+
+    /** Secondary fill brush of a vector-level crossfade. */
     var vectorSecondaryBrush: androidx.compose.ui.graphics.Brush? = null
+
+    /** From→to fraction of a vector-level crossfade. */
     var vectorBrushProgress: Float = 0.5f
+
+    /** Vector-level stroke brush override mode ([PathFrameValues.BRUSH_NONE] when unset). */
     var vectorStrokeBrushMode: Int = PathFrameValues.BRUSH_NONE
+
+    /** Primary stroke brush when [vectorStrokeBrushMode] is active. */
     var vectorPrimaryStrokeBrush: androidx.compose.ui.graphics.Brush? = null
+
+    /** Secondary stroke brush of a vector-level crossfade. */
     var vectorSecondaryStrokeBrush: androidx.compose.ui.graphics.Brush? = null
+
+    /** From→to fraction of a vector-level stroke crossfade. */
     var vectorStrokeBrushProgress: Float = 0.5f
 
     init {
@@ -37,6 +51,10 @@ class EvaluatedFrame(pairCount: Int) {
         pathProps.forEach { it.props.fill(Float.NaN) }
     }
 
+    /**
+     * Convenience constructor that also pre-creates the per-pair named-group slots from
+     * [plan], so group tracks can write into them without map churn on the first frame.
+     */
     constructor(plan: MorphPlan) : this(plan.pairs.size) {
         plan.pairs.forEachIndexed { index, pair ->
             (pair.fromPath?.groupNames.orEmpty() + pair.toPath?.groupNames.orEmpty())
@@ -157,6 +175,7 @@ class TimelineEvaluator(
         }
     }
 
+    /** Name matcher shared with [VectorAnimation]; repeated names compile to "name[n]". */
     private fun matchesPathName(actual: String?, requested: String, occurrence: Int): Boolean {
         if (actual == null) return false
         val expected = if (occurrence == 0) requested else "$requested[$occurrence]"
@@ -328,6 +347,7 @@ class TimelineEvaluator(
 
     // ------------------------------------------------------------------ helpers
 
+    /** NaNs the override buffer — the renderer's "use the path/plan default" sentinel. */
     private fun reset(props: FloatArray) {
         for (i in props.indices) props[i] = Float.NaN
     }
@@ -358,7 +378,11 @@ class TimelineEvaluator(
         }
     }
 
-    /** Group tracks share one clock across all descendants so the group stays rigid. */
+    /**
+     * The shared clock for all descendants of the named group: unlike [progressForPair]
+     * there is no stagger (a group animates as one rigid unit) and path-length timing maps
+     * onto the group's combined travel length.
+     */
     private fun progressForGroup(progress: Float, name: String): Float = when (timingMode) {
         TimingMode.BY_PATH_LENGTH -> {
             val length = groupLengths[name] ?: 0f
@@ -368,6 +392,7 @@ class TimelineEvaluator(
         TimingMode.BY_PATH, TimingMode.BY_COMMAND, TimingMode.UNIFORM -> progress
     }
 
+    /** Resolves the active [VectorAnimation.BrushSegment] and interpolates its paint specs. */
     private fun evaluateBrush(track: VectorAnimation.BrushTrack, progress: Float): GradientInterpolator.Result? {
         val segment = activeSegment(track.segments, progress) ?: return null
         val localT = segmentLocalT(segment.start, segment.end, progress)
@@ -375,6 +400,10 @@ class TimelineEvaluator(
         return GradientInterpolator.interpolate(segment.from, segment.to, eased, colorSpace)
     }
 
+    /**
+     * Resolves the active [VectorAnimation.Segment] and interpolates its scalar value,
+     * easing the local progress first and taking the shortest angular route for rotations.
+     */
     private fun evaluateTrack(track: VectorAnimation.Track, p: Float): Float {
         val seg = activeSegment(track.segments, p) ?: return Float.NaN
         val localT = segmentLocalT(seg.start, seg.end, p)
@@ -386,16 +415,23 @@ class TimelineEvaluator(
         }
     }
 
+    /** The [VectorAnimation.Segment] governing [p], holding its end value past the interval. */
     private fun activeSegment(
         segments: List<VectorAnimation.Segment>,
         p: Float,
     ): VectorAnimation.Segment? = selectSegment(segments, p, { it.start }, { it.end })
 
+    /** The [VectorAnimation.BrushSegment] governing [p], holding its end paint past the interval. */
     private fun activeSegment(
         segments: List<VectorAnimation.BrushSegment>,
         p: Float,
     ): VectorAnimation.BrushSegment? = selectSegment(segments, p, { it.start }, { it.end })
 
+    /**
+     * Interval selection with hold semantics: the segment containing [p] wins; past the last
+     * interval the last segment holds its end value; before the first, the first segment
+     * holds its start value. Gaps between intervals hold the previous segment's end.
+     */
     private inline fun <T> selectSegment(
         segments: List<T>,
         p: Float,
@@ -408,6 +444,7 @@ class TimelineEvaluator(
         return segments.first()
     }
 
+    /** Normalized progress of [p] within the [start, end] window, clamped to 0..1. */
     private fun segmentLocalT(start: Float, end: Float, p: Float): Float {
         if (end <= start) return 0f
         return ((p - start) / (end - start)).coerceIn(0f, 1f)
@@ -430,6 +467,7 @@ class TimelineEvaluator(
         /** Resolves color interpolation space for a pair (used by the renderer). */
         fun pairSpace(config: ColorInterpolationSpace): ColorInterpolationSpace = config
 
+        /** Shortest-path degree interpolation, exposed for the renderer's transform math. */
         internal fun angleLerp(from: Float, to: Float, t: Float): Float =
             ColorInterpolator.lerpAngleDeg(from, to, t)
     }

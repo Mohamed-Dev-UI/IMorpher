@@ -41,6 +41,11 @@ import kotlin.math.hypot
  */
 object MorphPlanner {
 
+    /**
+     * Builds a [MorphPlan] from two prepared vectors and a configuration. Pure and
+     * deterministic: equal inputs always produce an equal plan, so results cache well.
+     * See the object documentation for the pipeline stages.
+     */
     fun plan(
         from: PreparedVector,
         to: PreparedVector,
@@ -209,6 +214,7 @@ object MorphPlanner {
         return PreparedVector(width, height, vector.defaultWidth, vector.defaultHeight, vector.name, paths)
     }
 
+    /** Column-major 4x4 uniform 2D scale matrix matching [VectorCompiler]'s matrix layout. */
     private fun scaleMatrix(sx: Float, sy: Float) = floatArrayOf(
         sx, 0f, 0f, 0f,
         0f, sy, 0f, 0f,
@@ -248,13 +254,24 @@ object MorphPlanner {
 
     // ------------------------------------------------------------------ fallback decision
 
+    /** Immutable outcome of [decideFallback]; consumed by the pair-planning loop. */
     private class FallbackDecision(
+        /** Whether the plan degraded from pure geometry morphing. */
         val used: Boolean,
+        /** Whether EVERY pair should render as a crossfade. */
         val crossfadeAll: Boolean,
+        /** The explicit strategy that decided this, when one was requested. */
         val strategy: FallbackStrategy?,
+        /** Human-readable reason, or null for clean geometry morphs. */
         val reason: String?,
     )
 
+    /**
+     * Resolves the fallback decision for this morph: explicit strategies short-circuit
+     * (CROSSFADE/SCALE_CROSSFADE force a full crossfade, DRAW_REVEAL flags draw-first,
+     * THROW aborts on structural incompatibility, BEST_EFFORT always plans geometry),
+     * and AUTO crossfades only when one side has no paths at all.
+     */
     private fun decideFallback(
         from: PreparedVector,
         to: PreparedVector,
@@ -287,6 +304,7 @@ object MorphPlanner {
         return FallbackDecision(false, false, null, null)
     }
 
+    /** Human-readable reason the pair cannot morph structurally, or null when compatible. */
     private fun structurallyIncompatible(from: PreparedVector, to: PreparedVector): String? {
         if (from.paths.isEmpty() && to.paths.isEmpty()) return "both vectors have no paths"
         if (from.paths.isEmpty()) return "source vector has no paths (pure fade-in; crossfade chosen)"
@@ -296,6 +314,12 @@ object MorphPlanner {
 
     // ------------------------------------------------------------------ pair planning
 
+    /**
+     * Plans a two-sided pair: contour correspondence, hole-preserving all-or-nothing
+     * contour matching, winding/start-point alignment, subdivision, and the stroke-fill
+     * choreography decision. Unpaired contours land in [PathPairPlan.fromOnlyContours] /
+     * [PathPairPlan.toOnlyContours] where they fade through their own side's leg.
+     */
     private fun planMorphPair(
         index: Int,
         f: com.imorpher.vectormorph.core.model.PreparedPath,
@@ -414,6 +438,13 @@ object MorphPlanner {
         return result.sortedBy { it.first }
     }
 
+    /**
+     * Aligns one contour pair for interpolation: winding normalization (skipped when
+     * [preserveTargetWinding] — see [planMorphPair]'s parity guard), start-point alignment
+     * (honoring [MorphConfiguration.customStartOffsets]), arc-length-proportional subdivision
+     * to a common segment count, optional re-alignment for large command-count mismatches,
+     * and packing into the per-frame float arrays.
+     */
     private fun alignContours(
         f: com.imorpher.vectormorph.core.model.PreparedPath,
         ci: Int,
@@ -470,6 +501,10 @@ object MorphPlanner {
         )
     }
 
+    /**
+     * Whether the stroke→fill transition should draw the stroke first and sweep the fill in
+     * behind it. AUTO picks the draw choreography for outline→filled transitions only.
+     */
     private fun decideStrokeFill(
         f: com.imorpher.vectormorph.core.model.PreparedPath,
         t: com.imorpher.vectormorph.core.model.PreparedPath,
@@ -489,6 +524,7 @@ object MorphPlanner {
 
     // ------------------------------------------------------------------ appearing / disappearing pairs
 
+    /** Plans a target-only path (fade-in side); geometry renders from the target side. */
     private fun planAppearingPair(
         index: Int,
         t: com.imorpher.vectormorph.core.model.PreparedPath,
@@ -512,6 +548,7 @@ object MorphPlanner {
         )
     }
 
+    /** Plans a source-only path (fade-out side); geometry renders from the source side. */
     private fun planDisappearingPair(
         index: Int,
         f: com.imorpher.vectormorph.core.model.PreparedPath,
@@ -547,20 +584,27 @@ class MorphPlanCache(private val maxEntries: Int = 32) {
         val config: MorphConfiguration,
     )
 
+    /** Access-ordered LRU; plans are immutable so eviction only costs re-planning. */
     private val cache = object : LinkedHashMap<Key, MorphPlan>(16, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Key, MorphPlan>): Boolean =
             size > maxEntries
     }
 
+    /**
+     * Returns the cached plan for (from, to, config), building and inserting it via [build]
+     * on a miss. Access-order based, so repeated lookups keep hot entries alive.
+     */
     @Synchronized
     fun getOrPut(from: PreparedVector, to: PreparedVector, config: MorphConfiguration, build: () -> MorphPlan): MorphPlan {
         val key = Key(from, to, config)
         return cache.getOrPut(key, build)
     }
 
+    /** Drops every cached plan (call after large icon-set changes to release memory). */
     @Synchronized
     fun clear() = cache.clear()
 
+    /** Current number of cached plans. */
     @get:Synchronized
     val size: Int get() = cache.size
 }

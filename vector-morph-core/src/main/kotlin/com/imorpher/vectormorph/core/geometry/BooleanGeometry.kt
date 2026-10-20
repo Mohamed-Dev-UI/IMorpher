@@ -6,9 +6,16 @@ import androidx.compose.ui.graphics.PathOperation
 
 /** Optional boolean operations for clipping, masks, and custom vector effects. */
 object BooleanGeometry {
+    /** Boolean union of two paths — e.g. merging shapes for a combined clip mask. */
     fun union(first: Path, second: Path): Path = Path.combine(PathOperation.Union, first, second)
+
+    /** Boolean intersection — e.g. intersecting two inherited clip regions. */
     fun intersection(first: Path, second: Path): Path = Path.combine(PathOperation.Intersect, first, second)
+
+    /** Boolean difference — [first] minus the parts covered by [second]. */
     fun difference(first: Path, second: Path): Path = Path.combine(PathOperation.Difference, first, second)
+
+    /** Alias of [difference] for mask-style code that reads better as "subtract". */
     fun subtract(first: Path, second: Path): Path = difference(first, second)
 
     /** Builds a Compose path without modifying the supplied immutable contour data. */
@@ -30,6 +37,7 @@ object BooleanGeometry {
         close()
     }
 
+    /** An axis-aligned oval path of [radius] around [center] (a circle when radius is uniform). */
     fun circle(center: Offset, radius: Float): Path = Path().apply {
         addOval(androidx.compose.ui.geometry.Rect(
             center.x - radius, center.y - radius,

@@ -35,7 +35,13 @@ import com.imorpher.vectormorph.compose.renderer.MorphRenderer
 import com.imorpher.vectormorph.core.model.FallbackStrategy
 import java.util.WeakHashMap
 
-/** A reusable single-vector animation definition. */
+/**
+ * A reusable single-vector animation definition.
+ *
+ * @param vector The ImageVector drawn (and re-drawn) at every progress value.
+ * @param animation The timeline driving reveals, fills, transforms, and paint.
+ * @param configuration Engine configuration for the underlying plan (matching, fallbacks…).
+ */
 data class VectorAnimationDefinition(
     val vector: ImageVector,
     val animation: VectorAnimationSpec,
@@ -440,7 +446,13 @@ fun VectorAnimation(
     )
 }
 
-/** Starts one-shot vector animations at zero, then plays them once for each definition. */
+/**
+ * Starts one-shot vector animations at zero, then plays them once to 1 for each definition.
+ *
+ * The returned state follows [progress]'s own `Animatable` when [enabled] and the motion
+ * preference allows animation; INSTANT returns a constant 1f and a disabled caller gets a
+ * constant 0f. Re-composing with a new [vector]/[animation] restarts the one-shot.
+ */
 @Composable
 private fun rememberAutoPlayProgress(
     vector: ImageVector,
@@ -658,6 +670,13 @@ private fun VectorAnimatorCore(
     )
 }
 
+/**
+ * Draws [plan] at [progress] on a sized canvas, wiring the timeline evaluator (when
+ * [animation] or [configuration.animation] is present) to the shared [MorphRenderer].
+ *
+ * The evaluator is remembered per (plan, animation, color space, stagger) pair and the
+ * frame buffers per plan, so repeated frames reuse every allocation.
+ */
 @Composable
 private fun VectorPlanCanvas(
     plan: MorphPlan,
@@ -696,9 +715,18 @@ private fun VectorPlanCanvas(
     }
 }
 
+/** Compiled [PreparedVector]s, keyed by ImageVector identity so equal instances share work. */
 private val preparedVectors = WeakHashMap<ImageVector, PreparedVector>()
+
+/** Process-wide plan cache; plans are immutable, so sharing them across callers is safe. */
 private val planCache = MorphPlanCache(maxEntries = 64)
 
+/**
+ * Compiles [from]/[to] and plans their morph, cached on two levels: prepared vectors in a
+ * [java.util.WeakHashMap] keyed by ImageVector identity, and plans in a [MorphPlanCache]
+ * keyed by (prepared from, prepared to, configuration). The animation is stripped from the
+ * planning configuration because timelines never influence the plan — only its evaluation.
+ */
 @Composable
 private fun rememberPlan(
     from: ImageVector,
@@ -715,6 +743,7 @@ private fun rememberPlan(
     }
 }
 
+/** Compiles [vector] once per instance, sharing the result across all morphs that use it. */
 @Synchronized
 private fun prepared(vector: ImageVector): PreparedVector =
     preparedVectors.getOrPut(vector) { VectorCompiler.compile(vector) }

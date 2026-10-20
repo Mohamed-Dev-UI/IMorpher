@@ -51,11 +51,17 @@ sealed class BrushSpec {
      */
     data class Unknown(val brush: Brush) : BrushSpec()
 
+    /** True when this spec wraps a brush whose parameters could not be extracted. */
     val isUnknown: Boolean get() = this is Unknown
 
     companion object {
-        /** Extracts an animatable spec from a rendered [Brush]; null when [brush] is null. */
-        fun from(brush: Brush?): BrushSpec? = when (brush) {
+        /**
+     * Extracts an animatable spec from a rendered [Brush]; null when [brush] is null.
+     * Built-in solid/linear/radial/sweep brushes extract fully; anything else (a custom
+     * Brush subclass, or a Compose version with inaccessible internals) becomes
+     * [Unknown] and pairs involving it crossfade instead of interpolating.
+     */
+    fun from(brush: Brush?): BrushSpec? = when (brush) {
             null -> null
             is SolidColor -> Solid(brush.value)
             is LinearGradient -> {
@@ -162,8 +168,10 @@ fun linearGradientSpecAtAngle(
     )
 }
 
+/** Viewport-coordinate radial gradient spec (unit-space coordinates, [radius] relative). */
 fun radialGradientSpec(colors: List<Color>, centerX: Float = 0.5f, centerY: Float = 0.5f, radius: Float = 0.7f) =
     BrushSpec.Radial(colors = colors, stops = null, centerX = centerX, centerY = centerY, radius = radius)
 
+/** Viewport-coordinate angular (sweep) gradient spec around [centerX]/[centerY]. */
 fun sweepGradientSpec(colors: List<Color>, centerX: Float = 0.5f, centerY: Float = 0.5f) =
     BrushSpec.Sweep(colors = colors, stops = null, centerX = centerX, centerY = centerY)

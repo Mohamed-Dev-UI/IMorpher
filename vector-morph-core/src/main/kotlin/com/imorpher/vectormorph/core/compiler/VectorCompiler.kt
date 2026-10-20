@@ -35,6 +35,13 @@ import kotlin.math.hypot
  */
 object VectorCompiler {
 
+    /**
+     * Compiles [vector] into an immutable [PreparedVector]: the group tree is flattened
+     * (static transforms baked into viewport coordinates), path names disambiguated,
+     * clip paths captured in absolute space, and per-path features precomputed. Compilation
+     * is pure — the same ImageVector always produces an equal PreparedVector — so results
+     * can be cached and shared.
+     */
     fun compile(vector: ImageVector): PreparedVector {
         val paths = ArrayList<PreparedPath>(16)
         val nameCount = HashMap<String, Int>(16)
@@ -64,6 +71,7 @@ object VectorCompiler {
 
     // ------------------------------------------------------------------ tree walk
 
+    /** Depth-first walk of the group tree, accumulating transforms, clip paths, and paths. */
     private fun walk(
         node: VectorNode,
         matrix: FloatArray,
@@ -185,13 +193,14 @@ object VectorCompiler {
         }
     }
 
+    /** Disambiguates repeated path names ("path", "path[1]", "path[2]"…) in declaration order. */
     private fun uniqueName(raw: String, nameCount: MutableMap<String, Int>): String {
         val count = nameCount.getOrPut(raw) { 0 }
         nameCount[raw] = count + 1
         return if (count == 0) raw else "$raw[$count]"
     }
 
-    /** The anchor point on the path bounds for a [PathStart] enum (reveal start search target). */
+    /** Bounds-relative anchor point a [PathStart] reveal searches the contour for. */
     private fun anchorFor(
         ps: PathStart,
         minX: Float, minY: Float, maxX: Float, maxY: Float,
@@ -213,6 +222,10 @@ object VectorCompiler {
     //   x' = m[0]*x + m[4]*y + m[12]
     //   y' = m[1]*x + m[5]*y + m[13]
 
+    /**
+     * Transforms a 2D point by the column-major matrix [m] (the layout of the matrices
+     * built by [groupTransform] and [multiply]).
+     */
     fun transformPoint(m: FloatArray, x: Float, y: Float): FloatArray = floatArrayOf(
         m[0] * x + m[4] * y + m[12],
         m[1] * x + m[5] * y + m[13],
@@ -252,6 +265,10 @@ object VectorCompiler {
         return out
     }
 
+    /**
+     * Applies the column-major matrix [m] to every control point of [contour]. Returns the
+     * original instance unchanged when [m] is the identity, so callers can compare by identity.
+     */
     fun transformContour(contour: ContourData, m: FloatArray): ContourData {
         if (isIdentity(m)) return contour
         val segs = contour.segments.map { seg ->
@@ -264,6 +281,7 @@ object VectorCompiler {
         return ContourData(segs, contour.closed)
     }
 
+    /** True when [m] transforms 2D points identically (no scale, rotation, or translation). */
     private fun isIdentity(m: FloatArray): Boolean =
         m[0] == 1f && m[1] == 0f && m[4] == 0f && m[5] == 1f && m[12] == 0f && m[13] == 0f
 
@@ -292,6 +310,9 @@ object VectorCompiler {
 
     /** Fills style defaults used by synthetic paths (tests, fade-in stubs). */
     fun defaultFillType(): PathFillType = PathFillType.NonZero
+    /** Stroke cap used by synthetic paths (tests, fade-in stubs). */
     fun defaultStrokeCap(): StrokeCap = StrokeCap.Butt
+
+    /** Stroke join used by synthetic paths (tests, fade-in stubs). */
     fun defaultStrokeJoin(): StrokeJoin = StrokeJoin.Miter
 }

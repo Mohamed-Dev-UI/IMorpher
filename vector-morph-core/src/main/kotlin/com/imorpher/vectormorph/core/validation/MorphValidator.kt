@@ -27,6 +27,12 @@ object MorphValidator {
         return plan.report.issues
     }
 
+    /**
+     * Validates an already-planned pair set (used by [MorphPlanner] to fill
+     * [com.imorpher.vectormorph.core.plan.MorphReport.issues]). Emits per-pair findings —
+     * contour-count mismatches, winding/start-point notes, gradient and clip mismatches,
+     * quality warnings — plus vector-level viewport notes. Never throws.
+     */
     internal fun validatePlan(
         pairs: List<PathPairPlan>,
         from: PreparedVector,
@@ -164,6 +170,7 @@ object MorphValidator {
         return issues
     }
 
+    /** Describes an un-interpolable fill pair, or null when the paints can interpolate. */
     private fun brushMismatch(
         a: com.imorpher.vectormorph.core.gradients.BrushSpec?,
         b: com.imorpher.vectormorph.core.gradients.BrushSpec?,
@@ -177,6 +184,7 @@ object MorphValidator {
         return null
     }
 
+    /** Short kind label ("solid", "linear", "radial", "sweep", "unknown") for messages. */
     private fun brushKind(spec: com.imorpher.vectormorph.core.gradients.BrushSpec): String = when (spec) {
         is com.imorpher.vectormorph.core.gradients.BrushSpec.Solid -> "solid"
         is com.imorpher.vectormorph.core.gradients.BrushSpec.Linear -> "linear"

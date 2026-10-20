@@ -102,6 +102,12 @@ object ContourAligner {
 
     // ------------------------------------------------------------------ AUTO
 
+    /**
+     * The AUTO start-point strategy: every target boundary vertex (plus intra-segment
+     * refinements of the original start) is tried as the new start, keeping the rotation
+     * with the smallest arc-correspondence error against [source] — the direct cure for
+     * rotational deformation.
+     */
     internal fun autoAlign(source: ContourData, target: ContourData): Triple<ContourData, ContourData, Float> {
         // Try every boundary vertex of the target as its start point; keep the rotation that
         // minimizes correspondence error against the source (sampled at equal arc fractions).
@@ -153,6 +159,10 @@ object ContourAligner {
         return Triple(source, bestTarget, bestOffset)
     }
 
+    /**
+     * [count] points sampled at equal arc fractions along [contour] — the correspondence
+     * basis for alignment scoring.
+     */
     internal fun sampleByArcFraction(
         contour: ContourData,
         arc: com.imorpher.vectormorph.core.geometry.ArcLengthData,
@@ -186,6 +196,10 @@ object ContourAligner {
 
     // ------------------------------------------------------------------ helpers
 
+    /**
+     * Rotates [contour]'s start point to the boundary point nearest to ([x], [y]), sampling
+     * every segment at five parameters. Used by the MATCH_SOURCE / MATCH_TARGET strategies.
+     */
     internal fun rotateToNearest(contour: ContourData, x: Float, y: Float): ContourData {
         var bestSeg = 0
         var bestT = 0f
@@ -220,6 +234,7 @@ object ContourAligner {
         return contour.rotateStart(bestSeg, bestT)
     }
 
+    /** Rotates the start point to [fraction] (0..1) along the contour's arc length. */
     internal fun rotateToArcFraction(contour: ContourData, fraction: Float): ContourData {
         val arc = measureContour(contour)
         if (arc.totalLength <= 0f) return contour
@@ -235,6 +250,10 @@ object ContourAligner {
         return contour
     }
 
+    /**
+     * Arc fraction of the contour's ORIGINAL perimeter where [rotated]'s new start point
+     * landed — the "how far did we rotate" diagnostic.
+     */
     private fun rotationOffsetFraction(original: ContourData, rotated: ContourData): Float {
         // fraction of total arc length represented by the new start point
         val originalArc = measureContour(original)
@@ -281,6 +300,7 @@ object ContourAligner {
         return encloserWinding != winding
     }
 
+    /** +1 clockwise on screen, -1 counter-clockwise, 0 degenerate (area under the epsilon). */
     private fun signedAreaSign(contour: ContourData): Int {
         val area = signedArea(contour)
         return if (area > AREA_EPSILON) 1 else if (area < -AREA_EPSILON) -1 else 0

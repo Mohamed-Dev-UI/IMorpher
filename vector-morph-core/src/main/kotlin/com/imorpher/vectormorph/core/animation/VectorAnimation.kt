@@ -59,7 +59,11 @@ sealed class AnimationTarget {
     data class Group(val name: String) : AnimationTarget()
 }
 
-/** Whether an animated brush affects a path's fill or its stroke paint. */
+/**
+ * Whether an animated brush affects a path's fill or its stroke paint. A FILL track is
+ * deliberately ignored on stroke-only paths (it would invent a fill over the implicit
+ * close); use a STROKE track to recolor them.
+ */
 enum class BrushChannel { FILL, STROKE }
 
 /**
@@ -80,32 +84,53 @@ class VectorAnimation internal constructor(
     /** Optional per-pair custom rendering callback. */
     val customizer: CustomVectorAnimation? = null,
 ) {
+    /** One interval of a scalar track: [from]→[to] eased across the normalized timeline. */
     internal class Segment(
+        /** Normalized timeline position where this segment takes over. */
         val start: Float,
+        /** Normalized timeline position where this segment hands over (inclusive). */
         val end: Float,
+        /** Value at [start]. */
         val from: Float,
+        /** Value at [end]. */
         val to: Float,
+        /** Easing applied to the local progress between [start] and [end]. */
         val easing: androidx.compose.animation.core.Easing,
+        /** Reveal/fill configuration (mode, anchor, direction) when the property is a reveal. */
         val draw: DrawConfig? = null,
     )
 
+    /** One interval of a brush track: [from]→[to] paint interpolation. */
     internal class BrushSegment(
+        /** Normalized timeline position where this segment takes over. */
         val start: Float,
+        /** Normalized timeline position where this segment hands over. */
         val end: Float,
+        /** Paint at [start]. */
         val from: BrushSpec,
+        /** Paint at [end]. */
         val to: BrushSpec,
+        /** Easing applied to the local progress between [start] and [end]. */
         val easing: androidx.compose.animation.core.Easing,
     )
 
+    /** All [Segment]s of one (target, property) combination, evaluated independently. */
     internal class Track(
+        /** Which part of the vector this track drives. */
         val target: AnimationTarget,
+        /** Which scalar property this track drives. */
         val prop: PropKey,
+        /** Intervals in timeline order; may tile sequentially or overlap. */
         val segments: List<Segment>,
     )
 
+    /** All [BrushSegment]s of one (target, [channel]) combination. */
     internal class BrushTrack(
+        /** Which part of the vector this track drives. */
         val target: AnimationTarget,
+        /** Intervals in timeline order. */
         val segments: List<BrushSegment>,
+        /** Whether the interpolated paint drives fills or strokes. */
         val channel: BrushChannel = BrushChannel.FILL,
     )
 
@@ -143,6 +168,10 @@ class VectorAnimation internal constructor(
         if (matches) draw else null
     }
 
+    /**
+     * True when [actual] (a compiled, disambiguated path name) matches [requested] at
+     * [occurrence] — repeated names compile to "name[1]", "name[2]"… per declaration order.
+     */
     private fun matchesPathName(actual: String?, requested: String, occurrence: Int): Boolean {
         if (actual == null) return false
         val expected = if (occurrence == 0) requested else "$requested[$occurrence]"
@@ -170,11 +199,23 @@ class PathFrameValues {
     var secondaryBrush: Brush? = null
     /** From-to brush interpolation fraction when [brushMode] is a crossfade. */
     var brushProgress: Float = 0.5f
+    /** Stroke brush override mode ([BRUSH_NONE] when no stroke track applies). */
     var strokeBrushMode: Int = BRUSH_NONE
+
+    /** Primary stroke brush when [strokeBrushMode] is active. */
     var primaryStrokeBrush: Brush? = null
+
+    /** Secondary stroke brush of a stroke crossfade. */
     var secondaryStrokeBrush: Brush? = null
+
+    /** From→to fraction of a stroke crossfade. */
     var strokeBrushProgress: Float = 0.5f
 
+    /**
+     * Copies every per-frame visual (scalar overrides, draw configs, group bounds, brush
+     * state) from [other]. Used by the renderer's merged-frame optimization; group tracks
+     * are merged separately since they compose rather than replace.
+     */
     fun copyVisualsFrom(other: PathFrameValues) {
         other.props.copyInto(props)
         other.drawConfigs.copyInto(drawConfigs)

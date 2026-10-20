@@ -16,6 +16,10 @@ data class Cubic(
     val x2: Float, val y2: Float,
     val x3: Float, val y3: Float,
 ) {
+    /**
+     * Writes the eight coordinates (x0,y0,x1,y1,x2,y2,x3,y3) into [out] and returns it.
+     * Useful for the packed per-frame interpolation buffers.
+     */
     fun toArray(out: FloatArray = FloatArray(8)): FloatArray {
         out[0] = x0; out[1] = y0
         out[2] = x1; out[3] = y1
@@ -117,4 +121,5 @@ internal fun flattenCubic(
 
 /** Absolute value helper kept local so geometry has zero dependencies. */
 internal fun fastAbs(v: Float): Float = if (v < 0f) -v else v
+/** Equality within [eps] — geometry code compares rounded coordinates with this. */
 internal fun isClose(a: Float, b: Float, eps: Float = 1e-4f): Boolean = abs(a - b) <= eps

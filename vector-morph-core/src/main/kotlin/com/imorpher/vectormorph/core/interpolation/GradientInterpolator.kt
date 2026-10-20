@@ -28,6 +28,13 @@ object GradientInterpolator {
         object None : Result()
     }
 
+    /**
+     * Resolves what to draw between [from] and [to] at fraction [t]:
+     *  - both null → [Result.None]
+     *  - one side null or either [BrushSpec.Unknown] → [Result.Crossfade] (kept brushes)
+     *  - same gradient kind (or a solid promoted to the other side's kind) → [Result.Interpolated]
+     *  - different gradient kinds (linear vs radial vs sweep) → [Result.Crossfade]
+     */
     fun interpolate(
         from: BrushSpec?,
         to: BrushSpec?,
@@ -60,6 +67,7 @@ object GradientInterpolator {
 
     // ------------------------------------------------------------------ kind handling
 
+    /** Whether both specs share the same gradient kind and can interpolate parameter-wise. */
     private fun compatibleKinds(a: BrushSpec, b: BrushSpec): Boolean =
         (a is BrushSpec.Linear && b is BrushSpec.Linear) ||
             (a is BrushSpec.Radial && b is BrushSpec.Radial) ||
@@ -88,6 +96,11 @@ object GradientInterpolator {
         else -> null
     }
 
+    /**
+     * Interpolates two same-kind gradients: geometry (axis/center/radius), colors, and
+     * stops all move together. Linear gradients with angle metadata rotate along the
+     * shortest angular route instead of lerping raw endpoints.
+     */
     private fun lerpSameKind(a: BrushSpec, b: BrushSpec, t: Float, space: ColorInterpolationSpace): Brush =
         when {
             a is BrushSpec.Linear && b is BrushSpec.Linear -> {
@@ -131,6 +144,12 @@ object GradientInterpolator {
 
     // ------------------------------------------------------------------ stops
 
+    /**
+     * Merges two gradient ramps onto the union of their stop positions and lerps the color at
+     * every stop by [t]. Both sides keep their authored look at t = 0 / t = 1; stops present on
+     * only one side are sampled from the other ramp (constant before its first / after its last
+     * stop, linear in between). Used by the same-kind gradient interpolation.
+     */
     internal fun lerpStops(
         colorsA: List<Color>,
         stopsA: List<Float>?,
@@ -161,6 +180,7 @@ object GradientInterpolator {
         return outColors to outStops
     }
 
+    /** Pairs colors with stops, distributing stops evenly when missing or mismatched. */
     private fun normalizeStops(colors: List<Color>, stops: List<Float>?): List<Pair<Float, Color>> {
         return if (stops == null || stops.size != colors.size) {
             val n = colors.size
@@ -172,6 +192,7 @@ object GradientInterpolator {
         }
     }
 
+    /** Color of the ramp [stops] at position [p], starting the search at index [idx]. */
     private fun sampleAt(stops: List<Pair<Float, Color>>, p: Float, idx: Int, space: ColorInterpolationSpace): Color {
         val s = stops[idx]
         if (s.first >= p || idx == stops.size - 1) return s.second
@@ -184,6 +205,10 @@ object GradientInterpolator {
 
     // ------------------------------------------------------------------ brush building
 
+    /**
+     * Rebuilds a renderable Compose [Brush] from this spec. The inverse of
+     * [BrushSpec.from] for built-in brushes; [BrushSpec.Unknown] returns its captured brush.
+     */
     fun BrushSpec.buildBrush(): Brush = when (this) {
         is BrushSpec.Solid -> SolidColor(color)
         is BrushSpec.Linear -> if (stops == null) {
@@ -204,7 +229,9 @@ object GradientInterpolator {
         is BrushSpec.Unknown -> brush
     }
 
+    /** Scalar lerp helper for gradient geometry. */
     private fun lerpFloat(a: Float, b: Float, t: Float): Float = a + (b - a) * t
 
+    /** The fully transparent paint used when one crossfade endpoint is absent. */
     private fun transparentBrush(): Brush = SolidColor(Color.Transparent)
 }

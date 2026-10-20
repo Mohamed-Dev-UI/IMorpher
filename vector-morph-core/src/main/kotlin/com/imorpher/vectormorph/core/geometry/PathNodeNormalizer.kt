@@ -20,6 +20,11 @@ import kotlin.math.abs
  */
 object PathNodeNormalizer {
 
+    /**
+     * Converts [pathData] into normalized cubic [ContourData]s using the conversions listed
+     * on [PathNodeNormalizer]. The result is deterministic and allocation-light: contours are
+     * produced in command order, one per `MoveTo` run.
+     */
     fun normalize(pathData: List<PathNode>): List<ContourData> {
         if (pathData.isEmpty()) return emptyList()
 
@@ -192,6 +197,7 @@ object PathNodeNormalizer {
         return contours
     }
 
+    /** Appends a line as a cubic; zero-length lines (repeated coordinates) are dropped. */
     private fun addLine(segments: ArrayList<Cubic>, x0: Float, y0: Float, x1: Float, y1: Float) {
         // drop zero-length lines
         if (abs(x1 - x0) < 1e-6f && abs(y1 - y0) < 1e-6f) return

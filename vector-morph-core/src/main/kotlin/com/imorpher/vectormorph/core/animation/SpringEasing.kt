@@ -57,7 +57,11 @@ class SpringEasing(
         }
     }
 
-    /** Analytic solution of the damped harmonic oscillator towards 1. */
+    /**
+     * Analytic solution of the damped harmonic oscillator towards 1 at simulation [time]:
+     * underdamped ([zeta] < 1) oscillates, critically damped approaches without overshoot,
+     * overdamped ([zeta] > 1) approaches slowly.
+     */
     private fun springValueAt(time: Float, omega: Float, zeta: Float, maxIter: Int): Float {
         val x = omega * zeta * time
         return when {
@@ -81,6 +85,11 @@ class SpringEasing(
         }
     }
 
+    /**
+     * Spring position at [fraction] of the baked settling duration: 0 at rest, 1 at the
+     * target. Underdamped settings overshoot above 1 and oscillate back; values outside
+     * 0..1 clamp to the endpoints.
+     */
     override fun transform(fraction: Float): Float {
         if (fraction <= 0f) return 0f
         if (fraction >= 1f) return 1f
