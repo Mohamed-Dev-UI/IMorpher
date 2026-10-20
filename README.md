@@ -1,5 +1,5 @@
 # ImageVector Morph
-[![Release](https://jitpack.io/v/Mohamed-Dev-UI/IMorpher.svg)](https://jitpack.io/#Mohamed-Dev-UI/IMorpher)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.mohamed-dev-ui/vector-morph-compose)](https://central.sonatype.com/artifact/io.github.mohamed-dev-ui/vector-morph-compose)
 
 An ImageVector-first vector morphing and drawing engine for Jetpack Compose. It compiles
 `ImageVector` hierarchies once into normalized cubic geometry, plans path correspondence and
@@ -14,29 +14,45 @@ The repository is split into two Android library modules:
 
 ## Installation
 
-Add Maven Central to the repositories used by your Android project and depend on the Compose
-artifact:
+IMorpher is published to Maven Central — add it through your version catalog
+(`gradle/libs.versions.toml`) and use it like any other library:
 
-### Step 1. Add it in your settings.gradle.kts at the end of repositories:
-```kotlin
-dependencyResolutionManagement {
-		repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-		repositories {
-			mavenCentral()
-			maven { url = uri("https://jitpack.io") }
-		}
-	}
+```toml
+[versions]
+imorpher = "0.1.0"
+
+[libraries]
+imorpher-compose = { group = "io.github.mohamed-dev-ui", name = "vector-morph-compose", version.ref = "imorpher" }
 ```
-### Step 2. Add the dependency
+
+Then depend on it in any module of your project:
+
 ```kotlin
 dependencies {
-    implementation("io.github.mohamed-dev-ui:vector-morph-compose:<version>")
+    implementation(libs.imorpher.compose)
 }
 ```
 
-The Compose artifact exposes core APIs transitively. It targets Android API 23+ and uses Jetpack
-Compose. Replace `<version>` with the latest release available from Maven Central. Enable the
-Kotlin Compose compiler plugin in the consuming Android app module.
+If you need the core engine types directly (most apps don't — `vector-morph-compose`
+exposes them transitively), also add the core artifact to the catalog:
+
+```toml
+imorpher-core = { group = "io.github.mohamed-dev-ui", name = "vector-morph-core", version.ref = "imorpher" }
+```
+
+Without a version catalog:
+
+```kotlin
+dependencies {
+    implementation("io.github.mohamed-dev-ui:vector-morph-compose:0.1.0")
+}
+```
+
+`mavenCentral()` is already part of every standard Android Studio template; otherwise
+add it to your `dependencyResolutionManagement` repositories. The Compose artifact
+targets Android API 23+ and uses Jetpack Compose. Enable the Kotlin Compose compiler
+plugin in the consuming Android app module. Replace `0.1.0` with the latest release
+available on [Maven Central](https://central.sonatype.com/artifact/io.github.mohamed-dev-ui/vector-morph-compose).
 
 ## Demo app
 
@@ -362,19 +378,98 @@ controlled.
 
 ## Tests
 
-Core regression tests cover path command normalization, cubic subdivision, winding/start-point
-alignment, vector compilation, path mapping and unmatched paths, timeline evaluation, color and
-gradient interpolation, validator output, plan caching, animation serialization, and path-length
-timing. A Compose instrumentation screenshot test checks fixed-progress pixels, determinism, and
-semantics. Run the JVM and compile checks with:
+The JVM suites cover the whole engine end to end:
+
+- **core geometry** — cubic evaluation/splitting, contour rotation and reversal, arc-length
+  measurement and slicing, arc-to-cubic conversion, arc-length-balanced subdivision, path
+  command normalization (all command families including relative arcs and reflective curves);
+- **interpolation** — sRGB / linear sRGB / OKLab / OKLCH color ramps, gradient geometry and
+  stop-union interpolation, packed-coordinate lerps, and the draw-timing maps;
+- **matching & planning** — every path-matching strategy, contour alignment strategies, fill-rule
+  hole preservation, viewport normalization, fallback strategies, stroke-fill choreography, and
+  the plan cache;
+- **animation** — the timeline DSL (keyframes, intervals, reveal coupling, stagger), timeline
+  evaluation (targets, timing modes, overrides, brush channels), spring easing, and the binary
+  animation codec (round trips plus corrupt-payload rejection);
+- **compose rendering (Robolectric pixel tests)** — line morphs never invent geometry, stroke
+  reveals (forward/reverse/center-out/radial) stay subsets of their final shape, closed-contour
+  reverse reveals draw no chords, and every configuration knob (draw mode, start anchor, fill
+  mode/direction, timing mode, stagger, missing-path behaviors, fallback strategies, timeline
+  style overrides) measurably changes the rendered frame;
+- **app showcase** — exhaustive icon-catalog scans (every icon matches standard Compose
+  painting; every directed pair paints the right icon at both endpoints) and showcase state
+  tests.
+
+Run the JVM checks with:
 
 ```shell
 ./gradlew :vector-morph-core:testDebugUnitTest
-./gradlew :vector-morph-compose:compileDebugKotlin
-./gradlew :vector-morph-compose:compileDebugAndroidTestKotlin
+./gradlew :vector-morph-compose:testDebugUnitTest
+./gradlew :app:testDebugUnitTest
 ```
 
-Run the device-side screenshot test with `./gradlew :vector-morph-compose:connectedDebugAndroidTest`.
+Device-side instrumented tests (screenshot rendering and showcase UI checks) run with
+`./gradlew :vector-morph-compose:connectedDebugAndroidTest :app:connectedDebugAndroidTest`.
+
+## Publishing to Maven Central
+
+Publishing is handled by the `com.vanniktech.maven.publish` plugin (see the
+`mavenPublishing` blocks in the two library modules) together with the
+`.github/workflows/publish.yml` workflow.
+
+### One-time setup
+
+1. **Central Portal account** — register/sign in at
+   [central.sonatype.com](https://central.sonatype.com/) using the GitHub account that
+   owns the `Mohamed-Dev-UI` profile.
+2. **Namespace** — add and verify the namespace `io.github.mohamed-dev-ui`
+   (Portals → Namespaces). Verification happens automatically once the Portal profile
+   is connected to the matching GitHub account.
+3. **User token** — [generate a user token](https://central.sonatype.org/publish/generate-portal-token/)
+   (Account → Generate User Token). It is separate from the login credentials and
+   replaces username/password everywhere below.
+4. **Distribute the GPG public key** so Central can verify signatures:
+   ```shell
+   gpg --keyserver hkps://keyserver.ubuntu.com --send-keys D1BA3084B75225EFD65C2924807BFE4AC9B34D99
+   ```
+5. **Local credentials** — add to `~/.gradle/gradle.properties`
+   (never into the repo):
+   ```properties
+   mavenCentralUsername=<portal token username>
+   mavenCentralPassword=<portal token password>
+   signingInMemoryKeyId=D1BA3084B75225EFD65C2924807BFE4AC9B34D99
+   signingInMemoryKey=<output of `gpg --export-secret-keys --armor <key id>`, all newlines replaced by \n>
+   signingInMemoryKeyPassword=<GPG key passphrase>
+   ```
+6. **Repository secrets** — add to the GitHub repo (Settings → Secrets and variables →
+   Actions); the publish workflow consumes them via environment variables:
+
+   | Secret | Content |
+   | --- | --- |
+   | `MAVEN_CENTRAL_USERNAME` | Portal user token username |
+   | `MAVEN_CENTRAL_PASSWORD` | Portal user token password |
+   | `SIGNING_KEY` | Full output of `gpg --export-secret-keys --armor <key id>` |
+   | `SIGNING_KEY_ID` (optional) | GPG key id — `D1BA3084B75225EFD65C2924807BFE4AC9B34D99` |
+   | `SIGNING_KEY_PASSWORD` (optional) | GPG key passphrase, only if the key has one |
+
+### Publishing a release
+
+1. Bump `VERSION_NAME` in `gradle.properties` and commit.
+2. Push a tag — or run the workflow manually from the Actions tab (`workflow_dispatch`)
+   with the version:
+   ```shell
+   git tag v0.1.1 && git push origin v0.1.1
+   ```
+   The workflow signs and uploads both `vector-morph-core` and
+   `vector-morph-compose`, validates the deployment, and releases it automatically.
+3. From a machine with local credentials instead of CI, run
+   `./gradlew publishToMavenCentral` and click **Publish** on the deployment at
+   [central.sonatype.com/publishing/deployments](https://central.sonatype.com/publishing/deployments);
+   with automatic publishing enabled use `./gradlew publishAndReleaseToMavenCentral`
+   and no manual step is needed.
+
+Artifacts go live 10–30 minutes after validation, then any consumer's
+`libs.versions.toml` can resolve them immediately.
 
 ## License
 

@@ -1,0 +1,122 @@
+# Publishes :vector-morph-core and :vector-morph-compose to Maven Central.
+#
+# Triggers:
+#   - Push a tag:            git tag v0.1.0 && git push origin v0.1.0
+#   - Manual run (Actions):  "Publish to Maven Central" → set the version input
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   MAVEN_CENTRAL_USERNAME  - Central Portal user token username
+#   MAVEN_CENTRAL_PASSWORD  - Central Portal user token password
+#   SIGNING_KEY             - `gpg --export-secret-keys --armor <key id>` output
+#   SIGNING_KEY_ID          - (optional) GPG key id, e.g. D1BA3084B75225EFD65C2924807BFE4AC9B34D99
+#   SIGNING_KEY_PASSWORD    - (optional) GPG key passphrase
+#
+# With automatic release ON, the deployment is validated and published with no
+# manual Portal click. Turn it off for the very first deployment and click
+# "Publish" at https://central.sonatype.com/publishing/deployments instead.
+
+name: Publish to Maven Central
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (e.g. 0.1.0)"
+        required: true
+        type: string
+      automatic-release:
+        description: "Automatically release the deployment after validation"
+        required: false
+        type: boolean
+        default: true
+
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # GitHub runner images ship a preinstalled Android SDK; accept licenses and
+      # install the exact platform this project compiles against (AGP 9.4, SDK 37).
+      - name: Prepare Android SDK
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager --install "platforms;android-37"
+
+      # A release must never publish without tests passing
+      - name: Run unit tests
+        run: ./gradlew :vector-morph-core:testDebugUnitTest :vector-morph-compose:testDebugUnitTest :app:testDebugUnitTest
+
+      - name: Resolve version and release mode
+        id: meta
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_AUTOMATIC: ${{ inputs.automatic-release }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          VERSION="${REF_NAME#v}"
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            VERSION="${INPUT_VERSION#v}"
+          fi
+          VERSION="$(echo "$VERSION" | tr -d '[:space:]')"
+          AUTOMATIC="true"
+          if [ "$EVENT" = "workflow_dispatch" ] && [ "$INPUT_AUTOMATIC" != "true" ]; then
+            AUTOMATIC="false"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "automatic=$AUTOMATIC" >> "$GITHUB_OUTPUT"
+
+      - name: Verify gradle.properties VERSION_NAME matches the tag
+        if: github.event_name == 'push'
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          PROP_VERSION="$(sed -n 's/^VERSION_NAME=//p' gradle.properties | tr -d '\r\n')"
+          if [ "$PROP_VERSION" != "$VERSION" ]; then
+            echo "::error::gradle.properties VERSION_NAME is '$PROP_VERSION' but the tag resolves to '$VERSION'. Bump VERSION_NAME, commit, and re-create the tag."
+            exit 1
+          fi
+
+      - name: Publish to Maven Central
+        env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          SIGNING_KEY_ID: ${{ secrets.SIGNING_KEY_ID }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          AUTOMATIC: ${{ steps.meta.outputs.automatic }}
+        run: |
+          set -euo pipefail
+          export ORG_GRADLE_PROJECT_mavenCentralUsername="${MAVEN_CENTRAL_USERNAME:?The MAVEN_CENTRAL_USERNAME secret is missing}"
+          export ORG_GRADLE_PROJECT_mavenCentralPassword="${MAVEN_CENTRAL_PASSWORD:?The MAVEN_CENTRAL_PASSWORD secret is missing}"
+          export ORG_GRADLE_PROJECT_signingInMemoryKey="${SIGNING_KEY:?The SIGNING_KEY secret is missing}"
+          if [ -n "${SIGNING_KEY_ID:-}" ]; then
+            export ORG_GRADLE_PROJECT_signingInMemoryKeyId="$SIGNING_KEY_ID"
+          fi
+          if [ -n "${SIGNING_KEY_PASSWORD:-}" ]; then
+            export ORG_GRADLE_PROJECT_signingInMemoryKeyPassword="$SIGNING_KEY_PASSWORD"
+          fi
+
+          if [ "$AUTOMATIC" = "true" ]; then
+            ./gradlew publishAndReleaseToMavenCentral -PVERSION_NAME="$VERSION"
+          else
+            ./gradlew publishToMavenCentral -PVERSION_NAME="$VERSION"
+          fi
