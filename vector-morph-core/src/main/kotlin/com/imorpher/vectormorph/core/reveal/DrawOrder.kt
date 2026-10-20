@@ -1,6 +1,9 @@
 package com.imorpher.vectormorph.core.reveal
 
+import com.imorpher.vectormorph.core.model.DrawDirection
+import com.imorpher.vectormorph.core.model.DrawMode
 import com.imorpher.vectormorph.core.model.DrawOrderStrategy
+import com.imorpher.vectormorph.core.model.PathStart
 import com.imorpher.vectormorph.core.plan.MorphPlan
 import com.imorpher.vectormorph.core.plan.PairKind
 import kotlin.math.atan2
@@ -144,4 +147,108 @@ object DirectionMath {
         -> true
         else -> false
     }
+
+    /**
+     * Start-point anchor implied by a [DrawDirection], i.e. where the "pen" begins when
+     * `start` is derived from the direction ([PathStart.AUTO] / [PathStart.START] semantics).
+     *
+     * Extracted verbatim from the renderer's `resolveStartFraction` table so the literal
+     * semantics survive: corners/edges map to their travel-origin anchor, `CLOCKWISE` and
+     * `COUNTER_CLOCKWISE` anchor at [PathStart.TOP], and directions without a travel origin
+     * (`CENTER_OUT`, `OUTSIDE_IN`, `CUSTOM`) fall through to [PathStart.START].
+     */
+    fun anchorPathStartOf(direction: DrawDirection): PathStart = when (direction) {
+        DrawDirection.AUTO -> PathStart.TOP_LEFT
+        DrawDirection.TOP_RIGHT_TO_BOTTOM_LEFT -> PathStart.TOP_RIGHT
+        DrawDirection.BOTTOM_LEFT_TO_TOP_RIGHT -> PathStart.BOTTOM_LEFT
+        DrawDirection.BOTTOM_RIGHT_TO_TOP_LEFT -> PathStart.BOTTOM_RIGHT
+        DrawDirection.TOP_LEFT_TO_BOTTOM_RIGHT -> PathStart.TOP_LEFT
+        DrawDirection.RIGHT_TO_LEFT -> PathStart.RIGHT
+        DrawDirection.LEFT_TO_RIGHT -> PathStart.LEFT
+        DrawDirection.TOP_TO_BOTTOM -> PathStart.TOP
+        DrawDirection.BOTTOM_TO_TOP -> PathStart.BOTTOM
+        DrawDirection.CLOCKWISE, DrawDirection.COUNTER_CLOCKWISE -> PathStart.TOP
+        else -> PathStart.START
+    }
+
+    /** Directions that claim a concrete anchor (the four corners, the four edge axes, and both windings). */
+    private fun isSpatialDirection(direction: DrawDirection): Boolean = when (direction) {
+        DrawDirection.TOP_LEFT_TO_BOTTOM_RIGHT,
+        DrawDirection.TOP_RIGHT_TO_BOTTOM_LEFT,
+        DrawDirection.BOTTOM_LEFT_TO_TOP_RIGHT,
+        DrawDirection.BOTTOM_RIGHT_TO_TOP_LEFT,
+        DrawDirection.LEFT_TO_RIGHT,
+        DrawDirection.RIGHT_TO_LEFT,
+        DrawDirection.TOP_TO_BOTTOM,
+        DrawDirection.BOTTOM_TO_TOP,
+        DrawDirection.CLOCKWISE,
+        DrawDirection.COUNTER_CLOCKWISE,
+        -> true
+        else -> false
+    }
+
+    /**
+     * Resolves `start`, `direction`, and `mode` into one concrete anchor plus diagnostics.
+     * Pure: no path measurement, deterministic warnings in enum-declaration order.
+     *
+     * Precedence contract (no silent arbitration):
+     * 1. `mode == DrawMode.CUSTOM` resolves like `DrawMode.FORWARD` — the renderer rejects
+     *    custom draw modes separately; the resolver only anchors them.
+     * 2. Explicit `start != PathStart.AUTO` always owns the anchor. When the direction would
+     *    travel from a *different* anchor and is spatial (corner/axis/`CLOCKWISE`/
+     *    `COUNTER_CLOCKWISE`), [DrawResolutionWarning.START_OVERRIDES_DIRECTION] is recorded.
+     *    A spatial direction is required: a contradicting claim only means something if the
+     *    direction carries an anchor at all (e.g. `DrawDirection.AUTO` claims nothing).
+     * 3. `start == PathStart.AUTO` derives the anchor from `anchorPathStartOf` (direction
+     *    `AUTO` → [PathStart.TOP_LEFT]). `DrawDirection.CUSTOM` has no concrete anchor to
+     *    derive, so it emits [DrawResolutionWarning.MISSING_CONCRETE_ANCHOR] and falls back
+     *    to the documented default [PathStart.TOP_LEFT]; with an explicit start that warning
+     *    never fires because start already supplies the concrete anchor.
+     * 4. `mode == DrawMode.OUTSIDE_IN` ignores the anchor entirely — [DrawResolutionWarning.ANCHOR_IGNORED_BY_MODE].
+     * 5. `direction == DrawDirection.CENTER_OUT || DrawDirection.OUTSIDE_IN` is only
+     *    meaningful for fill sweeps; stroke callers surface [DrawResolutionWarning.CENTER_OUT_DIRECTION_ON_STROKE].
+     */
+    fun resolve(start: PathStart, direction: DrawDirection, mode: DrawMode): ResolvedDraw {
+        // Custom draw modes carry no anchoring semantics of their own; anchor like FORWARD.
+        val effectiveMode = if (mode == DrawMode.CUSTOM) DrawMode.FORWARD else mode
+        var startOverrides = false
+        var missingConcreteAnchor = false
+        val anchor: PathStart = when {
+            start != PathStart.AUTO -> {
+                startOverrides = isSpatialDirection(direction) && start != anchorPathStartOf(direction)
+                start
+            }
+            direction == DrawDirection.CUSTOM -> { missingConcreteAnchor = true; PathStart.TOP_LEFT }
+            else -> anchorPathStartOf(direction)
+        }
+        val warnings = mutableListOf<DrawResolutionWarning>()
+        if (startOverrides) warnings += DrawResolutionWarning.START_OVERRIDES_DIRECTION
+        if (effectiveMode == DrawMode.OUTSIDE_IN) warnings += DrawResolutionWarning.ANCHOR_IGNORED_BY_MODE
+        if (direction == DrawDirection.CENTER_OUT || direction == DrawDirection.OUTSIDE_IN) {
+            warnings += DrawResolutionWarning.CENTER_OUT_DIRECTION_ON_STROKE
+        }
+        if (missingConcreteAnchor) warnings += DrawResolutionWarning.MISSING_CONCRETE_ANCHOR
+        return ResolvedDraw(anchor, warnings)
+    }
 }
+
+/** Warning categories emitted when start/direction/mode contradict. */
+enum class DrawResolutionWarning {
+    /** An explicit [PathStart] replaced the anchor the [DrawDirection] would have implied. */
+    START_OVERRIDES_DIRECTION,
+    /** The resolved draw mode ignores the anchor entirely (e.g. `DrawMode.OUTSIDE_IN`). */
+    ANCHOR_IGNORED_BY_MODE,
+    /** A sweep-only direction was used where only a stroke reveal can honor it. */
+    CENTER_OUT_DIRECTION_ON_STROKE,
+    /** The direction supplied no concrete anchor to derive (e.g. `DrawDirection.CUSTOM`). */
+    MISSING_CONCRETE_ANCHOR,
+}
+
+/**
+ * One resolved anchor decision. [anchor] is never [PathStart.AUTO]; warnings are
+ * deterministic (enum-declaration order) and empty when nothing contradicts.
+ */
+data class ResolvedDraw(
+    val anchor: PathStart,
+    val warnings: List<DrawResolutionWarning>,
+)
