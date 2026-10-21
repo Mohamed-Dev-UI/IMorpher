@@ -149,13 +149,23 @@ object DirectionMath {
     }
 
     /**
-     * Start-point anchor implied by a [DrawDirection], i.e. where the "pen" begins when
-     * `start` is derived from the direction ([PathStart.AUTO] / [PathStart.START] semantics).
+     * Start-point anchor implied by a [DrawDirection]: where the "pen" begins when the
+     * caller supplies no explicit anchor (`PathStart.AUTO`). Authority is intentionally
+     * narrow — only a *derived* anchor routes through here:
      *
-     * Extracted verbatim from the renderer's `resolveStartFraction` table so the literal
-     * semantics survive: corners/edges map to their travel-origin anchor, `CLOCKWISE` and
-     * `COUNTER_CLOCKWISE` anchor at [PathStart.TOP], and directions without a travel origin
-     * (`CENTER_OUT`, `OUTSIDE_IN`, `CUSTOM`) fall through to [PathStart.START].
+     * - [PathStart.AUTO] means "derive from `direction`": corners/edges map to their
+     *   travel-origin anchor, `CLOCKWISE`/`COUNTER_CLOCKWISE` anchor at [PathStart.TOP],
+     *   and a direction of `AUTO` yields [PathStart.TOP_LEFT].
+     * - An explicit [PathStart.START] is a concrete anchor of its own (literal arc
+     *   position 0 of the normalized contour; the renderer returns that arc fraction
+     *   directly) and never re-anchors through this table.
+     * - Directions without a travel origin (`CENTER_OUT`, `OUTSIDE_IN`, `CUSTOM`) have
+     *   nothing to derive, so they fall through to [PathStart.START]; `CUSTOM` combined
+     *   with an AUTO start additionally warns via `DirectionMath.resolve`
+     *   ([DrawResolutionWarning.MISSING_CONCRETE_ANCHOR]).
+     *
+     * Extracted verbatim from the renderer's former `resolveStartFraction` table so the
+     * literal semantics survive.
      */
     fun anchorPathStartOf(direction: DrawDirection): PathStart = when (direction) {
         DrawDirection.AUTO -> PathStart.TOP_LEFT

@@ -194,12 +194,48 @@ DrawIcon(vector = IMorpherIcons.Automation, animation = animation)
 ```
 
 `DrawMode` includes forward, reverse, center-out, outside-in, and radial-style center-out.
-`PathStart` may be an endpoint, center, side, corner, or normalized custom offset.
-For closed contours, the planner can normalize winding and choose a low-error start alignment.
-With no explicit anchor, `DrawDirection.AUTO` chooses the geometric top-left point. The direction
-enum otherwise selects a geometric start anchor and the stroke continues in contour traversal
-order. Directional fill reveal is a separate clipping operation. `DrawOrderStrategy.AUTO` orders
-stagger timing from top-left to bottom-right; render z-order stays in the source declaration order.
+`PathStart` may be the `AUTO` sentinel, an endpoint, center, side, corner, or normalized custom
+offset. For closed contours, the planner can normalize winding and choose a low-error start
+alignment. Directional fill reveal is a separate clipping operation. `DrawOrderStrategy.AUTO`
+orders stagger timing from top-left to bottom-right; render z-order stays in the source
+declaration order. In the example above, the outline's explicit `start = PathStart.TOP_RIGHT`
+pins the pen to that corner — the same anchor `TOP_RIGHT_TO_BOTTOM_LEFT` would derive anyway,
+so the two parameters agree.
+
+`start` and `direction` are two independent parameters resolved by one precedence contract:
+
+- **`start` owns the anchor.** An explicit `start != AUTO` always wins, and a spatial
+  direction that would travel from a different anchor is recorded as `START_OVERRIDES_DIRECTION`
+  instead of being silently dropped. `start = AUTO` (the new sentinel, and the DSL and
+  `DrawConfig` default) derives the anchor from `direction` — with `direction = AUTO` that
+  anchor is the geometric top-left point. `start = START` is a literal anchor: arc position 0
+  of the normalized contour. That was the pre-release default behavior (`start` defaulted to
+  arc 0), and it remains reachable through `AUTO`. The combination `start = AUTO` +
+  `direction = CUSTOM` has no concrete anchor to derive: the reveal anchors top-left and
+  records `MISSING_CONCRETE_ANCHOR` (intended — that combo previously anchored at arc 0).
+- **`direction` owns the travel.** With `MorphConfiguration.directionTraversal =
+  HONOR_DIRECTION`, a `FORWARD` stroke reveal on an open contour traverses toward the
+  requested axis whenever the contour's own point order runs the other way; the default
+  (`LEGACY`) keeps the historical contour-point-order traversal. Closed contours are untouched
+  by the policy — their traversal control remains the `CLOCKWISE`/`COUNTER_CLOCKWISE` winding
+  reversal regardless of policy. Explicit `REVERSE`/`CENTER_OUT`/`OUTSIDE_IN` draw modes always
+  win over the policy, and `OUTSIDE_IN` ignores the start anchor entirely (warning
+  `ANCHOR_IGNORED_BY_MODE`). HONOR_DIRECTION applies to the live morph-pair stroke pass only:
+  custom-geometry, static-side, and `PATH_TRAVERSAL` fill sites don't honor it.
+- **Sweep-only directions.** `DrawDirection.CENTER_OUT` and `OUTSIDE_IN` are fill-sweep
+  semantics (a `FillMode.SWEEP` start angle). On a stroke reveal they carry no travel meaning
+  and emit `CENTER_OUT_DIRECTION_ON_STROKE` via the resolver.
+- **Custom draw anchors.** `MorphConfiguration.customDrawAnchors` (normalized arc fraction per
+  path) drives `PathStart.CUSTOM` draws. `customStartOffsets` stays the morph-alignment map
+  and remains only a legacy fallback where `customDrawAnchors` has no entry.
+- **Fill direction inheritance.** A per-path or vector-level `fill()` without an explicit
+  direction inherits the first explicitly declared draw direction of the same target's stroke
+  requests at build time. Default (`AUTO`) strokes are not sources, so such fills stay on
+  `MorphConfiguration.defaultFillDirection`, the last fallback. Explicit fill directions are
+  never overridden.
+- **Debug.** With `MorphDebugOptions.showStartPoints` and/or `showDirection` on, the overlay
+  renders the resolved anchor dot, the travel arrow along the direction's axis, and a warning
+  banner whenever any of the conflicts above are recorded.
 
 ## Fill, color, and gradients
 

@@ -33,7 +33,19 @@ enum class DrawDirection {
     RIGHT_TO_LEFT,
     TOP_TO_BOTTOM,
     BOTTOM_TO_TOP,
+    /**
+     * Fill-sweep semantics: valid as a [FillMode.SWEEP] start-angle selector — the sweep
+     * starts at the angle derived from the direction's anchor. On a stroke reveal it
+     * carries no travel meaning; `DirectionMath.resolve` emits
+     * `DrawResolutionWarning.CENTER_OUT_DIRECTION_ON_STROKE`.
+     */
     CENTER_OUT,
+    /**
+     * Fill-sweep semantics: valid as a [FillMode.SWEEP] start-angle selector — the sweep
+     * starts at the angle derived from the direction's anchor (today the same top-left
+     * corner angle as `CENTER_OUT`). On a stroke reveal it carries no travel meaning;
+     * `DirectionMath.resolve` emits `DrawResolutionWarning.CENTER_OUT_DIRECTION_ON_STROKE`.
+     */
     OUTSIDE_IN,
     CLOCKWISE,
     COUNTER_CLOCKWISE,
