@@ -71,7 +71,12 @@ data class PathMapping(
     val target: String,
 )
 
-/** Optional debug visualization toggles rendered on top of the animated vector. */
+/** Optional debug visualization toggles rendered on top of the animated vector.
+ *
+ * The resolution-warning banner draws whenever [MorphConfiguration.debug] is on and
+ * warnings are recorded — with ANY option enabled, not just [showStartPoints]/
+ * [showDirection] (which gate only the resolved anchor dot and the travel arrow).
+ */
 data class MorphDebugOptions(
     val showPathPoints: Boolean = false,
     val showPathNumbers: Boolean = false,

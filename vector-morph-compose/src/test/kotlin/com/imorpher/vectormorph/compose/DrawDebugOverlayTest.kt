@@ -70,6 +70,12 @@ import org.robolectric.annotation.GraphicsMode
  * a no-warn scene with the SAME toggles (`LEFT` start matches that axis). Both scenes paint
  * mirrored anchors/arrows, so frame-wide totals are not the signal; the calibrated extra
  * pixels live inside the corner rect only.
+ *
+ * Banner gating follows the overlay, not a toggle: the warning indicator paints whenever
+ * the overlay runs at all (`debug != null`) — so a scene with only a non-anchor/arrow
+ * option on (e.g. `showPathNumbers`) still shows it, while the resolved anchor dots and
+ * markers stay off without their gating toggles (frame-wide probe-yellow stays at zero;
+ * a shortcut toggle-less scene isn't even collecting resolved anchors).
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -224,6 +230,29 @@ class DrawDebugOverlayTest {
         )
     }
 
+    /**
+     * The banner follows the OVERLAY being on, not any single toggle: the conflict scene
+     * with ONLY a non-start/direction option on (`showPathNumbers`) still paints the
+     * indicator in the corner rect, while the resolved anchor dot and the markers stay
+     * off without their gating toggles — frame-wide, nothing paints probe-yellow (their
+     * resolved anchors are not even collected then).
+     */
+    @Test
+    fun warningBannerPaintsWithAnyDebugOption() {
+        val conflict = renderLineFrame(
+            reveal(start = PathStart.TOP_RIGHT, direction = DrawDirection.LEFT_TO_RIGHT),
+            debug = MorphDebugOptions(showPathNumbers = true),
+        )
+        assertTrue("calibration guard: the conflict scene must paint", conflict.litPixelsKey().count > 0)
+        val bannerPixels = countProbeRed(conflict, cornerRectX, cornerRectY)
+        assertTrue("the banner must paint with only showPathNumbers on (count=$bannerPixels)", bannerPixels >= 3)
+        assertEquals(
+            "anchor dots and markers must stay off without their gating toggles",
+            0,
+            countProbeYellow(conflict, 0 until conflict.width, 0 until conflict.height),
+        )
+    }
+
     // ------------------------------------------------------------------ direct-render route
 
     /** One locally-owned-[MorphRenderer] frame plus its frame warnings. */
@@ -300,6 +329,13 @@ class DrawDebugOverlayTest {
         return (argb ushr 16 and 0xFF) >= 0xC0 &&
             (argb ushr 8 and 0xFF) <= 0x40 &&
             (argb and 0xFF) <= 0x40
+    }
+
+    /** Probe-yellow pixels inside the rect of [bitmap] (anchor dot / markers core color). */
+    private fun countProbeYellow(bitmap: Bitmap, xs: IntRange, ys: IntRange): Int {
+        var count = 0
+        for (y in ys) for (x in xs) if (isProbeYellow(bitmap.getPixel(x, y))) count++
+        return count
     }
 
     /** Probe-red pixels inside the rect of [bitmap]. */

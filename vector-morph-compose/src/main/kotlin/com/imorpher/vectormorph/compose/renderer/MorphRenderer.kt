@@ -430,6 +430,12 @@ class MorphRenderer {
      * Development-only geometry overlays (bounds, centroids, points, matching lines,
      * numbered labels, resolved draw anchors/travel axes, resolution warnings) drawn in
      * viewport space from [MorphConfiguration.debug].
+     *
+     * Gating: the resolved anchor dot and the travel arrow render only with
+     * [com.imorpher.vectormorph.core.model.MorphDebugOptions.showStartPoints]/`showDirection`
+     * (and resolved anchors are only collected for those toggles), while the resolution-
+     * warning banner paints whenever this overlay runs ([MorphConfiguration.debug] non-null)
+     * and warnings were recorded — it is not gated behind the anchor/arrow toggles.
      */
     private fun DrawScope.drawDebugOverlay(
         plan: MorphPlan,
@@ -522,9 +528,11 @@ class MorphRenderer {
                     )
                 }
             }
-            if (drawWarnings.isNotEmpty()) {
-                drawResolutionWarningBanner()
-            }
+        }
+        // The warning banner follows the OVERLAY running at all, not any single toggle:
+        // recorded resolution warnings must stay visible with any debug option on.
+        if (drawWarnings.isNotEmpty()) {
+            drawResolutionWarningBanner()
         }
     }
 

@@ -236,8 +236,8 @@ so the two parameters agree.
   `MorphConfiguration.defaultFillDirection`, the last fallback. Explicit fill directions are
   never overridden.
 - **Debug.** With `MorphDebugOptions.showStartPoints` and/or `showDirection` on, the overlay
-  renders the resolved anchor dot, the travel arrow along the direction's axis, and a warning
-  banner whenever any of the conflicts above are recorded.
+  renders the resolved anchor dot and the travel arrow along the direction's axis. The warning
+  banner appears with any debug option enabled whenever any of the conflicts above are recorded.
 
 ## Fill, color, and gradients
 
