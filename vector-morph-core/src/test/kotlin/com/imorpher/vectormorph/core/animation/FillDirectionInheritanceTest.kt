@@ -15,7 +15,8 @@ import org.junit.Test
 class FillDirectionInheritanceTest {
 
     private fun firstFillDirectionOf(animation: VectorAnimation): DrawDirection? =
-        animation.tracks.first { it.prop == PropKey.FILL_PROGRESS }.segments.first().draw!!.fillDirection
+        (animation.tracks.first { it.prop == PropKey.FILL_PROGRESS }.segments.first().reveal
+            as FillRevealConfig).fillDirection
 
     // ------------------------------------------------------------------ plan contract
 
@@ -26,13 +27,13 @@ class FillDirectionInheritanceTest {
             path("outline") { fill(mode = FillMode.DIRECTIONAL, interval = 0.4f..1f) }   // direction omitted
         }
         val fillTrack = anim.tracks.first { it.prop == PropKey.FILL_PROGRESS }
-        assertEquals(DrawDirection.BOTTOM_TO_TOP, fillTrack.segments.first().draw!!.fillDirection)
+        assertEquals(DrawDirection.BOTTOM_TO_TOP, (fillTrack.segments.first().reveal as FillRevealConfig).fillDirection)
     }
 
     @Test
     fun orphanFillStaysNullForRendererFallback() {
         val anim = VectorAnimation { allPaths { fill(mode = FillMode.DIRECTIONAL) } }
-        assertNull(anim.tracks.first { it.prop == PropKey.FILL_PROGRESS }.segments.first().draw!!.fillDirection)
+        assertNull((anim.tracks.first { it.prop == PropKey.FILL_PROGRESS }.segments.first().reveal as FillRevealConfig).fillDirection)
     }
 
     /**

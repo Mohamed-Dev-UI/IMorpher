@@ -3,19 +3,27 @@ package com.imorpher.vectormorph.core
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.ui.graphics.Color
 import com.imorpher.vectormorph.core.animation.AnimationTarget
+import com.imorpher.vectormorph.core.animation.ClipRevealConfig
+import com.imorpher.vectormorph.core.animation.DrawConfig
+import com.imorpher.vectormorph.core.animation.FillRevealConfig
 import com.imorpher.vectormorph.core.animation.PropKey
+import com.imorpher.vectormorph.core.animation.Reveal
 import com.imorpher.vectormorph.core.animation.VectorAnimation
 import com.imorpher.vectormorph.core.animation.VectorAnimationCodec
 import com.imorpher.vectormorph.core.gradients.linearGradientSpecAtAngle
 import com.imorpher.vectormorph.core.interpolation.GradientInterpolator
 import com.imorpher.vectormorph.core.model.ColorInterpolationSpace
 import com.imorpher.vectormorph.core.model.DrawDirection
+import com.imorpher.vectormorph.core.model.DrawMode
 import com.imorpher.vectormorph.core.model.FillMode
 import com.imorpher.vectormorph.core.model.PathStart
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertThrows
 import org.junit.Test
+import java.io.ByteArrayOutputStream
+import java.io.DataOutputStream
 
 class VectorAnimationCodecTest {
     @Test
@@ -41,7 +49,7 @@ class VectorAnimationCodecTest {
         val pathTrack = decoded.tracks.single { it.target == AnimationTarget.Path("outline", 1) && it.prop == PropKey.ALPHA }
         assertEquals(0.1f, pathTrack.segments.single().start, 0f)
         assertEquals(0.8f, pathTrack.segments.single().end, 0f)
-        assertNotNull(decoded.drawConfigFor("outline[1]", null, 0, -1, PropKey.DRAW_PROGRESS))
+        assertNotNull(decoded.strokeRevealFor("outline[1]", null, 0, -1, PropKey.DRAW_PROGRESS))
         val linear = decoded.brushTracks.single().segments.first().from as com.imorpher.vectormorph.core.gradients.BrushSpec.Linear
         assertEquals(350f, linear.angleDegrees!!, 0f)
     }
@@ -60,7 +68,8 @@ class VectorAnimationCodecTest {
      * stores enums by name, so the decoded animation must resolve anchors and travel
      * identically to the encoded one — a START default must never re-anchor through the
      * direction table, and an inherited fillDirection must stay a real value, not revert
-     * to null/AUTO. Comparison is field-based (compiled tracks/DrawConfigs), not pixels.
+     * to null/AUTO. Comparison is field-based (compiled tracks and typed reveal configs),
+     * not pixels.
      */
     @Test
     fun startDirectionPrecedenceFieldsSurviveBinaryRoundTrip() {
@@ -101,44 +110,215 @@ class VectorAnimationCodecTest {
         }
 
         // (a) AUTO stays AUTO; the explicit BOTTOM_TO_TOP travel direction is preserved.
-        val sourceAuto = drawConfigOf(source, "autoAnchor", PropKey.DRAW_PROGRESS)
+        val sourceAuto = revealOf(source, "autoAnchor", PropKey.DRAW_PROGRESS) as DrawConfig
         assertEquals(PathStart.AUTO, sourceAuto.start)
         assertEquals(DrawDirection.BOTTOM_TO_TOP, sourceAuto.direction)
-        assertDrawConfigEquals(sourceAuto, drawConfigOf(decoded, "autoAnchor", PropKey.DRAW_PROGRESS))
+        assertStrokeEquals(sourceAuto, revealOf(decoded, "autoAnchor", PropKey.DRAW_PROGRESS) as DrawConfig)
 
         // (b) the inherited fill direction is concrete (not AUTO, not null).
-        val sourceFill = drawConfigOf(source, "inheritedFill", PropKey.FILL_PROGRESS)
+        val sourceFill = revealOf(source, "inheritedFill", PropKey.FILL_PROGRESS) as FillRevealConfig
         assertEquals(FillMode.DIRECTIONAL, sourceFill.fillMode)
         assertEquals(DrawDirection.TOP_TO_BOTTOM, sourceFill.fillDirection)
-        assertDrawConfigEquals(sourceFill, drawConfigOf(decoded, "inheritedFill", PropKey.FILL_PROGRESS))
-        assertEquals(DrawDirection.TOP_TO_BOTTOM, drawConfigOf(decoded, "inheritedFill", PropKey.DRAW_PROGRESS).direction)
+        assertFillEquals(sourceFill, revealOf(decoded, "inheritedFill", PropKey.FILL_PROGRESS) as FillRevealConfig)
+        assertEquals(
+            DrawDirection.TOP_TO_BOTTOM,
+            (revealOf(decoded, "inheritedFill", PropKey.DRAW_PROGRESS) as DrawConfig).direction,
+        )
 
         // (c) explicit START is preserved verbatim — never re-anchored by its direction.
-        val sourceStart = drawConfigOf(source, "literalStart", PropKey.DRAW_PROGRESS)
+        val sourceStart = revealOf(source, "literalStart", PropKey.DRAW_PROGRESS) as DrawConfig
         assertEquals(PathStart.START, sourceStart.start)
-        assertDrawConfigEquals(sourceStart, drawConfigOf(decoded, "literalStart", PropKey.DRAW_PROGRESS))
+        assertStrokeEquals(sourceStart, revealOf(decoded, "literalStart", PropKey.DRAW_PROGRESS) as DrawConfig)
     }
 
-    /** Resolves the single draw config of one (named-path target, property) track. */
-    private fun drawConfigOf(
+    /** Resolves the single reveal of one (named-path target, property) track. */
+    private fun revealOf(
         animation: VectorAnimation,
         targetName: String,
         prop: PropKey,
-    ): VectorAnimation.DrawConfig =
-        animation.tracks.single {
-            it.prop == prop && (it.target as? AnimationTarget.Path)?.name == targetName
-        }.segments.single().draw ?: throw AssertionError("Track $targetName/$prop carries no draw config")
+    ): Reveal = animation.tracks.single {
+        it.prop == prop && (it.target as? AnimationTarget.Path)?.name == targetName
+    }.segments.single().reveal ?: throw AssertionError("Track $targetName/$prop carries no reveal")
 
-    /** Field-by-field [VectorAnimation.DrawConfig] comparison (it is not a data class). */
-    private fun assertDrawConfigEquals(
-        expected: VectorAnimation.DrawConfig,
-        actual: VectorAnimation.DrawConfig,
-    ) {
+    /** Field-by-field [DrawConfig] comparison (it is not a data class). */
+    private fun assertStrokeEquals(expected: DrawConfig, actual: DrawConfig) {
         assertEquals(expected.mode, actual.mode)
         assertEquals(expected.start, actual.start)
         assertEquals(expected.direction, actual.direction)
+    }
+
+    /** Field-by-field [FillRevealConfig] comparison (it is not a data class). */
+    private fun assertFillEquals(expected: FillRevealConfig, actual: FillRevealConfig) {
         assertEquals(expected.fillMode, actual.fillMode)
         assertEquals(expected.fillDirection, actual.fillDirection)
+    }
+
+    /** Field-by-field [ClipRevealConfig] comparison (it is not a data class). */
+    private fun assertClipEquals(expected: ClipRevealConfig, actual: ClipRevealConfig) {
+        assertEquals(expected.direction, actual.direction)
+    }
+
+    /**
+     * Golden-bytes pin for the typed reveal split (Review Focus 2): VERSION stays 1 and every
+     * reveal record keeps the documented V1 field layout — the mode/start/direction string
+     * slots followed by the nullable fill pair. The stroke record spells the real trio plus
+     * two `false` fill flags; the fill record writes `FORWARD`/`START`/`AUTO` placeholder
+     * strings that no consumer reads and then the real fill pair; the clip record writes
+     * the `FORWARD`/`START` placeholders plus its real moving-edge direction. Decoding the
+     * literal bytes yields the three typed reveals exactly, and re-encoding the decoded
+     * animation replays the same layout (byte-length equality + spot fields + identical
+     * reveals after a second decode).
+     */
+    @Test
+    fun goldenVersionOneBytesDecodeIntoTypedRevealsAndReEncodeToTheSameLayout() {
+        val layout = goldenVersionOneBytes()
+        val decoded = VectorAnimationCodec.decode(layout.bytes)
+
+        assertEquals(3, decoded.tracks.size)
+        val stroke = decoded.tracks.single { it.prop == PropKey.DRAW_PROGRESS }.segments.single().reveal
+        val fill = decoded.tracks.single { it.prop == PropKey.FILL_PROGRESS }.segments.single().reveal
+        val clip = decoded.tracks.single { it.prop == PropKey.CLIP_PROGRESS }.segments.single().reveal
+
+        // Stroke spell-out: FORWARD / AUTO / BOTTOM_TO_TOP; the two trailing fill slots are
+        // read-and-dropped — stroke reveals carry no fill coupling anymore.
+        assertStrokeEquals(
+            DrawConfig(mode = DrawMode.FORWARD, start = PathStart.AUTO, direction = DrawDirection.BOTTOM_TO_TOP),
+            stroke as DrawConfig,
+        )
+        assertFillEquals(FillRevealConfig(FillMode.DIRECTIONAL, null), fill as FillRevealConfig)
+        assertClipEquals(ClipRevealConfig(DrawDirection.LEFT_TO_RIGHT), clip as ClipRevealConfig)
+
+        // Round-trip identity: decode → encode again → decode yields the same typed reveals.
+        val reEncoded = VectorAnimationCodec.encode(decoded)
+        val roundTripped = VectorAnimationCodec.decode(reEncoded)
+        assertStrokeEquals(
+            stroke as DrawConfig,
+            roundTripped.tracks.single { it.prop == PropKey.DRAW_PROGRESS }.segments.single().reveal as DrawConfig,
+        )
+        assertFillEquals(
+            fill as FillRevealConfig,
+            roundTripped.tracks.single { it.prop == PropKey.FILL_PROGRESS }.segments.single().reveal as FillRevealConfig,
+        )
+        assertClipEquals(
+            clip as ClipRevealConfig,
+            roundTripped.tracks.single { it.prop == PropKey.CLIP_PROGRESS }.segments.single().reveal
+                as ClipRevealConfig,
+        )
+
+        // Byte-length equality, then spot fields at the same absolute offsets.
+        assertEquals(layout.bytes.size, reEncoded.size)
+        // (1) the full stroke record replays byte for byte (real trio + two false fill slots)
+        assertArrayEquals(
+            layout.bytes.copyOfRange(layout.strokeRecordStart, layout.strokeRecordEnd),
+            reEncoded.copyOfRange(layout.strokeRecordStart, layout.strokeRecordEnd),
+        )
+        // (2) the fill record's real pair replays byte for byte
+        assertArrayEquals(
+            layout.bytes.copyOfRange(layout.fillPairStart, layout.fillPairEnd),
+            reEncoded.copyOfRange(layout.fillPairStart, layout.fillPairEnd),
+        )
+        // (3) the clip record's real moving-edge field replays at the same position
+        assertArrayEquals(
+            layout.bytes.copyOfRange(layout.clipDirectionStart, layout.clipDirectionEnd),
+            reEncoded.copyOfRange(layout.clipDirectionStart, layout.clipDirectionEnd),
+        )
+        // (4) the legacy trailing null flags (fill-pair slots on stroke/clip) hold their spot
+        assertEquals(layout.bytes[layout.strokeFillModeNullOffset], reEncoded[layout.strokeFillModeNullOffset])
+        assertEquals(layout.bytes[layout.strokeFillDirectionNullOffset], reEncoded[layout.strokeFillDirectionNullOffset])
+        assertEquals(layout.bytes[layout.strokeFillModeNullOffset], 0.toByte())
+        assertEquals(layout.bytes[layout.strokeFillDirectionNullOffset], 0.toByte())
+    }
+
+    /** Hand-built literal byte array + the offsets of the compared spot regions. */
+    private class GoldenLayout(
+        val bytes: ByteArray,
+        val strokeRecordStart: Int,
+        val strokeRecordEnd: Int,
+        val strokeFillModeNullOffset: Int,
+        val strokeFillDirectionNullOffset: Int,
+        val fillPairStart: Int,
+        val fillPairEnd: Int,
+        val clipDirectionStart: Int,
+        val clipDirectionEnd: Int,
+    )
+
+    /** The documented V1 layout above, emitted literally with [DataOutputStream]. */
+    private fun goldenVersionOneBytes(): GoldenLayout {
+        val sink = ByteArrayOutputStream()
+        val out = DataOutputStream(sink)
+        fun easingSamples() {
+            out.writeInt(129)   // EASING_SAMPLES: LinearEasing sampled 129 times
+            (0 until 129).forEach { sample -> out.writeFloat(sample / 128f) }
+        }
+        // ---- header
+        out.writeInt(0x564D414E)                       // MAGIC "VMAN"
+        out.writeInt(1)                                // VERSION — unchanged by the typed split
+        out.writeBoolean(false)                        // appearanceOnly (reveal tracks are geometry)
+        out.writeFloat(0f)                             // staggerDelay
+        out.writeUTF("TOP_LEFT_TO_BOTTOM_RIGHT")       // staggerOrder
+        // ---- tracks
+        out.writeInt(3)                                // track count: one DRAW, one FILL, one CLIP
+        // -- track 1 of 3: DRAW_PROGRESS (AllPaths)
+        out.writeByte(1)                               // target tag: AllPaths
+        out.writeUTF("DRAW_PROGRESS")
+        out.writeInt(1)                                // segment count
+        out.writeFloat(0f); out.writeFloat(1f)         // segment start / end
+        out.writeFloat(0f); out.writeFloat(1f)         // segment from / to
+        easingSamples()
+        val strokeRecordStart = sink.size()
+        out.writeBoolean(true)                         // hasReveal
+        out.writeUTF("FORWARD")                        // mode (real)
+        out.writeUTF("AUTO")                           // start anchor (real)
+        out.writeUTF("BOTTOM_TO_TOP")                  // direction (real)
+        val strokeFillModeNullOffset = sink.size()
+        out.writeBoolean(false)                        // nullable fillMode slot — stroke carries none
+        val strokeFillDirectionNullOffset = sink.size()
+        out.writeBoolean(false)                        // nullable fillDirection slot — stroke carries none
+        val strokeRecordEnd = sink.size()
+        // -- track 2 of 3: FILL_PROGRESS (AllPaths)
+        out.writeByte(1)
+        out.writeUTF("FILL_PROGRESS")
+        out.writeInt(1)
+        out.writeFloat(0f); out.writeFloat(1f)
+        out.writeFloat(0f); out.writeFloat(1f)
+        easingSamples()
+        out.writeBoolean(true)                         // hasReveal
+        out.writeUTF("FORWARD")                        // placeholder — no consumer reads it
+        out.writeUTF("START")                          // placeholder — no consumer reads it
+        out.writeUTF("AUTO")                           // placeholder — no consumer reads it
+        val fillPairStart = sink.size()
+        out.writeBoolean(true); out.writeUTF("DIRECTIONAL")  // fillMode (real)
+        out.writeBoolean(false)                        // fillDirection = null → renderer fallback
+        val fillPairEnd = sink.size()
+        // -- track 3 of 3: CLIP_PROGRESS (AllPaths)
+        out.writeByte(1)
+        out.writeUTF("CLIP_PROGRESS")
+        out.writeInt(1)
+        out.writeFloat(0f); out.writeFloat(1f)
+        out.writeFloat(0f); out.writeFloat(1f)
+        easingSamples()
+        out.writeBoolean(true)                         // hasReveal
+        out.writeUTF("FORWARD")                        // placeholder — no consumer reads it
+        out.writeUTF("START")                          // placeholder — no consumer reads it
+        val clipDirectionStart = sink.size()
+        out.writeUTF("LEFT_TO_RIGHT")                  // moving clip edge (the record's real field)
+        val clipDirectionEnd = sink.size()
+        out.writeBoolean(false)                        // nullable fillMode slot — clip carries none
+        out.writeBoolean(false)                        // nullable fillDirection slot — clip carries none
+        // ---- brushes
+        out.writeInt(0)                                // brush track count
+        out.flush()
+        return GoldenLayout(
+            bytes = sink.toByteArray(),
+            strokeRecordStart = strokeRecordStart,
+            strokeRecordEnd = strokeRecordEnd,
+            strokeFillModeNullOffset = strokeFillModeNullOffset,
+            strokeFillDirectionNullOffset = strokeFillDirectionNullOffset,
+            fillPairStart = fillPairStart,
+            fillPairEnd = fillPairEnd,
+            clipDirectionStart = clipDirectionStart,
+            clipDirectionEnd = clipDirectionEnd,
+        )
     }
 
     @Test

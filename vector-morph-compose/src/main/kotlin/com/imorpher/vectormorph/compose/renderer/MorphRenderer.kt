@@ -686,8 +686,12 @@ class MorphRenderer {
             if (into.props[key.ordinal].isNaN() && !group.props[key.ordinal].isNaN()) {
                 into.props[key.ordinal] = group.props[key.ordinal]
             }
-            if (into.drawConfigs[key.ordinal] == null) into.drawConfigs[key.ordinal] = group.drawConfigs[key.ordinal]
         }
+        // Reveal slots merge with the same "only when the target slot is null" rule the
+        // per-prop array used; each group fills only its own unset slots.
+        if (into.strokeReveal == null) into.strokeReveal = group.strokeReveal
+        if (into.fillReveal == null) into.fillReveal = group.fillReveal
+        if (into.clipReveal == null) into.clipReveal = group.clipReveal
         if (!hasPathFill && group.brushMode != com.imorpher.vectormorph.core.animation.PathFrameValues.BRUSH_NONE) {
             into.brushMode = group.brushMode; into.primaryBrush = group.primaryBrush
             into.secondaryBrush = group.secondaryBrush; into.brushProgress = group.brushProgress
@@ -783,14 +787,14 @@ class MorphRenderer {
             alphaOverride = props.props[PropKey.ALPHA.ordinal].takeUnless { value -> value.isNaN() }
         }
 
-        val customDraw = props.drawConfigs[PropKey.DRAW_PROGRESS.ordinal]
-            ?: config.animation?.drawConfigFor(
+        val customDraw = props.strokeReveal
+            ?: config.animation?.strokeRevealFor(
                 pair.fromPath?.name, pair.toPath?.name, pair.fromPath?.index ?: -1,
                 pair.toPath?.index ?: -1, PropKey.DRAW_PROGRESS,
                 pair.fromPath?.groupNames.orEmpty(), pair.toPath?.groupNames.orEmpty(),
             )
-        val customFill = props.drawConfigs[PropKey.FILL_PROGRESS.ordinal]
-            ?: config.animation?.drawConfigFor(
+        val customFill = props.fillReveal
+            ?: config.animation?.fillRevealFor(
                 pair.fromPath?.name, pair.toPath?.name, pair.fromPath?.index ?: -1,
                 pair.toPath?.index ?: -1, PropKey.FILL_PROGRESS,
                 pair.fromPath?.groupNames.orEmpty(), pair.toPath?.groupNames.orEmpty(),
@@ -914,8 +918,8 @@ class MorphRenderer {
         val contours = custom.contours.orEmpty()
         val drawP = props.props[PropKey.DRAW_PROGRESS.ordinal].takeUnless { it.isNaN() } ?: progress
         val fillP = props.props[PropKey.FILL_PROGRESS.ordinal].takeUnless { it.isNaN() } ?: progress
-        val drawCfg = props.drawConfigs[PropKey.DRAW_PROGRESS.ordinal]
-        val fillCfg = props.drawConfigs[PropKey.FILL_PROGRESS.ordinal]
+        val drawCfg = props.strokeReveal
+        val fillCfg = props.fillReveal
         val transform = PairTransform.from(props, side, side, 0f)
         withPairTransform(transform) {
             val contents: DrawScope.() -> Unit = {
@@ -956,7 +960,7 @@ class MorphRenderer {
                 }
             }
             val clipProgress = props.props[PropKey.CLIP_PROGRESS.ordinal].takeUnless { it.isNaN() } ?: 1f
-            val clipDirection = props.drawConfigs[PropKey.CLIP_PROGRESS.ordinal]?.direction
+            val clipDirection = props.clipReveal?.direction
                 ?: DrawDirection.TOP_LEFT_TO_BOTTOM_RIGHT
             withClipReveal(side.clipContours, clipProgress, clipDirection, contents)
         }
@@ -1097,17 +1101,17 @@ class MorphRenderer {
         val fillProgress = props.props[PropKey.FILL_PROGRESS.ordinal].takeUnless { it.isNaN() }
 
         // draw config from the DSL track (mode/start/direction for reveals)
-        val drawCfg = props.drawConfigs[PropKey.DRAW_PROGRESS.ordinal]
-            ?: config.animation?.takeIf { drawProgress != null }?.drawConfigFor(
+        val drawCfg = props.strokeReveal
+            ?: config.animation?.takeIf { drawProgress != null }?.strokeRevealFor(
                 f.name, t.name, f.index, t.index, PropKey.DRAW_PROGRESS, f.groupNames, t.groupNames,
             )
-        val clipCfg = props.drawConfigs[PropKey.CLIP_PROGRESS.ordinal]
+        val clipCfg = props.clipReveal
         val clipProgress = props.props[PropKey.CLIP_PROGRESS.ordinal].takeUnless { it.isNaN() } ?: 1f
         val clipDirection = clipCfg?.direction ?: DrawDirection.TOP_LEFT_TO_BOTTOM_RIGHT
         // Group clips live in viewport space; use the active endpoint while its contents morph.
         val clipContours = if (morphT < 0.5f) f.clipContours else t.clipContours
-        val fillCfg = props.drawConfigs[PropKey.FILL_PROGRESS.ordinal]
-            ?: config.animation?.takeIf { fillProgress != null }?.drawConfigFor(
+        val fillCfg = props.fillReveal
+            ?: config.animation?.takeIf { fillProgress != null }?.fillRevealFor(
                 f.name, t.name, f.index, t.index, PropKey.FILL_PROGRESS, f.groupNames, t.groupNames,
             )
 
@@ -1132,8 +1136,8 @@ class MorphRenderer {
                         drawProgress != null -> drawProgress
                         else -> 1f
                     }
-                val fillMode = fillCfg?.fillMode ?: drawCfg?.fillMode ?: config.defaultFillMode
-                val fillDir = fillCfg?.fillDirection ?: drawCfg?.fillDirection ?: config.defaultFillDirection
+                val fillMode = fillCfg?.fillMode ?: config.defaultFillMode
+                val fillDir = fillCfg?.fillDirection ?: config.defaultFillDirection
 
                 val customFillContours = props.customOverrides?.fillContours
                 if (customFillContours != null) {
@@ -1415,8 +1419,10 @@ class MorphRenderer {
 
             FillMode.PATH_TRAVERSAL -> {
                 // fill follows the stroke traversal: paint the *revealed* stroke path with a
-                // very wide brush in the fill color
-                val strokeDraw = props.drawConfigs[PropKey.DRAW_PROGRESS.ordinal]
+                // very wide brush in the fill color. This reads the STROKE slot (the
+                // DRAW_PROGRESS property) even while painting a fill: fill traversal is
+                // choreography-steered by the stroke's mode/start/direction.
+                val strokeDraw = props.strokeReveal
                 val drawMode = strokeDraw?.mode ?: DrawMode.FORWARD
                 val drawDirection = strokeDraw?.direction ?: direction
                 val width = max(w, h) * 1.2f + strokeWidth
@@ -1822,7 +1828,7 @@ class MorphRenderer {
         val transform = PairTransform.from(props, side, side, 0f)
         withPairTransform(transform) {
             val clipProgress = props.props[PropKey.CLIP_PROGRESS.ordinal].takeUnless { it.isNaN() } ?: 1f
-            val clipDirection = props.drawConfigs[PropKey.CLIP_PROGRESS.ordinal]?.direction
+            val clipDirection = props.clipReveal?.direction
                 ?: DrawDirection.TOP_LEFT_TO_BOTTOM_RIGHT
             if (side.clipContours.isEmpty()) {
                 drawStaticContents(side, fillResult, strokeResult, alpha, fillAlphaOverride, strokeAlphaOverride, strokeWidthOverride)
@@ -1928,10 +1934,10 @@ class MorphRenderer {
             ?: globalProgress
         val fillProgress = props.props[PropKey.FILL_PROGRESS.ordinal].takeUnless { it.isNaN() }
             ?: globalProgress
-        val drawConfig = props.drawConfigs[PropKey.DRAW_PROGRESS.ordinal] ?: config.animation?.drawConfigFor(
+        val drawConfig = props.strokeReveal ?: config.animation?.strokeRevealFor(
             null, side.name, -1, side.index, PropKey.DRAW_PROGRESS, emptyList(), side.groupNames,
         )
-        val fillConfig = props.drawConfigs[PropKey.FILL_PROGRESS.ordinal] ?: config.animation?.drawConfigFor(
+        val fillConfig = props.fillReveal ?: config.animation?.fillRevealFor(
             null, side.name, -1, side.index, PropKey.FILL_PROGRESS, emptyList(), side.groupNames,
         )
         val fallbackFill = side.fill?.let { GradientInterpolator.run { it.buildBrush() } }
@@ -1955,7 +1961,7 @@ class MorphRenderer {
         val fillAlphaOverride = props.props[PropKey.FILL_ALPHA.ordinal].takeUnless { it.isNaN() } ?: 1f
         val strokeAlphaOverride = props.props[PropKey.STROKE_ALPHA.ordinal].takeUnless { it.isNaN() } ?: 1f
         val clipProgress = props.props[PropKey.CLIP_PROGRESS.ordinal].takeUnless { it.isNaN() } ?: 1f
-        val clipDirection = props.drawConfigs[PropKey.CLIP_PROGRESS.ordinal]?.direction
+        val clipDirection = props.clipReveal?.direction
             ?: DrawDirection.TOP_LEFT_TO_BOTTOM_RIGHT
         val transform = PairTransform.from(props, side, side, 0f)
         withPairTransform(transform) {

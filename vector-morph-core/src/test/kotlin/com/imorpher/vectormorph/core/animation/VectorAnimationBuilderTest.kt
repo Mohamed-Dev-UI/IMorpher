@@ -204,12 +204,12 @@ class VectorAnimationBuilderTest {
             fillSegments.last().start >= 0.65f - 0.01f,
         )
 
-        // draw configs survive compilation: the fill mode rides the FILL_PROGRESS track
-        val draw = animation.drawConfigFor("body", "body", 0, 0)
+        // reveal configs survive compilation: the fill mode rides the FILL_PROGRESS track
+        val draw = animation.strokeRevealFor("body", "body", 0, 0)
         assertNotNull(draw)
-        val fillConfig = animation.drawConfigFor("body", "body", 0, 0, PropKey.FILL_PROGRESS)
-        assertNotNull(fillConfig)
-        assertEquals(FillMode.DIRECTIONAL, fillConfig!!.fillMode)
+        val fillReveal = animation.fillRevealFor("body", "body", 0, 0)
+        assertNotNull(fillReveal)
+        assertEquals(FillMode.DIRECTIONAL, fillReveal!!.fillMode)
     }
 
     @Test

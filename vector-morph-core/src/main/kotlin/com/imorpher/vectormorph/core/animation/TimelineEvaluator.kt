@@ -191,12 +191,12 @@ class TimelineEvaluator(
         for (i in frame.pathProps.indices) {
             val pv = frame.pathProps[i]
             reset(pv.props)
-            pv.drawConfigs.fill(null)
+            pv.strokeReveal = null; pv.fillReveal = null; pv.clipReveal = null
             pv.groupBounds.fill(Float.NaN)
             pv.customOverrides = null
             pv.groupProps.values.forEach { group ->
                 reset(group.props)
-                group.drawConfigs.fill(null)
+                group.strokeReveal = null; group.fillReveal = null; group.clipReveal = null
                 group.groupBounds.fill(Float.NaN)
                 group.customOverrides = null
                 group.brushMode = PathFrameValues.BRUSH_NONE
@@ -244,8 +244,13 @@ class TimelineEvaluator(
                                 groupBounds[target.name]?.copyInto(values.groupBounds)
                             }
                             val active = activeSegment(track.segments, localProgress)
-                            val draw = active?.draw
-                            if (draw != null) values.drawConfigs[track.prop.ordinal] = draw
+                            val reveal = active?.reveal
+                            when (track.prop) {
+                                PropKey.DRAW_PROGRESS -> values.strokeReveal = reveal as? DrawConfig
+                                PropKey.FILL_PROGRESS -> values.fillReveal = reveal as? FillRevealConfig
+                                PropKey.CLIP_PROGRESS -> values.clipReveal = reveal as? ClipRevealConfig
+                                else -> {}
+                            }
                         }
                     }
                 }

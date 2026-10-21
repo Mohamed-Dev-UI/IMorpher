@@ -48,11 +48,47 @@ object VectorAnimationCodec {
                     out.writeFloat(segment.start); out.writeFloat(segment.end)
                     out.writeFloat(segment.from); out.writeFloat(segment.to)
                     writeEasing(out, segment.easing)
-                    out.writeBoolean(segment.draw != null)
-                    segment.draw?.let { draw ->
-                        out.writeUTF(draw.mode.name); out.writeUTF(draw.start.name); out.writeUTF(draw.direction.name)
-                        writeNullableEnum(out, draw.fillMode?.name)
-                        writeNullableEnum(out, draw.fillDirection?.name)
+                    out.writeBoolean(segment.reveal != null)
+                    segment.reveal?.let { reveal ->
+                        // Same 5-field record per reveal as version 1 (mode/start/direction
+                        // slots + the nullable fill pair) — dispatching by the record's
+                        // property keeps the byte layout stable while the payload becomes typed.
+                        when (track.prop) {
+                            PropKey.DRAW_PROGRESS -> {
+                                val draw = reveal as? DrawConfig
+                                    ?: throw IllegalStateException(
+                                        "DRAW_PROGRESS segment carries ${reveal::class.simpleName}",
+                                    )
+                                out.writeUTF(draw.mode.name); out.writeUTF(draw.start.name); out.writeUTF(draw.direction.name)
+                                // The fill pair no longer rides stroke reveals: keep the two
+                                // nullable slots as backward-compatible null writes.
+                                writeNullableEnum(out, null); writeNullableEnum(out, null)
+                            }
+                            PropKey.FILL_PROGRESS -> {
+                                val fill = reveal as? FillRevealConfig
+                                    ?: throw IllegalStateException(
+                                        "FILL_PROGRESS segment carries ${reveal::class.simpleName}",
+                                    )
+                                out.writeUTF(com.imorpher.vectormorph.core.model.DrawMode.FORWARD.name)
+                                out.writeUTF(com.imorpher.vectormorph.core.model.PathStart.START.name)
+                                out.writeUTF(com.imorpher.vectormorph.core.model.DrawDirection.AUTO.name)
+                                writeNullableEnum(out, fill.fillMode?.name)
+                                writeNullableEnum(out, fill.fillDirection?.name)
+                            }
+                            PropKey.CLIP_PROGRESS -> {
+                                val clip = reveal as? ClipRevealConfig
+                                    ?: throw IllegalStateException(
+                                        "CLIP_PROGRESS segment carries ${reveal::class.simpleName}",
+                                    )
+                                out.writeUTF(com.imorpher.vectormorph.core.model.DrawMode.FORWARD.name)
+                                out.writeUTF(com.imorpher.vectormorph.core.model.PathStart.START.name)
+                                out.writeUTF(clip.direction.name)
+                                writeNullableEnum(out, null); writeNullableEnum(out, null)
+                            }
+                            else -> throw IllegalStateException(
+                                "Reveal record on non-reveal property ${track.prop.name}",
+                            )
+                        }
                     }
                 }
             }
@@ -104,14 +140,29 @@ object VectorAnimationCodec {
                     val start = input.readFloat(); val end = input.readFloat()
                     val from = input.readFloat(); val to = input.readFloat()
                     val easing = readEasing(input)
-                    val draw = if (input.readBoolean()) VectorAnimation.DrawConfig(
-                        mode = enumValue(input.readUTF()),
-                        start = enumValue(input.readUTF()),
-                        direction = enumValue(input.readUTF()),
-                        fillMode = readNullableEnum(input)?.let { enumValue<com.imorpher.vectormorph.core.model.FillMode>(it) },
-                        fillDirection = readNullableEnum(input)?.let { enumValue<com.imorpher.vectormorph.core.model.DrawDirection>(it) },
-                    ) else null
-                    segments.add(VectorAnimation.Segment(start, end, from, to, easing, draw))
+                    // Version-1 record layout: mode/start/direction string slots followed by
+                    // the nullable fill pair, regardless of the record's property. Decode
+                    // validates and maps the record onto the property's typed reveal variant;
+                    // placeholder/mismatched slots are read and dropped.
+                    val reveal = if (input.readBoolean()) {
+                        val mode = enumValue<com.imorpher.vectormorph.core.model.DrawMode>(input.readUTF())
+                        val anchor = enumValue<com.imorpher.vectormorph.core.model.PathStart>(input.readUTF())
+                        val direction = enumValue<com.imorpher.vectormorph.core.model.DrawDirection>(input.readUTF())
+                        val fillModeName = readNullableEnum(input)
+                        val fillDirectionName = readNullableEnum(input)
+                        when (prop) {
+                            PropKey.DRAW_PROGRESS -> VectorAnimation.DrawConfig(mode, anchor, direction)
+                            PropKey.FILL_PROGRESS -> VectorAnimation.FillRevealConfig(
+                                fillMode = fillModeName?.let { enumValue<com.imorpher.vectormorph.core.model.FillMode>(it) },
+                                fillDirection = fillDirectionName?.let { enumValue<com.imorpher.vectormorph.core.model.DrawDirection>(it) },
+                            )
+                            PropKey.CLIP_PROGRESS -> VectorAnimation.ClipRevealConfig(direction)
+                            else -> throw IllegalStateException(
+                                "Reveal record on non-reveal property ${prop.name}",
+                            )
+                        }
+                    } else null
+                    segments.add(VectorAnimation.Segment(start, end, from, to, easing, reveal))
                 }
                 tracks.add(VectorAnimation.Track(target, prop, segments))
             }

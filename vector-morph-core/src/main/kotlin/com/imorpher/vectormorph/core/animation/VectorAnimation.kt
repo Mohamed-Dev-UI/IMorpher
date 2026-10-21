@@ -96,8 +96,12 @@ class VectorAnimation internal constructor(
         val to: Float,
         /** Easing applied to the local progress between [start] and [end]. */
         val easing: androidx.compose.animation.core.Easing,
-        /** Reveal/fill configuration (mode, anchor, direction) when the property is a reveal. */
-        val draw: DrawConfig? = null,
+        /**
+         * Typed reveal payload for the property this track drives: a stroke draw carries
+         * [DrawConfig], a fill reveal [FillRevealConfig] and a clip reveal
+         * [ClipRevealConfig] (null for non-reveal or keyframe-only segments).
+         */
+        val reveal: Reveal? = null,
     )
 
     /** One interval of a brush track: [from]→[to] paint interpolation. */
@@ -134,18 +138,42 @@ class VectorAnimation internal constructor(
         val channel: BrushChannel = BrushChannel.FILL,
     )
 
-    /** Extra parameters attached to draw/reveal tracks. */
+    /**
+     * Typed reveal payload carried by a [Segment]: each reveal property compiles exactly
+     * the variant its renderer consumes, so fill/clip reveals no longer drag the stroke
+     * fields they never use (plan C6).
+     */
+    sealed interface Reveal
+
+    /** Stroke reveal configuration: mode/start/direction, consumed by the pen-drawing passes. */
     class DrawConfig(
         val mode: com.imorpher.vectormorph.core.model.DrawMode = com.imorpher.vectormorph.core.model.DrawMode.FORWARD,
         val start: com.imorpher.vectormorph.core.model.PathStart = com.imorpher.vectormorph.core.model.PathStart.AUTO,
         val direction: com.imorpher.vectormorph.core.model.DrawDirection = com.imorpher.vectormorph.core.model.DrawDirection.AUTO,
-        /** Fill reveal to pair with the reveal (mode + direction); null = no fill coupling. */
-        val fillMode: com.imorpher.vectormorph.core.model.FillMode? = null,
-        val fillDirection: com.imorpher.vectormorph.core.model.DrawDirection? = null,
-    )
+    ) : Reveal
 
-    /** Returns the draw configuration associated with the last matching reveal track. */
-    fun drawConfigFor(
+    /**
+     * Fill reveal configuration: the fill sweep's mode and travel direction. No stroke
+     * fields — a fill is never anchored by a start point nor drawn as a stroke.
+     */
+    class FillRevealConfig(
+        val fillMode: com.imorpher.vectormorph.core.model.FillMode?,
+        val fillDirection: com.imorpher.vectormorph.core.model.DrawDirection?,
+    ) : Reveal
+
+    /** Clip reveal configuration: the moving edge that reveals inherited clipping geometry. */
+    class ClipRevealConfig(
+        val direction: com.imorpher.vectormorph.core.model.DrawDirection,
+    ) : Reveal
+
+    /**
+     * Returns the stroke reveal configuration ([DrawConfig]) of the last matching reveal
+     * track. Track search: tracks reversed, per track the last segment carrying a
+     * [DrawConfig] reveal, the track must target [property] and must match the pair
+     * identity (names at [occurrence], indices, or group membership) — the first track
+     * passing all three checks wins (never a [AnimationTarget.Vector] track).
+     */
+    fun strokeRevealFor(
         fromName: String?,
         toName: String?,
         fromIndex: Int,
@@ -153,8 +181,39 @@ class VectorAnimation internal constructor(
         property: PropKey = PropKey.DRAW_PROGRESS,
         fromGroups: List<String> = emptyList(),
         toGroups: List<String> = emptyList(),
-    ): DrawConfig? = tracks.asReversed().firstNotNullOfOrNull { track ->
-        val draw = track.segments.asReversed().firstNotNullOfOrNull { it.draw }
+    ): DrawConfig? = revealConfigFor(property, fromName, toName, fromIndex, toIndex, fromGroups, toGroups)
+
+    /**
+     * Returns the fill reveal configuration ([FillRevealConfig]) of the last matching
+     * fill track; identical track-search semantics to [strokeRevealFor] but resolving a
+     * [FillRevealConfig] reveal (and defaulting to [PropKey.FILL_PROGRESS]).
+     */
+    fun fillRevealFor(
+        fromName: String?,
+        toName: String?,
+        fromIndex: Int,
+        toIndex: Int,
+        property: PropKey = PropKey.FILL_PROGRESS,
+        fromGroups: List<String> = emptyList(),
+        toGroups: List<String> = emptyList(),
+    ): FillRevealConfig? = revealConfigFor(property, fromName, toName, fromIndex, toIndex, fromGroups, toGroups)
+
+    /**
+     * Shared reversed-track scan behind the typed reveal lookups: the LAST segment of
+     * each track (reversed) carrying the requested reveal kind must exist and the track
+     * must target [property] and match the pair identity — the first track passing all
+     * three checks wins.
+     */
+    private inline fun <reified R : Reveal> revealConfigFor(
+        property: PropKey,
+        fromName: String?,
+        toName: String?,
+        fromIndex: Int,
+        toIndex: Int,
+        fromGroups: List<String>,
+        toGroups: List<String>,
+    ): R? = tracks.asReversed().firstNotNullOfOrNull { track ->
+        val reveal = track.segments.asReversed().firstNotNullOfOrNull { it.reveal as? R }
             ?: return@firstNotNullOfOrNull null
         if (track.prop != property) return@firstNotNullOfOrNull null
         val matches = when (val target = track.target) {
@@ -165,7 +224,32 @@ class VectorAnimation internal constructor(
             is AnimationTarget.PathIndex -> target.index == fromIndex || target.index == toIndex
             is AnimationTarget.Group -> target.name in fromGroups || target.name in toGroups
         }
-        if (matches) draw else null
+        if (matches) reveal else null
+    }
+
+    /**
+     * @deprecated Reveals are typed per property ([strokeRevealFor], [fillRevealFor],
+     * [ClipRevealConfig]): as of the typed split this shim returns the matching STROKE
+     * segment's [DrawConfig] only for [PropKey.DRAW_PROGRESS] (via `reveal as? DrawConfig`)
+     * and null for every other property — fill and clip reveals are no longer
+     * [DrawConfig]s by design.
+     */
+    @Deprecated(
+        "Reveals are typed per property; use strokeRevealFor (stroke), fillRevealFor (fill), " +
+            "or read Segment.reveal directly.",
+    )
+    fun drawConfigFor(
+        fromName: String?,
+        toName: String?,
+        fromIndex: Int,
+        toIndex: Int,
+        property: PropKey = PropKey.DRAW_PROGRESS,
+        fromGroups: List<String> = emptyList(),
+        toGroups: List<String> = emptyList(),
+    ): DrawConfig? = if (property == PropKey.DRAW_PROGRESS) {
+        strokeRevealFor(fromName, toName, fromIndex, toIndex, property, fromGroups, toGroups)
+    } else {
+        null
     }
 
     /**
@@ -179,12 +263,28 @@ class VectorAnimation internal constructor(
     }
 }
 
+/** Package-level shorthand for [VectorAnimation.Reveal] (typed reveal payload). */
+typealias Reveal = VectorAnimation.Reveal
+
+/** Package-level shorthand for [VectorAnimation.DrawConfig] (stroke reveal). */
+typealias DrawConfig = VectorAnimation.DrawConfig
+
+/** Package-level shorthand for [VectorAnimation.FillRevealConfig] (fill reveal). */
+typealias FillRevealConfig = VectorAnimation.FillRevealConfig
+
+/** Package-level shorthand for [VectorAnimation.ClipRevealConfig] (clip reveal). */
+typealias ClipRevealConfig = VectorAnimation.ClipRevealConfig
+
 /** Scratch evaluation buffers, reused across frames (no per-frame allocation of the arrays). */
 class PathFrameValues {
     /** Reused scalar overrides, indexed by [PropKey]. NaN means use the vector's own value. */
     val props = FloatArray(PropKey.COUNT) { Float.NaN }
-    /** Active reveal/fill configuration attached to the property's currently active segment. */
-    val drawConfigs: Array<VectorAnimation.DrawConfig?> = arrayOfNulls(PropKey.COUNT)
+    /** Active stroke reveal from the pair's active DRAW_PROGRESS segment. */
+    var strokeReveal: VectorAnimation.DrawConfig? = null
+    /** Active fill reveal from the pair's active FILL_PROGRESS segment. */
+    var fillReveal: VectorAnimation.FillRevealConfig? = null
+    /** Active clip reveal from the pair's active CLIP_PROGRESS segment. */
+    var clipReveal: VectorAnimation.ClipRevealConfig? = null
     /** Shared named-group bounds in viewport coordinates, set for group transform tracks. */
     val groupBounds = FloatArray(4) { Float.NaN }
     /** Transient custom callback result, replaced on each renderer pass. */
@@ -212,13 +312,15 @@ class PathFrameValues {
     var strokeBrushProgress: Float = 0.5f
 
     /**
-     * Copies every per-frame visual (scalar overrides, draw configs, group bounds, brush
-     * state) from [other]. Used by the renderer's merged-frame optimization; group tracks
-     * are merged separately since they compose rather than replace.
+     * Copies every per-frame visual (scalar overrides, reveal configs, group bounds,
+     * brush state) from [other]. Used by the renderer's merged-frame optimization; group
+     * tracks are merged separately since they compose rather than replace.
      */
     fun copyVisualsFrom(other: PathFrameValues) {
         other.props.copyInto(props)
-        other.drawConfigs.copyInto(drawConfigs)
+        strokeReveal = other.strokeReveal
+        fillReveal = other.fillReveal
+        clipReveal = other.clipReveal
         other.groupBounds.copyInto(groupBounds)
         customOverrides = other.customOverrides
         brushMode = other.brushMode; primaryBrush = other.primaryBrush

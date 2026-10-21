@@ -74,7 +74,7 @@ class VectorAnimationBuilder internal constructor() {
         val from: Float,
         val to: Float,
         val easing: Easing,
-        val draw: VectorAnimation.DrawConfig?,
+        val reveal: Reveal?,
     )
 
     private data class BrushRequest(
@@ -283,12 +283,12 @@ class VectorAnimationBuilder internal constructor() {
         to: Float,
         interval: ClosedFloatingPointRange<Float>,
         easing: Easing,
-        draw: VectorAnimation.DrawConfig? = null,
+        reveal: Reveal? = null,
     ) {
         val start = interval.start.coerceIn(0f, 1f)
         val end = interval.endInclusive.coerceIn(0f, 1f)
         if (end <= start) return
-        scalars.add(ScalarRequest(target, prop, start, end, from, to, easing, draw))
+        scalars.add(ScalarRequest(target, prop, start, end, from, to, easing, reveal))
         if (prop != PropKey.ALPHA && prop != PropKey.FILL_ALPHA && prop != PropKey.STROKE_ALPHA) {
             appearanceOnly = false
         }
@@ -359,11 +359,12 @@ class VectorAnimationBuilder internal constructor() {
         //    (plan task 6 / C5, rule 5).
         val firstDrawDirectionByTarget = HashMap<AnimationTarget, DrawDirection>()
         for (request in scalars) {
-            if (request.prop == PropKey.DRAW_PROGRESS && request.draw != null &&
-                request.draw.direction != DrawDirection.AUTO &&
+            val stroke = request.reveal as? DrawConfig
+            if (request.prop == PropKey.DRAW_PROGRESS && stroke != null &&
+                stroke.direction != DrawDirection.AUTO &&
                 !firstDrawDirectionByTarget.containsKey(request.target)
             ) {
-                firstDrawDirectionByTarget[request.target] = request.draw.direction
+                firstDrawDirectionByTarget[request.target] = stroke.direction
             }
         }
         for ((targetAndProperty, requests) in scalars.groupBy { it.target to it.prop }) {
@@ -375,7 +376,7 @@ class VectorAnimationBuilder internal constructor() {
             }
             val segments = requests.sortedBy { it.start }.map { req ->
                 VectorAnimation.Segment(req.start, req.end, req.from, req.to, req.easing,
-                    resolveInheritedFillDirection(req.draw, inheritedStrokeDirection))
+                    resolveInheritedFillDirection(req.reveal, inheritedStrokeDirection))
             }
             compiledScalars.add(
                 VectorAnimation.Track(
@@ -430,23 +431,21 @@ class VectorAnimationBuilder internal constructor() {
     }
 
     /**
-     * Resolves the fill direction carried by a compiled FILL_PROGRESS [draw]: a config
-     * with a null [VectorAnimation.DrawConfig.fillDirection] copies [strokeDirection] —
-     * the target's first **explicitly declared** draw direction. Default-directioned
-     * (`AUTO`) strokes are not sources, so unresolved configs keep null and the renderer
-     * falls back to [com.imorpher.vectormorph.core.model.MorphConfiguration.defaultFillDirection].
-     * DrawConfig is immutable, so this constructs a copy rather than mutating.
+     * Resolves the fill direction carried by a compiled FILL_PROGRESS [reveal]: a config
+     * with a null [FillRevealConfig.fillDirection] copies [strokeDirection] — the target's
+     * first **explicitly declared** draw direction. Default-directioned (`AUTO`) strokes
+     * are not sources, so unresolved configs keep null and the renderer falls back to
+     * [com.imorpher.vectormorph.core.model.MorphConfiguration.defaultFillDirection].
+     * FillRevealConfig is immutable, so this constructs a copy rather than mutating.
      */
     private fun resolveInheritedFillDirection(
-        draw: VectorAnimation.DrawConfig?,
+        reveal: Reveal?,
         strokeDirection: DrawDirection?,
-    ): VectorAnimation.DrawConfig? {
-        if (draw == null || draw.fillDirection != null || strokeDirection == null) return draw
-        return VectorAnimation.DrawConfig(
-            mode = draw.mode,
-            start = draw.start,
-            direction = draw.direction,
-            fillMode = draw.fillMode,
+    ): Reveal? {
+        val fill = reveal as? FillRevealConfig ?: return reveal
+        if (fill.fillDirection != null || strokeDirection == null) return fill
+        return FillRevealConfig(
+            fillMode = fill.fillMode,
             fillDirection = strokeDirection,
         )
     }
@@ -546,8 +545,7 @@ class PathAnimationScope internal constructor(
 
     private fun cfg(
         mode: DrawMode, start: PathStart, direction: DrawDirection,
-        fillMode: FillMode? = null, fillDirection: DrawDirection? = null,
-    ) = VectorAnimation.DrawConfig(mode, start, direction, fillMode, fillDirection)
+    ) = VectorAnimation.DrawConfig(mode, start, direction)
 
     /**
      * Progressive stroke draw-on. This is the pen-drawing effect.
@@ -566,7 +564,7 @@ class PathAnimationScope internal constructor(
     ) {
         builder.addScalar(
             target, PropKey.DRAW_PROGRESS, from, to, interval, easing ?: this.easing,
-            draw = cfg(mode, start, direction),
+            reveal = cfg(mode, start, direction),
         )
     }
 
@@ -602,9 +600,7 @@ class PathAnimationScope internal constructor(
     ) {
         builder.addScalar(
             target, PropKey.FILL_PROGRESS, 0f, 1f, interval, easing ?: this.easing,
-            // The baked start is consumed by neither fill nor clip rendering; AUTO keeps it
-            // consistent with the draw-side sentinel semantics (no anchor claims, rule 2).
-            draw = cfg(DrawMode.FORWARD, PathStart.AUTO, DrawDirection.AUTO, fillMode = mode, fillDirection = direction),
+            reveal = FillRevealConfig(fillMode = mode, fillDirection = direction),
         )
     }
 
@@ -619,9 +615,7 @@ class PathAnimationScope internal constructor(
         require(direction != DrawDirection.CUSTOM) { "Use CustomVectorAnimation for custom clip geometry" }
         builder.addScalar(
             target, PropKey.CLIP_PROGRESS, from, to, interval, easing ?: this.easing,
-            // The baked start is consumed by neither fill nor clip rendering; AUTO keeps it
-            // consistent with the draw-side sentinel semantics (no anchor claims, rule 2).
-            draw = cfg(DrawMode.FORWARD, PathStart.AUTO, direction),
+            reveal = ClipRevealConfig(direction),
         )
     }
 
