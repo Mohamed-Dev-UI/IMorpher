@@ -18,6 +18,13 @@ import java.io.EOFException
  * Custom render callbacks and custom `Brush` implementations contain executable/runtime state and
  * are rejected with a descriptive exception. Built-in solid, linear, radial, and sweep brushes
  * are fully supported.
+ *
+ * Wire format stability: the on-disk layout is unchanged since version 1. Reveal records keep a
+ * five-slot shape per segment regardless of kind; FILL_PROGRESS and CLIP_PROGRESS records carry
+ * meaningless placeholder strings ("FORWARD"/"START") in the slots they never consume, which the
+ * decoder enum-validates and drops. Re-encoding always writes the canonical placeholders, so
+ * legacy-spelled files (e.g. `AUTO` in a fill/clip record's start slot) decode identically but do
+ * not round-trip byte-for-byte.
  */
 object VectorAnimationCodec {
     private const val MAGIC = 0x564D414E // VMAN

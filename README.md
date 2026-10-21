@@ -239,6 +239,14 @@ so the two parameters agree.
   renders the resolved anchor dot and the travel arrow along the direction's axis. The warning
   banner appears with any debug option enabled whenever any of the conflicts above are recorded.
 
+Reveal configs are typed per property: stroke reveals (`strokeReveal`, `drawProgress`) carry the
+mode/start/direction `DrawConfig`, `fill()` carries fill mode/direction only, and `clipReveal()`
+carries direction only — each reveal property compiles exactly the fields its renderer consumes.
+The vector animation codec keeps its version-1 wire format, so previously saved bytes stay
+compatible; fill and clip records simply store placeholders in the slots they never read, and
+`strokeRevealFor`/`fillRevealFor` are the typed lookups (the legacy `drawConfigFor` shim remains
+deprecated for stroke lookups).
+
 ## Fill, color, and gradients
 
 Every path can animate fill/stroke alpha and width, fill and stroke paint, and fill reveal. Solid

@@ -235,8 +235,9 @@ class VectorAnimation internal constructor(
      * [DrawConfig]s by design.
      */
     @Deprecated(
-        "Reveals are typed per property; use strokeRevealFor (stroke), fillRevealFor (fill), " +
-            "or read Segment.reveal directly.",
+        "Reveals are typed per property; this shim resolves only stroke (DRAW_PROGRESS) reveals " +
+            "and returns null for fill/clip. " +
+            "Use strokeRevealFor, fillRevealFor, or read Segment.reveal directly.",
     )
     fun drawConfigFor(
         fromName: String?,

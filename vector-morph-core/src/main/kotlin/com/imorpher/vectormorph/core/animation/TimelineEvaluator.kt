@@ -250,6 +250,9 @@ class TimelineEvaluator(
                             // a later track never clears a slot an earlier track wrote on
                             // the same values — per-evaluate resets are the only clear path.
                             if (reveal != null) when (track.prop) {
+                                // reveal is always the prop's own variant — the builder
+                                // couples prop→variant and the codec decode dispatches by
+                                // prop — so `as?` can never null-write a populated slot.
                                 PropKey.DRAW_PROGRESS -> values.strokeReveal = reveal as? DrawConfig
                                 PropKey.FILL_PROGRESS -> values.fillReveal = reveal as? FillRevealConfig
                                 PropKey.CLIP_PROGRESS -> values.clipReveal = reveal as? ClipRevealConfig
