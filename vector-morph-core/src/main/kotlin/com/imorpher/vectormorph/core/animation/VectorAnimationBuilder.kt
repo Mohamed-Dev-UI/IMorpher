@@ -191,10 +191,15 @@ class VectorAnimationBuilder internal constructor() {
         allPaths { fillProgress(from, to, interval, easing ?: defaultEasing) }
     }
 
-    /** Vector-level convenience: configured fill reveal on every path (mode + direction). */
+    /**
+     * Vector-level convenience: configured fill reveal on every path (mode + direction).
+     * A null [direction] means "inherit" — it is resolved at build time from the target's
+     * first stroke draw request, or left null for the renderer's
+     * [com.imorpher.vectormorph.core.model.MorphConfiguration.defaultFillDirection] fallback.
+     */
     fun fill(
         mode: FillMode = FillMode.DIRECTIONAL,
-        direction: DrawDirection = DrawDirection.TOP_RIGHT_TO_BOTTOM_LEFT,
+        direction: DrawDirection? = null,
         interval: ClosedFloatingPointRange<Float> = 0f..1f,
         easing: Easing? = null,
     ) {
@@ -344,9 +349,29 @@ class VectorAnimationBuilder internal constructor() {
 
         // 2) Compile explicit intervals together per (target, property). This preserves every
         //    interval and lets a timeline hold the previous value across gaps.
+        //    Fill-direction inheritance: a fill request without its own direction adopts the
+        //    direction of the first (declaration order) DRAW_PROGRESS request on the exact
+        //    same target, so strokeReveal(direction = X) + fill() stop contradicting. Fill
+        //    requests without any stroke source stay null — the renderer falls back to
+        //    MorphConfiguration.defaultFillDirection (plan task 6 / C5).
+        val firstStrokeDirectionByTarget = HashMap<AnimationTarget, DrawDirection>()
+        for (request in scalars) {
+            if (request.prop == PropKey.DRAW_PROGRESS && request.draw != null &&
+                !firstStrokeDirectionByTarget.containsKey(request.target)
+            ) {
+                firstStrokeDirectionByTarget[request.target] = request.draw.direction
+            }
+        }
         for ((targetAndProperty, requests) in scalars.groupBy { it.target to it.prop }) {
+            val target = targetAndProperty.first
+            val inheritedStrokeDirection = if (targetAndProperty.second == PropKey.FILL_PROGRESS) {
+                firstStrokeDirectionByTarget[target]
+            } else {
+                null
+            }
             val segments = requests.sortedBy { it.start }.map { req ->
-                VectorAnimation.Segment(req.start, req.end, req.from, req.to, req.easing, req.draw)
+                VectorAnimation.Segment(req.start, req.end, req.from, req.to, req.easing,
+                    resolveInheritedFillDirection(req.draw, inheritedStrokeDirection))
             }
             compiledScalars.add(
                 VectorAnimation.Track(
@@ -398,6 +423,26 @@ class VectorAnimationBuilder internal constructor() {
         }
 
         return VectorAnimation(compiledScalars, compiledBrushes, appearanceOnly, staggerDelay, staggerOrder, customizer)
+    }
+
+    /**
+     * Resolves the fill direction carried by a compiled FILL_PROGRESS [draw]: a config
+     * with a null [VectorAnimation.DrawConfig.fillDirection] copies [strokeDirection]
+     * (the target's first stroke request direction); anything else is returned as-is.
+     * DrawConfig is immutable, so this constructs a copy rather than mutating.
+     */
+    private fun resolveInheritedFillDirection(
+        draw: VectorAnimation.DrawConfig?,
+        strokeDirection: DrawDirection?,
+    ): VectorAnimation.DrawConfig? {
+        if (draw == null || draw.fillDirection != null || strokeDirection == null) return draw
+        return VectorAnimation.DrawConfig(
+            mode = draw.mode,
+            start = draw.start,
+            direction = draw.direction,
+            fillMode = draw.fillMode,
+            fillDirection = strokeDirection,
+        )
     }
 }
 
@@ -541,7 +586,10 @@ class PathAnimationScope internal constructor(
     /** Vector-level convenience: configured fill reveal on every path (mode + direction). */
     fun fill(
         mode: FillMode = FillMode.DIRECTIONAL,
-        direction: DrawDirection = DrawDirection.TOP_RIGHT_TO_BOTTOM_LEFT,
+        /** Travel direction of the fill sweep; null = inherit the draw direction of this
+         * target's first stroke request at build time (orphan fills stay null and the
+         * renderer falls back to [com.imorpher.vectormorph.core.model.MorphConfiguration.defaultFillDirection]). */
+        direction: DrawDirection? = null,
         interval: ClosedFloatingPointRange<Float> = 0f..1f,
         easing: Easing? = null,
     ) {
