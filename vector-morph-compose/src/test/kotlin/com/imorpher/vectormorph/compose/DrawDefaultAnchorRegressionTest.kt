@@ -1,173 +1,173 @@
 package com.imorpher.vectormorph.compose
 
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.os.Looper
-import android.view.View
+import androidx.compose.animation.core.LinearEasing
 import androidx.activity.ComponentActivity
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.size
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathNode
 import com.imorpher.vectormorph.core.animation.VectorAnimation as VectorAnimationSpec
 import com.imorpher.vectormorph.core.model.DrawDirection
-import com.imorpher.vectormorph.core.model.MorphConfiguration
 import com.imorpher.vectormorph.core.model.PathStart
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Task 1 regression probe (start/direction coordination plan): the new `PathStart.AUTO`
- * default must be pixel-identical to the old explicit `PathStart.START` default render.
+ * Regression probes for the start/direction anchor contract (start/direction coordination
+ * plan, Tasks 1 + 3).
  *
- * `AUTO` means "derive the anchor from `DrawDirection`"; today's default (`START` +
- * `AUTO` direction → top-left anchor) must stay reachable exactly as before, and the
- * flipped DSL/`DrawConfig` defaults must not change output for existing API usage.
+ * **Target Contract rule 3:** an explicit `PathStart.START` means *literal arc position 0* of
+ * the normalized contour regardless of `DrawDirection`; `PathStart.AUTO` (the DSL/`DrawConfig`
+ * default) derives the anchor from the direction table — top-left for `AUTO` direction, which
+ * is exactly what the old explicit `START` default used to render. The Task 1 parity probe
+ * (`START ≡ AUTO`) therefore expired by design and is re-derived here as pixel-layout probes
+ * on a contour whose arc 0 is not its top-left region, plus an equality probe that keeps the
+ * DSL defaults pinned to the AUTO sentinel they must remain.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34])
 class DrawDefaultAnchorRegressionTest {
 
-    private lateinit var activity: ComponentActivity
-    private val framePx = 96
+    private lateinit var harness: RenderProbeHarness
 
     @Before
     fun setUp() {
-        activity = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
+        harness = RenderProbeHarness(Robolectric.buildActivity(ComponentActivity::class.java).setup().get())
     }
 
-    // ------------------------------------------------------------------ builders
+    // ------------------------------------------------------------------ fixture
 
-    private fun stroked(name: String, data: List<PathNode>, width: Float = 2f): ImageVector {
-        val builder = ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f)
-        builder.addPath(
-            pathData = data,
-            stroke = SolidColor(Color(0xFF12A4D9)),
-            strokeLineWidth = width,
-            name = "stroke",
-        )
-        return builder.build()
-    }
+    /**
+     * Open polyline authored bottom-right → top-left: arc 0 sits at (21, 21), while the
+     * bounding box's top-left corner lies on an INTERIOR vertex (3, 3). On this contour an
+     * AUTO (top-left) anchor and a literal START (arc 0) anchor light up opposite halves.
+     */
+    private fun bottomRightToTopLeft() = listOf(
+        PathNode.MoveTo(21f, 21f),
+        PathNode.LineTo(16f, 10f),
+        PathNode.LineTo(3f, 3f),
+        PathNode.LineTo(10f, 12f),
+    )
 
-    private fun line() = listOf(PathNode.MoveTo(3f, 12f), PathNode.LineTo(21f, 12f))
-
-    /** The stroke pair the reveal runs on: a horizontal line morphing into a slanted one. */
-    private val from by lazy { stroked("from", line(), width = 2f) }
+    /** Pair the fixture morphs into; same topology, same arc-0 vs top-left relationship. */
+    private val from by lazy { harness.stroked("from", bottomRightToTopLeft(), width = 2f) }
     private val to by lazy {
-        stroked(
+        harness.stroked(
             "to",
-            listOf(PathNode.MoveTo(3f, 12f), PathNode.LineTo(21f, 6f)),
+            listOf(
+                PathNode.MoveTo(21f, 19f),
+                PathNode.LineTo(15f, 9f),
+                PathNode.LineTo(3f, 2f),
+                PathNode.LineTo(10f, 13f),
+            ),
             width = 2f,
         )
     }
 
-    // ------------------------------------------------------------------ rendering
+    // ------------------------------------------------------------------ probes
 
-    private fun renderMorph(
-        from: ImageVector,
-        to: ImageVector,
-        progress: Float,
-        configuration: MorphConfiguration = MorphConfiguration.Default,
-        animation: VectorAnimationSpec? = null,
-    ): Bitmap {
-        val view = ComposeView(activity)
-        view.setContent {
-            Box(modifier = Modifier.size(framePx.dp), contentAlignment = Alignment.Center) {
-                MorphVector(
-                    from = from,
-                    to = to,
-                    progress = progress,
-                    configuration = if (animation != null) configuration.copy(animation = animation) else configuration,
-                    contentDescription = null,
-                    width = framePx.dp,
-                    height = framePx.dp,
-                )
-            }
+    /** (a) The no-arg DSL default (AUTO) still anchors the top-left region mid-reveal. */
+    @Test
+    fun autoSentinelDefaultAnchorsTopLeft() {
+        listOf(0.2f, 0.25f).forEach { t ->
+            val key = harness.renderMorph(from, to, t, animation = defaultAnimation()).litPixelsKey()
+            assertTrue("default render must paint the reveal at t=$t", key.count > 0)
+            assertTrue(
+                "AUTO default must anchor top-left: centroid (${key.centroidX}, ${key.centroidY}) t=$t",
+                key.centroidX < 0.5f && key.centroidY < 0.5f,
+            )
         }
-        activity.setContentView(view)
-        pumpMainLoop()
-        view.measure(
-            View.MeasureSpec.makeMeasureSpec(framePx, View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(framePx, View.MeasureSpec.EXACTLY),
+    }
+
+    /** (b) Rule 3: explicit `START` anchors literal arc position 0 — the bottom-right origin here. */
+    @Test
+    fun explicitStartAnchorsLiteralArcZero() {
+        listOf(0.2f, 0.25f).forEach { t ->
+            val key = harness.renderMorph(from, to, t, animation = startStartAnimation()).litPixelsKey()
+            assertTrue("explicit START must paint the reveal at t=$t", key.count > 0)
+            assertTrue(
+                "explicit START must anchor literal arc 0 (bottom-right): " +
+                    "centroid (${key.centroidX}, ${key.centroidY}) t=$t",
+                key.centroidX > 0.5f && key.centroidY > 0.5f,
+            )
+        }
+    }
+
+    /**
+     * Intended rule-3 behavior change (a): `START` no longer mirrors the direction-derived
+     * anchor, so this replaces the expired Task 1 `START ≡ AUTO` equality with a divergence
+     * pin on the distinguishing contour.
+     */
+    @Test
+    fun startAndAutoDivergeOnArcZeroMismatch() {
+        val autoFrame = harness.renderMorph(from, to, 0.25f, animation = startAutoAnimation())
+        val startFrame = harness.renderMorph(from, to, 0.25f, animation = startStartAnimation())
+        assertFalse(
+            "rule 3: START (literal arc 0) must render differently from AUTO (top-left anchor)",
+            autoFrame.sameAs(startFrame),
         )
-        view.layout(0, 0, framePx, framePx)
-        pumpMainLoop()
-        val bitmap = Bitmap.createBitmap(framePx, framePx, Bitmap.Config.ARGB_8888)
-        view.draw(Canvas(bitmap))
-        pumpMainLoop()
-        return bitmap
     }
 
-    private fun pumpMainLoop() {
-        repeat(4) { shadowOf(Looper.getMainLooper()).idle() }
-    }
-
-    // ------------------------------------------------------------------ parity probes
-
+    /**
+     * Re-derived DSL-default parity probe: the flipped `drawProgress()`/`strokeReveal()`
+     * defaults must keep the old default's *visual* (direction-derived top-left anchoring —
+     * now spelled AUTO), which is equal to explicitly passing the AUTO sentinel and distinct
+     * from the old explicit START default under rule 3.
+     */
     @Test
-    fun autoDefaultMatchesOldExplicitDefault() {
-        val old = drawAnimation(start = PathStart.START, direction = DrawDirection.AUTO)
-        val new = drawAnimation(start = PathStart.AUTO, direction = DrawDirection.AUTO)
-        listOf(0.25f, 0.5f, 0.75f).forEach { t ->
-            val oldFrame = renderMorph(from, to, t, animation = old)
-            val newFrame = renderMorph(from, to, t, animation = new)
-            // Sanity: the frames must actually paint the reveal, so parity is not vacuous.
-            assertTrue(
-                "mid-reveal frame at t=$t must paint pixels",
-                BitmapAsserts.paintedCount(oldFrame) > 0,
-            )
-            assertTrue(
-                "AUTO default must render identical to the old explicit default at t=$t",
-                oldFrame.sameAs(newFrame),
-            )
-        }
-    }
-
-    @Test
-    fun flippedDslDefaultStillMatchesOldExplicitDefault() {
-        // drawProgress() / strokeReveal() now default to AUTO; that default must equal
-        // the old explicit START default for unchanged call sites.
-        val legacyDefault = drawAnimation(start = PathStart.START, direction = DrawDirection.AUTO)
-        val flippedDefault = VectorAnimationSpec {
-            defaultEasing(androidx.compose.animation.core.LinearEasing)
+    fun dslDefaultStaysDirectionAnchoredAfterRule3() {
+        val explicitAuto = startAutoAnimation()
+        val defaulted = VectorAnimationSpec {
+            defaultEasing(LinearEasing)
             allPaths {
                 drawProgress(from = 0f, to = 1f, interval = 0f..1f)
             }
         }
-        val flippedStrokeAlias = VectorAnimationSpec {
-            defaultEasing(androidx.compose.animation.core.LinearEasing)
+        val aliased = VectorAnimationSpec {
+            defaultEasing(LinearEasing)
             allPaths {
                 strokeReveal(interval = 0f..1f)
             }
         }
-        listOf(0.25f, 0.5f, 0.75f).forEach { t ->
-            val legacy = renderMorph(from, to, t, animation = legacyDefault)
-            val defaulted = renderMorph(from, to, t, animation = flippedDefault)
-            val aliased = renderMorph(from, to, t, animation = flippedStrokeAlias)
-            assertTrue("defaulted drawProgress must match the old START default at t=$t", legacy.sameAs(defaulted))
-            assertTrue("defaulted strokeReveal must match the old START default at t=$t", legacy.sameAs(aliased))
+        val legacyStartDefault = startStartAnimation()
+        listOf(0.2f, 0.25f).forEach { t ->
+            val defaultedFrame = harness.renderMorph(from, to, t, animation = defaulted)
+            assertTrue(
+                "defaulted drawProgress must match the explicit AUTO sentinel at t=$t",
+                harness.renderMorph(from, to, t, animation = explicitAuto).sameAs(defaultedFrame),
+            )
+            assertTrue(
+                "defaulted strokeReveal alias must match the explicit AUTO sentinel at t=$t",
+                harness.renderMorph(from, to, t, animation = aliased).sameAs(defaultedFrame),
+            )
+            assertFalse(
+                "rule 3: DSL default must no longer equal the old explicit START default at t=$t",
+                harness.renderMorph(from, to, t, animation = legacyStartDefault).sameAs(defaultedFrame),
+            )
         }
     }
 
     // ------------------------------------------------------------------ helpers
 
+    private fun defaultAnimation(): VectorAnimationSpec = VectorAnimationSpec {
+        defaultEasing(LinearEasing)
+        allPaths {
+            drawProgress(from = 0f, to = 1f, interval = 0f..1f)
+        }
+    }
+
+    private fun startAutoAnimation(): VectorAnimationSpec = drawAnimation(PathStart.AUTO, DrawDirection.AUTO)
+
+    private fun startStartAnimation(): VectorAnimationSpec = drawAnimation(PathStart.START, DrawDirection.AUTO)
+
     private fun drawAnimation(start: PathStart, direction: DrawDirection): VectorAnimationSpec =
         VectorAnimationSpec {
-            defaultEasing(androidx.compose.animation.core.LinearEasing)
+            defaultEasing(LinearEasing)
             allPaths {
                 drawProgress(
                     from = 0f, to = 1f, interval = 0f..1f,

@@ -45,6 +45,7 @@ import com.imorpher.vectormorph.core.plan.PairKind
 import com.imorpher.vectormorph.core.plan.PathPairPlan
 import com.imorpher.vectormorph.core.reveal.DirectionMath
 import com.imorpher.vectormorph.core.reveal.DrawOrder
+import com.imorpher.vectormorph.core.reveal.DrawResolutionWarning
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.max
@@ -77,6 +78,18 @@ class MorphRenderer {
 
     /** Clip mask for directional/radial/sweep fill reveals. */
     private val maskPath = Path()
+
+    // per-frame draw-resolution diagnostics (cleared at the start of every render)
+    /** Draw-resolution warnings collected while rendering the current frame. */
+    private val drawWarnings = ArrayList<DrawResolutionWarning>()
+
+    /**
+     * Snapshot of the draw-resolution warnings collected during the last render; the list
+     * clears at the start of each render. Read-only seam for the debug overlay (Task 7 of
+     * the start/direction coordination plan) and for test probes — deliberately not a
+     * configuration knob.
+     */
+    internal fun frameDrawWarnings(): List<DrawResolutionWarning> = drawWarnings.toList()
 
     /** Clip wedge for directional clip reveals. */
     private val wedgePath = Path()
@@ -180,6 +193,7 @@ class MorphRenderer {
         tintFrom: Any? = null,
         tintTo: Any? = null,
     ) {
+        drawWarnings.clear()
         val p = progress.coerceIn(0f, 1f)
         ensurePlanScratch(plan)
 
@@ -853,6 +867,7 @@ class MorphRenderer {
                         path, drawP, drawCfg?.mode ?: DrawMode.FORWARD, drawCfg?.start ?: PathStart.AUTO,
                         drawCfg?.direction ?: DrawDirection.AUTO, null, config.customStartOffsets[side.name] ?: 0f,
                         config.timing,
+                        warnings = { drawWarnings.addAll(it) },
                     )
                     if (!shown.isEmpty && width > 0f) paintStroke(
                         shown, strokeResult, strokeAlpha,
@@ -1151,6 +1166,7 @@ class MorphRenderer {
                                 strokeGeometry, drawProgress, mode, start, direction, cp, customStart,
                                 config.timing, ci, pair.contourPairs.size, max(f.totalLength, t.totalLength),
                                 closed = cp.from.closed && cp.to.closed,
+                                warnings = { drawWarnings.addAll(it) },
                             )
                             if (revealed.isEmpty) continue
                             withClipReveal(clipContours, clipProgress, clipDirection) {
@@ -1357,6 +1373,7 @@ class MorphRenderer {
                             drawDirection,
                             null,
                             closed = t.contours.all { it.closed },
+                            warnings = { drawWarnings.addAll(it) },
                         )
                     )
                 }
@@ -1394,7 +1411,10 @@ class MorphRenderer {
 
     /**
      * Extracts the visible portion of [source] according to [progress] and the draw mode,
-     * using arc-length measurement — constant visual speed, exact geometry.
+     * using arc-length measurement — constant visual speed, exact geometry. The
+     * start/direction/mode arbitration happens in [DirectionMath.resolve] inside
+     * [resolveStartFraction]; any [DrawResolutionWarning] it produces reaches [warnings]
+     * (the frame collector's callback by default).
      */
     private fun buildRevealedStrokePath(
         source: Path,
@@ -1410,6 +1430,7 @@ class MorphRenderer {
         totalPathLength: Float = cp?.from?.totalLength ?: 0f,
         staticArc: com.imorpher.vectormorph.core.geometry.ArcLengthData? = null,
         closed: Boolean = true,
+        warnings: (List<DrawResolutionWarning>) -> Unit = {},
     ): Path {
         measure.setPath(source, false)
         val len = measure.length
@@ -1432,7 +1453,7 @@ class MorphRenderer {
         // starting arc fraction: precomputed anchor fractions live on the prepared paths;
         // for morph contours we resolve the anchor from the interpolated geometry.
         val startFrac = resolveStartFraction(
-            source, measure, len, start, direction, customStartFraction,
+            source, measure, len, start, direction, mode, customStartFraction, warnings,
         )
         val s = startFrac * len
 
@@ -1517,31 +1538,31 @@ class MorphRenderer {
         return strokePath
     }
 
-    /** Resolves where the "pen" starts: the arc fraction nearest the requested anchor. */
+    /**
+     * Resolves where the "pen" starts: the arc fraction nearest the resolved anchor (or the
+     * literal `0`/`1`/`0.5` values for START/END/CENTER). Anchor arbitration is delegated to
+     * [DirectionMath.resolve] so `start` and `direction` follow one precedence contract:
+     * an explicit [PathStart] wins over the direction, `AUTO` derives from the direction
+     * table, and any contradiction lands in the frame's warning collector via [warnings].
+     */
     private fun resolveStartFraction(
         source: Path,
         measure: PathMeasure,
         len: Float,
         start: PathStart,
         direction: DrawDirection,
+        mode: DrawMode,
         customStartFraction: Float,
+        warnings: (List<DrawResolutionWarning>) -> Unit,
     ): Float {
         if (start == PathStart.CUSTOM) return customStartFraction.coerceIn(0f, 1f)
-        // START and the AUTO sentinel both derive the anchor from DrawDirection — the AUTO
-        // sentinel means "direction decides", mirroring today's default behavior.
-        val resolvedStart = if (start == PathStart.AUTO || start == PathStart.START) when (direction) {
-            DrawDirection.AUTO -> PathStart.TOP_LEFT
-            DrawDirection.TOP_RIGHT_TO_BOTTOM_LEFT -> PathStart.TOP_RIGHT
-            DrawDirection.BOTTOM_LEFT_TO_TOP_RIGHT -> PathStart.BOTTOM_LEFT
-            DrawDirection.BOTTOM_RIGHT_TO_TOP_LEFT -> PathStart.BOTTOM_RIGHT
-            DrawDirection.TOP_LEFT_TO_BOTTOM_RIGHT -> PathStart.TOP_LEFT
-            DrawDirection.RIGHT_TO_LEFT -> PathStart.RIGHT
-            DrawDirection.LEFT_TO_RIGHT -> PathStart.LEFT
-            DrawDirection.TOP_TO_BOTTOM -> PathStart.TOP
-            DrawDirection.BOTTOM_TO_TOP -> PathStart.BOTTOM
-            DrawDirection.CLOCKWISE, DrawDirection.COUNTER_CLOCKWISE -> PathStart.TOP
-            else -> PathStart.START
-        } else start
+        val resolved = DirectionMath.resolve(start, direction, mode)
+        warnings(resolved.warnings)
+        val resolvedStart = resolved.anchor
+        // Target Contract rule 3 (start/direction coordination plan): an explicit START
+        // anchors literal arc position 0 of the normalized contour regardless of direction.
+        // The old direction-derived behavior of the START default is reachable through the
+        // AUTO sentinel only (e.g. AUTO direction → TOP_LEFT anchor).
         if (resolvedStart == PathStart.START) return 0f
         if (resolvedStart == PathStart.END) return 1f
         if (resolvedStart == PathStart.CENTER) return 0.5f
@@ -1819,6 +1840,7 @@ class MorphRenderer {
                             side.totalLength,
                             side.arcLengths.getOrNull(contourIndex),
                             closed = contour.closed,
+                            warnings = { drawWarnings.addAll(it) },
                         )
                         withClipReveal(side.clipContours, clipProgress, clipDirection) {
                             paintStroke(revealed, strokeResultWithAnimation, pathAlpha * side.strokeAlpha * strokeAlphaOverride, style)

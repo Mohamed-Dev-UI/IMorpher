@@ -156,7 +156,7 @@ class VectorAnimationBuilder internal constructor() {
     /** Reveals (draws) every path, optionally coupling the fill to follow the stroke. */
     fun reveal(
         mode: DrawMode = DrawMode.FORWARD,
-        start: PathStart = PathStart.START,
+        start: PathStart = PathStart.AUTO,
         direction: DrawDirection = DrawDirection.AUTO,
         interval: ClosedFloatingPointRange<Float> = 0f..1f,
         easing: Easing? = null,
@@ -547,7 +547,9 @@ class PathAnimationScope internal constructor(
     ) {
         builder.addScalar(
             target, PropKey.FILL_PROGRESS, 0f, 1f, interval, easing ?: this.easing,
-            draw = cfg(DrawMode.FORWARD, PathStart.START, DrawDirection.AUTO, fillMode = mode, fillDirection = direction),
+            // The baked start is consumed by neither fill nor clip rendering; AUTO keeps it
+            // consistent with the draw-side sentinel semantics (no anchor claims, rule 2).
+            draw = cfg(DrawMode.FORWARD, PathStart.AUTO, DrawDirection.AUTO, fillMode = mode, fillDirection = direction),
         )
     }
 
@@ -562,7 +564,9 @@ class PathAnimationScope internal constructor(
         require(direction != DrawDirection.CUSTOM) { "Use CustomVectorAnimation for custom clip geometry" }
         builder.addScalar(
             target, PropKey.CLIP_PROGRESS, from, to, interval, easing ?: this.easing,
-            draw = cfg(DrawMode.FORWARD, PathStart.START, direction),
+            // The baked start is consumed by neither fill nor clip rendering; AUTO keeps it
+            // consistent with the draw-side sentinel semantics (no anchor claims, rule 2).
+            draw = cfg(DrawMode.FORWARD, PathStart.AUTO, direction),
         )
     }
 
