@@ -40,6 +40,29 @@ enum class DrawDirection {
     CUSTOM,
 }
 
+/**
+ * How a `DrawMode.FORWARD` stroke reveal travels along an **open** contour
+ * (start/direction coordination plan, Target Contract rule 4: "direction owns travel").
+ *
+ * Closed contours and explicit non-FORWARD draw modes are untouched by this policy:
+ * `CLOCKWISE`/`COUNTER_CLOCKWISE` flips stay winding-driven, and `REVERSE`/`CENTER_OUT`/
+ * `OUTSIDE_IN` always win over whatever this flag requests.
+ */
+enum class DirectionTraversal {
+    /**
+     * Reveal traversal follows the contour's own point order — the historical behavior.
+     * A direction that contradicts the contour's authored travel has no effect.
+     */
+    LEGACY,
+
+    /**
+     * `FORWARD` reveals traverse **toward the requested axis**: when the contour
+     * leaves the resolved anchor heading opposite [DrawDirection]'s axis, the reveal
+     * plays the anchor's backwards arc instead so the travel honors the direction.
+     */
+    HONOR_DIRECTION,
+}
+
 /** Where a path's drawing/reveal begins. */
 enum class PathStart {
     /**

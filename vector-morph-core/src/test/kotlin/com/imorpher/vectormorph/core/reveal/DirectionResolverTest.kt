@@ -126,4 +126,31 @@ class DirectionResolverTest {
             },
         )
     }
+
+    // ------------------------------------------------- isSpatial (the HONOR_DIRECTION gate)
+
+    /**
+     * [DirectionMath.isSpatial] means "claims a concrete travel axis": the four corners and
+     * the four edge axes only. Windings (`CLOCKWISE`/`COUNTER_CLOCKWISE`) are deliberately
+     * excluded — their contour-order flip lives in the renderer's winding reversal, so the
+     * direction-traversal sign must never touch them — and `AUTO`/`CENTER_OUT`/`OUTSIDE_IN`/
+     * `CUSTOM` claim no axis at all.
+     */
+    @Test
+    fun isSpatialRecognizesTravelAxesOnly() {
+        val nonSpatial = setOf(
+            DrawDirection.AUTO,
+            DrawDirection.CENTER_OUT,
+            DrawDirection.OUTSIDE_IN,
+            DrawDirection.COUNTER_CLOCKWISE,
+            DrawDirection.CUSTOM,
+            DrawDirection.CLOCKWISE,
+        )
+        for (direction in DrawDirection.entries - nonSpatial) {
+            assertTrue("$direction must be spatial", DirectionMath.isSpatial(direction))
+        }
+        for (direction in nonSpatial) {
+            assertTrue("$direction must not be spatial", !DirectionMath.isSpatial(direction))
+        }
+    }
 }

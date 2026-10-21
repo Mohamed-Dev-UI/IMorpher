@@ -31,6 +31,7 @@ import com.imorpher.vectormorph.core.geometry.ContourData
 import com.imorpher.vectormorph.core.interpolation.GeometryInterpolator
 import com.imorpher.vectormorph.core.interpolation.GradientInterpolator
 import com.imorpher.vectormorph.core.interpolation.GradientInterpolator.buildBrush
+import com.imorpher.vectormorph.core.model.DirectionTraversal
 import com.imorpher.vectormorph.core.model.DrawDirection
 import com.imorpher.vectormorph.core.model.DrawMode
 import com.imorpher.vectormorph.core.model.FillMode
@@ -1166,6 +1167,7 @@ class MorphRenderer {
                                 strokeGeometry, drawProgress, mode, start, direction, cp, customStart,
                                 config.timing, ci, pair.contourPairs.size, max(f.totalLength, t.totalLength),
                                 closed = cp.from.closed && cp.to.closed,
+                                honorDirection = config.directionTraversal == DirectionTraversal.HONOR_DIRECTION,
                                 warnings = { drawWarnings.addAll(it) },
                             )
                             if (revealed.isEmpty) continue
@@ -1415,6 +1417,12 @@ class MorphRenderer {
      * start/direction/mode arbitration happens in [DirectionMath.resolve] inside
      * [resolveStartFraction]; any [DrawResolutionWarning] it produces reaches [warnings]
      * (the frame collector's callback by default).
+     *
+     * [honorDirection] carries `MorphConfiguration.directionTraversal == HONOR_DIRECTION`
+     * (plan rule 4): a `DrawMode.FORWARD` reveal whose direction claims a travel axis
+     * ([DirectionMath.isSpatial]) samples the arc chord leaving the resolved anchor and
+     * flips to the existing `REVERSE` arm when the contour travels against that axis —
+     * the anchor is resolved once, only the traversal direction changes.
      */
     private fun buildRevealedStrokePath(
         source: Path,
@@ -1431,6 +1439,7 @@ class MorphRenderer {
         staticArc: com.imorpher.vectormorph.core.geometry.ArcLengthData? = null,
         closed: Boolean = true,
         warnings: (List<DrawResolutionWarning>) -> Unit = {},
+        honorDirection: Boolean = false,
     ): Path {
         measure.setPath(source, false)
         val len = measure.length
@@ -1457,7 +1466,33 @@ class MorphRenderer {
         )
         val s = startFrac * len
 
-        when (mode) {
+        // HONOR_DIRECTION (start/direction coordination plan rule 4): under LEGACY a
+        // FORWARD reveal follows the contour's own point order, which can run against
+        // the requested travel axis. Sample the arc chord leaving the anchor — one eighth
+        // of the contour length, taken to the contour end without wrapping open contours —
+        // and dot it against the axis' travel vector (axis[2]-axis[0], axis[3]-axis[1]).
+        // Negative dot ⇒ reveal through the existing REVERSE arm's segment machinery
+        // (same anchor, same windowing); positive/zero (including the degenerate chord at
+        // an anchor sitting on the contour's end) keep FORWARD as today. Winding-addressed
+        // directions never reach this branch (DirectionMath.isSpatial excludes them), so
+        // shouldReverseWinding's outcome is untouched — LEGACY and every non-FORWARD mode
+        // ignore the sign entirely.
+        val effectiveMode = if (
+            honorDirection && mode == DrawMode.FORWARD && DirectionMath.isSpatial(direction)
+        ) {
+            val axis = DirectionMath.axisFor(direction)
+            val travelX = axis[2] - axis[0]
+            val travelY = axis[3] - axis[1]
+            val from = measure.getPosition(s)
+            val to = measure.getPosition((s + len / 8f).coerceAtMost(len))
+            if ((to.x - from.x) * travelX + (to.y - from.y) * travelY < 0f) {
+                DrawMode.REVERSE
+            } else {
+                DrawMode.FORWARD
+            }
+        } else mode
+
+        when (effectiveMode) {
             DrawMode.FORWARD -> {
                 val end = s + p * len
                 if (end <= len) {

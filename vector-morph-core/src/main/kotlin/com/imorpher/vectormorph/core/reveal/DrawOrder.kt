@@ -171,8 +171,17 @@ object DirectionMath {
         else -> PathStart.START
     }
 
-    /** Directions that claim a concrete anchor (the four corners, the four edge axes, and both windings). */
-    private fun isSpatialDirection(direction: DrawDirection): Boolean = when (direction) {
+    /**
+     * Whether the direction claims a concrete **travel axis** — the four corner diagonals
+     * and the four edge axes — whose orientation a traversal can honor. This is the gate
+     * for `MorphConfiguration.directionTraversal == HONOR_DIRECTION`: only axis-claiming
+     * directions can disagree with a contour's point order in a way traversal can fix.
+     *
+     * Deliberately excluded: `CLOCKWISE`/`COUNTER_CLOCKWISE` (their contour-order flip is
+     * the renderer's winding reversal, not a travel axis), and `AUTO`/`CENTER_OUT`/
+     * `OUTSIDE_IN`/`CUSTOM` which claim no concrete axis at all.
+     */
+    fun isSpatial(direction: DrawDirection): Boolean = when (direction) {
         DrawDirection.TOP_LEFT_TO_BOTTOM_RIGHT,
         DrawDirection.TOP_RIGHT_TO_BOTTOM_LEFT,
         DrawDirection.BOTTOM_LEFT_TO_TOP_RIGHT,
@@ -181,11 +190,19 @@ object DirectionMath {
         DrawDirection.RIGHT_TO_LEFT,
         DrawDirection.TOP_TO_BOTTOM,
         DrawDirection.BOTTOM_TO_TOP,
-        DrawDirection.CLOCKWISE,
-        DrawDirection.COUNTER_CLOCKWISE,
         -> true
         else -> false
     }
+
+    /**
+     * Directions that claim a concrete anchor (the axis directions plus both windings,
+     * which anchor at `PathStart.TOP`). Built on [isSpatial]: windings carry an anchor
+     * claim without carrying a travel axis.
+     */
+    private fun isSpatialDirection(direction: DrawDirection): Boolean =
+        isSpatial(direction) ||
+            direction == DrawDirection.CLOCKWISE ||
+            direction == DrawDirection.COUNTER_CLOCKWISE
 
     /**
      * Resolves `start`, `direction`, and `mode` into one concrete anchor plus diagnostics.

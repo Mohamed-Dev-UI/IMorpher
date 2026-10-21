@@ -37,6 +37,14 @@ data class MorphConfiguration(
     val debug: MorphDebugOptions? = null,
     /** Render paths strictly in declaration order even when a draw order strategy reorders reveals. */
     val keepRenderOrder: Boolean = true,
+    /**
+     * How `DrawMode.FORWARD` stroke reveals travel on open contours: [DirectionTraversal.LEGACY]
+     * (the default, in this release) keeps today's contour-order traversal, HONOR_DIRECTION
+     * traverses toward the draw direction's axis. Explicit `DrawMode.REVERSE`/`CENTER_OUT`/
+     * `OUTSIDE_IN` modes always win over either policy, and closed contours keep their
+     * winding-reversal behavior unchanged.
+     */
+    val directionTraversal: DirectionTraversal = DirectionTraversal.LEGACY,
 ) {
     companion object {
         /** Plain, well-behaved default: geometry morph with auto strategies. */

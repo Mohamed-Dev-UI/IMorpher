@@ -152,6 +152,9 @@ class StrokeResolutionApplicationTest {
             chevronFrom, chevronTo, t = 0.3f,
             animation = revealAnimation(PathStart.BOTTOM_LEFT, DrawDirection.AUTO, DrawMode.OUTSIDE_IN),
         )
+        // Painted-pixel guards: identical must mean identical LIT frames, not two blanks.
+        assertTrue("CENTER start must paint pixels", center.litPixelsKey().count > 0)
+        assertTrue("BOTTOM_LEFT start must paint pixels", bottomLeft.litPixelsKey().count > 0)
         assertTrue(
             "OUTSIDE_IN must ignore the anchor: both starts render identical pixels",
             center.sameAs(bottomLeft),
@@ -207,6 +210,11 @@ class StrokeResolutionApplicationTest {
      * Rule-1/4 pin through a locally owned [MorphRenderer] rendered onto a canvas, so the
      * per-frame warnings collector is readable: identical pixels must carry the warning that
      * the anchor was ignored by the mode.
+     *
+     * NOTE: this mirrors the evaluator plumbing the [MorphVector] composition performs
+     * (plan → [TimelineEvaluator] → [MorphRenderer] with the same [MorphConfiguration]).
+     * If the composition path gains evaluator/renderer parameters, keep this helper in
+     * step so the direct-render route stays a faithful pixel mirror.
      */
     private fun renderViaMorphRenderer(
         from: androidx.compose.ui.graphics.vector.ImageVector,
