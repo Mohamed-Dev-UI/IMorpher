@@ -51,7 +51,7 @@ fun PenRevealShowcase() {
         VectorAnimationSpec {
             allPaths {
                 strokeReveal(
-                    start = com.imorpher.vectormorph.core.model.PathStart.START,
+                    start = com.imorpher.vectormorph.core.model.PathStart.AUTO,
                     direction = com.imorpher.vectormorph.core.model.DrawDirection.AUTO,
                     interval = 0f..1f,
                     mode = com.imorpher.vectormorph.core.model.DrawMode.FORWARD,
