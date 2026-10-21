@@ -152,9 +152,10 @@ class FrameSlotMergeTest {
     @Test
     fun clearOnEachEvaluationKeepsReveallessSegmentsFromInheritingThePreviousSlot() {
         // One (target, prop) track can mix a reveal-bearing segment (fill) with a plain
-        // one (fillProgress). The slot must resolve per active segment every frame: the
-        // old drawConfigs array was nulled before the tracks ran, so a plain segment
-        // clears the slot instead of leaking the previous frame's fill reveal.
+        // one (fillProgress). The per-evaluate reset of the three typed slots is the ONLY
+        // clear path a slot ever gets: a reveal-less active segment performs no write at
+        // all (last non-null writer wins), so cross-frame staleness must be handled by
+        // that reset — never by leaking a previous frame's fill reveal into the next.
         val vector = vectorOf("p" to line())
         val animation = VectorAnimation {
             defaultEasing(LinearEasing)
@@ -170,7 +171,29 @@ class FrameSlotMergeTest {
         )
         evaluator.evaluate(0.8f, frame)
         assertEquals(FillMode.DIRECTIONAL, frame.pathProps[0].fillReveal?.fillMode)
+        // A fresh evaluation starts slot-null; the active reveal-less segment must not
+        // re-light the slot, and the previous frame's config must not leak either.
         evaluator.evaluate(0.3f, frame)
         assertNull(frame.pathProps[0].fillReveal)
+    }
+
+    @Test
+    fun laterNullRevealTrackDoesNotClearAnEarlierWriterOnTheSameSlot() {
+        // Multi-writer parity with the old ordinal-indexed array: two DIFFERENT targets
+        // (AllPaths then path("p")) both resolve onto path pair 0 and drive the same
+        // FILL_PROGRESS slot. The earlier writer's segment carries the FillRevealConfig;
+        // the later writer runs a reveal-less fillProgress()-only segment. The old rule
+        // applied the active config only when it was non-null
+        // (`if (draw != null) values.drawConfigs[ordinal] = draw`), so the later
+        // reveal-less writer must NOT clear the earlier FillRevealConfig — the last
+        // NON-NULL writer wins, never the last active track.
+        val vector = vectorOf("p" to line())
+        val animation = VectorAnimation {
+            defaultEasing(LinearEasing)
+            allPaths { fill(mode = FillMode.DIRECTIONAL, interval = 0f..1f) }
+            path("p") { fillProgress(0f, 1f, interval = 0f..1f) }
+        }
+        val frame = evaluate(animation, vector)
+        assertEquals(FillMode.DIRECTIONAL, frame.pathProps[0].fillReveal?.fillMode)
     }
 }

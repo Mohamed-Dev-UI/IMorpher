@@ -245,7 +245,11 @@ class TimelineEvaluator(
                             }
                             val active = activeSegment(track.segments, localProgress)
                             val reveal = active?.reveal
-                            when (track.prop) {
+                            // Old array semantics: the active config was applied only when
+                            // non-null (`if (draw != null) …`), so a reveal-less segment on
+                            // a later track never clears a slot an earlier track wrote on
+                            // the same values — per-evaluate resets are the only clear path.
+                            if (reveal != null) when (track.prop) {
                                 PropKey.DRAW_PROGRESS -> values.strokeReveal = reveal as? DrawConfig
                                 PropKey.FILL_PROGRESS -> values.fillReveal = reveal as? FillRevealConfig
                                 PropKey.CLIP_PROGRESS -> values.clipReveal = reveal as? ClipRevealConfig

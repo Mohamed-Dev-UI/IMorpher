@@ -142,19 +142,21 @@ object VectorAnimationCodec {
                     val easing = readEasing(input)
                     // Version-1 record layout: mode/start/direction string slots followed by
                     // the nullable fill pair, regardless of the record's property. Decode
-                    // validates and maps the record onto the property's typed reveal variant;
-                    // placeholder/mismatched slots are read and dropped.
+                    // validates every slot with the enum it is written as (parity with the
+                    // pre-cleanup decoder, which enum-checked all five) and maps the record
+                    // onto the property's typed reveal variant; placeholder/mismatched
+                    // slots are read, validated, and dropped.
                     val reveal = if (input.readBoolean()) {
                         val mode = enumValue<com.imorpher.vectormorph.core.model.DrawMode>(input.readUTF())
                         val anchor = enumValue<com.imorpher.vectormorph.core.model.PathStart>(input.readUTF())
                         val direction = enumValue<com.imorpher.vectormorph.core.model.DrawDirection>(input.readUTF())
-                        val fillModeName = readNullableEnum(input)
-                        val fillDirectionName = readNullableEnum(input)
+                        val fillModeName = readNullableEnum(input)?.let { enumValue<com.imorpher.vectormorph.core.model.FillMode>(it) }
+                        val fillDirectionName = readNullableEnum(input)?.let { enumValue<com.imorpher.vectormorph.core.model.DrawDirection>(it) }
                         when (prop) {
                             PropKey.DRAW_PROGRESS -> VectorAnimation.DrawConfig(mode, anchor, direction)
                             PropKey.FILL_PROGRESS -> VectorAnimation.FillRevealConfig(
-                                fillMode = fillModeName?.let { enumValue<com.imorpher.vectormorph.core.model.FillMode>(it) },
-                                fillDirection = fillDirectionName?.let { enumValue<com.imorpher.vectormorph.core.model.DrawDirection>(it) },
+                                fillMode = fillModeName,
+                                fillDirection = fillDirectionName,
                             )
                             PropKey.CLIP_PROGRESS -> VectorAnimation.ClipRevealConfig(direction)
                             else -> throw IllegalStateException(

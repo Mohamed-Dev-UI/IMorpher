@@ -229,6 +229,68 @@ class VectorAnimationCodecTest {
         assertEquals(layout.bytes[layout.strokeFillDirectionNullOffset], 0.toByte())
     }
 
+    /**
+     * Legacy-spelling variant of the golden blob: pre-cleanup encoders baked start-anchor
+     * `"AUTO"` (not `"START"`) into the FILL and CLIP records because the shared
+     * `cfg(..., PathStart.AUTO, ...)` was created before the per-property split. `"AUTO"`
+     * is a valid `PathStart` name, so the decode validates the slot and drops the value —
+     * the typed reveals must come out exactly identical to the `START`-placeholder variant
+     * and to what the current encoder re-emits for them.
+     */
+    @Test
+    fun legacyAutoStartSpellingDecodes() {
+        val legacy = VectorAnimationCodec.decode(goldenVersionOneBytes(fillClipStartSlot = "AUTO").bytes)
+        val postSplit = VectorAnimationCodec.decode(goldenVersionOneBytes().bytes)
+
+        assertFillEquals(
+            postSplit.fillRevealOf(PropKey.FILL_PROGRESS),
+            legacy.fillRevealOf(PropKey.FILL_PROGRESS),
+        )
+        assertClipEquals(
+            postSplit.clipRevealOf(PropKey.CLIP_PROGRESS),
+            legacy.clipRevealOf(PropKey.CLIP_PROGRESS),
+        )
+        assertStrokeEquals(
+            postSplit.strokeRevealOf(PropKey.DRAW_PROGRESS),
+            legacy.strokeRevealOf(PropKey.DRAW_PROGRESS),
+        )
+        // Both decodes carry the same reveals, so the deterministic encode places them
+        // back into byte-identical (post-split spelling) blobs.
+        assertArrayEquals(VectorAnimationCodec.encode(postSplit), VectorAnimationCodec.encode(legacy))
+    }
+
+    /**
+     * Decode strictness parity (review follow-up 4): the old decoder momentarily
+     * enum-validated the nullable pair slots on EVERY record — also on stroke and clip
+     * records that then dropped the values. Corrupt bytes in those slots must still
+     * throw exactly as before instead of being silently read-and-dropped.
+     */
+    @Test
+    fun corruptPairSlotStillThrowsExactlyAsBefore() {
+        // A DRAW record whose fillMode slot carries a name that is not a FillMode fails
+        // the decode (the pre-cleanup decoder validated it on the DrawConfig's fillMode
+        // field before the renderer ever dropped it).
+        assertThrows(IllegalArgumentException::class.java) {
+            VectorAnimationCodec.decode(goldenVersionOneBytes(strokeFillModeName = "NOT_A_FILL_MODE").bytes)
+        }
+    }
+
+    /** Single-typed-reveal readers over the golden blob's three AllPaths tracks. */
+    private fun VectorAnimation.strokeRevealOf(prop: PropKey): DrawConfig {
+        val reveal = tracks.single { it.prop == prop }.segments.single().reveal
+        return reveal as? DrawConfig ?: throw AssertionError("Track $prop carries no stroke reveal")
+    }
+
+    private fun VectorAnimation.fillRevealOf(prop: PropKey): FillRevealConfig {
+        val reveal = tracks.single { it.prop == prop }.segments.single().reveal
+        return reveal as? FillRevealConfig ?: throw AssertionError("Track $prop carries no fill reveal")
+    }
+
+    private fun VectorAnimation.clipRevealOf(prop: PropKey): ClipRevealConfig {
+        val reveal = tracks.single { it.prop == prop }.segments.single().reveal
+        return reveal as? ClipRevealConfig ?: throw AssertionError("Track $prop carries no clip reveal")
+    }
+
     /** Hand-built literal byte array + the offsets of the compared spot regions. */
     private class GoldenLayout(
         val bytes: ByteArray,
@@ -243,7 +305,10 @@ class VectorAnimationCodecTest {
     )
 
     /** The documented V1 layout above, emitted literally with [DataOutputStream]. */
-    private fun goldenVersionOneBytes(): GoldenLayout {
+    private fun goldenVersionOneBytes(
+        fillClipStartSlot: String = "START",
+        strokeFillModeName: String? = null,
+    ): GoldenLayout {
         val sink = ByteArrayOutputStream()
         val out = DataOutputStream(sink)
         fun easingSamples() {
@@ -271,7 +336,8 @@ class VectorAnimationCodecTest {
         out.writeUTF("AUTO")                           // start anchor (real)
         out.writeUTF("BOTTOM_TO_TOP")                  // direction (real)
         val strokeFillModeNullOffset = sink.size()
-        out.writeBoolean(false)                        // nullable fillMode slot — stroke carries none
+        out.writeBoolean(strokeFillModeName != null)
+        strokeFillModeName?.let(out::writeUTF)         // nullable fillMode slot — stroke carries none
         val strokeFillDirectionNullOffset = sink.size()
         out.writeBoolean(false)                        // nullable fillDirection slot — stroke carries none
         val strokeRecordEnd = sink.size()
@@ -284,7 +350,7 @@ class VectorAnimationCodecTest {
         easingSamples()
         out.writeBoolean(true)                         // hasReveal
         out.writeUTF("FORWARD")                        // placeholder — no consumer reads it
-        out.writeUTF("START")                          // placeholder — no consumer reads it
+        out.writeUTF(fillClipStartSlot)                // placeholder — no consumer reads it
         out.writeUTF("AUTO")                           // placeholder — no consumer reads it
         val fillPairStart = sink.size()
         out.writeBoolean(true); out.writeUTF("DIRECTIONAL")  // fillMode (real)
@@ -299,7 +365,7 @@ class VectorAnimationCodecTest {
         easingSamples()
         out.writeBoolean(true)                         // hasReveal
         out.writeUTF("FORWARD")                        // placeholder — no consumer reads it
-        out.writeUTF("START")                          // placeholder — no consumer reads it
+        out.writeUTF(fillClipStartSlot)                // placeholder — no consumer reads it
         val clipDirectionStart = sink.size()
         out.writeUTF("LEFT_TO_RIGHT")                  // moving clip edge (the record's real field)
         val clipDirectionEnd = sink.size()
