@@ -91,14 +91,23 @@ internal class RenderProbeHarness(
         return builder.build()
     }
 
-    /** Single stroked contour path with the probe-blue solid paint. */
-    fun stroked(name: String, data: List<PathNode>, width: Float = 2f): ImageVector {
+    /**
+     * Single stroked contour path with the probe-blue solid paint. The path name defaults
+     * to "stroke" (previously hard-coded) and can be exposed for map keying — e.g.
+     * `DrawAnchorMapApplicationTest` names its path "p" to key the anchor maps.
+     */
+    fun stroked(
+        name: String,
+        data: List<PathNode>,
+        width: Float = 2f,
+        pathName: String = "stroke",
+    ): ImageVector {
         val builder = ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f)
         builder.addPath(
             pathData = data,
             stroke = SolidColor(Color(0xFF12A4D9)),
             strokeLineWidth = width,
-            name = "stroke",
+            name = pathName,
         )
         return builder.build()
     }

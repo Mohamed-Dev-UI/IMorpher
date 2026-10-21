@@ -2,11 +2,7 @@ package com.imorpher.vectormorph.compose
 
 import androidx.activity.ComponentActivity
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathNode
-import androidx.compose.ui.unit.dp
 import com.imorpher.vectormorph.core.animation.VectorAnimation as VectorAnimationSpec
 import com.imorpher.vectormorph.core.model.DrawDirection
 import com.imorpher.vectormorph.core.model.DrawMode
@@ -33,9 +29,9 @@ import org.robolectric.annotation.GraphicsMode
  *
  * Pixel probes run through the full [MorphVector] pipeline on the shared render harness
  * (`RenderProbeHarness`). The fixture re-uses Task 3/4's open-contour style: the chevron's
- * authored geometry maps arc fractions onto clean regions — and unlike the shared harness's
- * `stroked()` builder (path name hard-coded to "stroke"), this probe names its path "p" so the
- * anchor maps can key on it, mirroring the plan's sketch.
+ * authored geometry maps arc fractions onto clean regions — and the shared harness's
+ * `stroked()` builder names the path "p" (its `pathName` parameter) so the anchor maps can
+ * key on it, mirroring the plan's sketch.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -69,19 +65,19 @@ class DrawAnchorMapApplicationTest {
      * `StartPointStrategy.CUSTOM` + `customStartOffsets` performs no geometry rotation in the
      * planner — the alignment map provably cannot move the pixels either way in probe 3.
      */
-    private val chevronFrom by lazy { strokedPathP(listOf(PathNode.MoveTo(4f, 18f), PathNode.LineTo(12f, 6f), PathNode.LineTo(20f, 18f))) }
-    private val chevronTo by lazy { strokedPathP(listOf(PathNode.MoveTo(4f, 20f), PathNode.LineTo(12f, 8f), PathNode.LineTo(20f, 20f))) }
-
-    /** Mirrors [RenderProbeHarness.stroked] with the path name exposed ("p") for map keying. */
-    private fun strokedPathP(data: List<PathNode>, width: Float = 2f): ImageVector {
-        val builder = ImageVector.Builder("p-vector", 24.dp, 24.dp, 24f, 24f)
-        builder.addPath(
-            pathData = data,
-            stroke = SolidColor(Color(0xFF12A4D9)),
-            strokeLineWidth = width,
-            name = "p",
+    private val chevronFrom by lazy {
+        harness.stroked(
+            "p-vector",
+            listOf(PathNode.MoveTo(4f, 18f), PathNode.LineTo(12f, 6f), PathNode.LineTo(20f, 18f)),
+            pathName = "p",
         )
-        return builder.build()
+    }
+    private val chevronTo by lazy {
+        harness.stroked(
+            "p-vector",
+            listOf(PathNode.MoveTo(4f, 20f), PathNode.LineTo(12f, 8f), PathNode.LineTo(20f, 20f)),
+            pathName = "p",
+        )
     }
 
     // ------------------------------------------------------------------ probes

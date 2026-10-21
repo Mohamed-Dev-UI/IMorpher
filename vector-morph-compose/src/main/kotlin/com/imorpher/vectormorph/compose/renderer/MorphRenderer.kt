@@ -92,8 +92,22 @@ class MorphRenderer {
      */
     internal fun frameDrawWarnings(): List<DrawResolutionWarning> = drawWarnings.toList()
 
+    /**
+     * Resolved draw anchors recorded for the debug overlay (start/direction coordination
+     * plan rule 7): one entry per revealed contour that fed a collector this frame, cleared
+     * at the start of every render. Only filled when the debug overlay actually consumes it
+     * ([collectDrawAnchors]), so a debug-free frame resolves geometry exactly as before.
+     */
+    private val drawAnchors = ArrayList<ResolvedDrawAnchor>()
+
+    /** Whether [drawAnchors] is being collected for the frame currently rendering. */
+    private var collectDrawAnchors = false
+
     /** Clip wedge for directional clip reveals. */
     private val wedgePath = Path()
+
+    /** Scratch triangle for the debug resolution-warning indicator. */
+    private val warningPath = Path()
 
     /** Clip circle for radial clip reveals. */
     private val radialPath = Path()
@@ -195,6 +209,10 @@ class MorphRenderer {
         tintTo: Any? = null,
     ) {
         drawWarnings.clear()
+        drawAnchors.clear()
+        collectDrawAnchors = config.debug.let { debug ->
+            debug != null && (debug.showStartPoints || debug.showDirection)
+        }
         val p = progress.coerceIn(0f, 1f)
         ensurePlanScratch(plan)
 
@@ -410,7 +428,8 @@ class MorphRenderer {
 
     /**
      * Development-only geometry overlays (bounds, centroids, points, matching lines,
-     * numbered labels) drawn in viewport space from [MorphConfiguration.debug].
+     * numbered labels, resolved draw anchors/travel axes, resolution warnings) drawn in
+     * viewport space from [MorphConfiguration.debug].
      */
     private fun DrawScope.drawDebugOverlay(
         plan: MorphPlan,
@@ -478,6 +497,51 @@ class MorphRenderer {
                 }
             }
         }
+
+        // Resolved-draw annotations (start/direction coordination plan rule 7): the anchor
+        // the reveal actually selected and an arrow along the configured direction's travel
+        // axis. buildRevealedStrokePath feeds [drawAnchors] only while this block can
+        // consume it, so neither toggle changes any other pixel. Style follows the markers
+        // above (yellow = start, magenta = direction).
+        if (options.showStartPoints || options.showDirection) {
+            for (anchor in drawAnchors) {
+                val center = Offset(anchor.x, anchor.y)
+                if (options.showStartPoints) {
+                    drawCircle(color = Color.Yellow, radius = 0.5f, center = center)
+                }
+                if (options.showDirection) {
+                    val axis = DirectionMath.axisFor(anchor.direction)
+                    drawLine(
+                        color = Color.Magenta,
+                        start = center,
+                        end = Offset(
+                            anchor.x + (axis[2] - axis[0]) * anchor.arrowLength,
+                            anchor.y + (axis[3] - axis[1]) * anchor.arrowLength,
+                        ),
+                        strokeWidth = 0.3f,
+                    )
+                }
+            }
+            if (drawWarnings.isNotEmpty()) {
+                drawResolutionWarningBanner()
+            }
+        }
+    }
+
+    /**
+     * Fixed top-left viewport-corner indicator for a frame with draw-resolution warnings:
+     * a red triangle plus the warning count (7-segment digits, same style as
+     * [drawDebugNumber]). Counted over all revealed contours, so it repeats no detail —
+     * the callers keep the per-warning breakdown.
+     */
+    private fun DrawScope.drawResolutionWarningBanner() {
+        warningPath.rewind()
+        warningPath.moveTo(0.4f, 1.8f)
+        warningPath.lineTo(1.15f, 0.5f)
+        warningPath.lineTo(1.9f, 1.8f)
+        warningPath.close()
+        drawPath(warningPath, Color.Red)
+        drawDebugNumber(drawWarnings.size, 2.6f, 0.5f, Color.Red)
     }
 
     /** Draws compact 7-segment digits so debug overlays stay backend-independent. */
@@ -864,11 +928,13 @@ class MorphRenderer {
                 val strokeContours = custom.strokeRevealContours ?: contours
                 for (contour in strokeContours) {
                     val path = staticPath(contour)
+                    val direction = drawCfg?.direction ?: DrawDirection.AUTO
                     val shown = if (custom.strokeRevealContours != null) path else buildRevealedStrokePath(
                         path, drawP, drawCfg?.mode ?: DrawMode.FORWARD, drawCfg?.start ?: PathStart.AUTO,
-                        drawCfg?.direction ?: DrawDirection.AUTO, null, drawAnchorFor(config, side.name, side.name),
+                        direction, null, drawAnchorFor(config, side.name, side.name),
                         config.timing,
                         warnings = { drawWarnings.addAll(it) },
+                        anchorCollector = if (collectDrawAnchors) debugAnchorSink(transform, direction) else null,
                     )
                     if (!shown.isEmpty && width > 0f) paintStroke(
                         shown, strokeResult, strokeAlpha,
@@ -1167,6 +1233,7 @@ class MorphRenderer {
                                 closed = cp.from.closed && cp.to.closed,
                                 honorDirection = config.directionTraversal == DirectionTraversal.HONOR_DIRECTION,
                                 warnings = { drawWarnings.addAll(it) },
+                                anchorCollector = if (collectDrawAnchors) debugAnchorSink(transform, direction) else null,
                             )
                             if (revealed.isEmpty) continue
                             withClipReveal(clipContours, clipProgress, clipDirection) {
@@ -1367,6 +1434,9 @@ class MorphRenderer {
                         customContours.forEach { paintTraversal(staticPath(it)) }
                     }
                     else -> paintTraversal(
+                        // Fill-sweep reuse of the reveal machinery, not a pen anchor: no
+                        // debug anchor collector here (rule 7 covers stroke reveals), but
+                        // the warnings still land in the frame collector.
                         buildRevealedStrokePath(
                             path, prog, drawMode,
                             strokeDraw?.start ?: PathStart.AUTO,
@@ -1422,6 +1492,12 @@ class MorphRenderer {
      * resolved anchor and flips to the existing `REVERSE` arm when the arc travels against
      * that axis — the anchor is resolved once, only the traversal direction changes.
      * Closed contours never flip here: CW/CCW stays their traversal control.
+     *
+     * [anchorCollector] feeds the debug overlay (plan rule 7) the resolved anchor — the
+     * exact point [resolveStartFraction] selected, as PathMeasure.getPosition reports it —
+     * plus a travel-arrow length sized to ≈10% of the measured contour's bounds diagonal.
+     * It is consulted only for mid-reveal windows and only when the callers supply it
+     * (debug toggles on), so resolution behavior and default pixel output are untouched.
      */
     private fun buildRevealedStrokePath(
         source: Path,
@@ -1439,6 +1515,7 @@ class MorphRenderer {
         closed: Boolean = true,
         warnings: (List<DrawResolutionWarning>) -> Unit = {},
         honorDirection: Boolean = false,
+        anchorCollector: ((anchorX: Float, anchorY: Float, travelLength: Float) -> Unit)? = null,
     ): Path {
         measure.setPath(source, false)
         val len = measure.length
@@ -1464,6 +1541,27 @@ class MorphRenderer {
             source, measure, len, start, direction, mode, customStartFraction, warnings,
         )
         val s = startFrac * len
+
+        // Debug overlay collection (start/direction coordination plan rule 7): measure the
+        // resolved anchor point and an arrow length from the contour's own bounds — once,
+        // before any traversal-sign decision, since the anchor is independent of the sign.
+        anchorCollector?.let { collector ->
+            val position = measure.getPosition(s)
+            if (position.x.isFinite() && position.y.isFinite()) {
+                var minX = position.x; var minY = position.y
+                var maxX = position.x; var maxY = position.y
+                val samples = 48
+                for (i in 0..samples) {
+                    val sample = measure.getPosition(len * i / samples)
+                    if (!sample.x.isFinite() || !sample.y.isFinite()) continue
+                    if (sample.x < minX) minX = sample.x
+                    if (sample.y < minY) minY = sample.y
+                    if (sample.x > maxX) maxX = sample.x
+                    if (sample.y > maxY) maxY = sample.y
+                }
+                collector(position.x, position.y, hypot(maxX - minX, maxY - minY) * 0.1f)
+            }
+        }
 
         // HONOR_DIRECTION (start/direction coordination plan rule 4): under LEGACY a
         // FORWARD reveal follows the contour's own point order, which can run against
@@ -1589,6 +1687,21 @@ class MorphRenderer {
             ?: config.customStartOffsets[fromName]
             ?: config.customStartOffsets[toName]
             ?: 0f
+
+    /**
+     * Builds the per-reveal-site debug collector (start/direction coordination plan rule 7):
+     * maps the reveal-space anchor through the site's [tr] pair transform — the same
+     * translate→rotate→scale ops [withPairTransform] applies to the canvas — and stores it
+     * with [arrowDirection]'s configured travel axis for the overlay to draw. Constructed
+     * only while [collectDrawAnchors], never otherwise.
+     */
+    private fun debugAnchorSink(
+        tr: PairTransform,
+        arrowDirection: DrawDirection,
+    ): (anchorX: Float, anchorY: Float, travelLength: Float) -> Unit = { x, y, travelLength ->
+        val mapped = tr.map(x, y)
+        drawAnchors += ResolvedDrawAnchor(mapped.x, mapped.y, arrowDirection, travelLength)
+    }
 
     /**
      * Resolves where the "pen" starts: the arc fraction nearest the resolved anchor (or the
@@ -1893,6 +2006,7 @@ class MorphRenderer {
                             side.arcLengths.getOrNull(contourIndex),
                             closed = contour.closed,
                             warnings = { drawWarnings.addAll(it) },
+                            anchorCollector = if (collectDrawAnchors) debugAnchorSink(transform, strokeDirection) else null,
                         )
                         withClipReveal(side.clipContours, clipProgress, clipDirection) {
                             paintStroke(revealed, strokeResultWithAnimation, pathAlpha * side.strokeAlpha * strokeAlphaOverride, style)
@@ -2143,6 +2257,25 @@ class MorphRenderer {
         val isIdentity: Boolean
             get() = sx == 1f && sy == 1f && rotation == 0f && tx == 0f && ty == 0f
 
+        /**
+         * Maps a vector-space point through this transform — the same
+         * translate→rotate→scale ops [withPairTransform] applies to the canvas — so debug
+         * markers recorded inside a transformed pair still land on their stroke.
+         */
+        fun map(x: Float, y: Float): Offset {
+            var px = (x - pivotX) * sx
+            var py = (y - pivotY) * sy
+            if (rotation != 0f) {
+                val radians = Math.toRadians(rotation.toDouble()).toFloat()
+                val c = cos(radians)
+                val s = sin(radians)
+                val rotatedX = px * c - py * s
+                py = px * s + py * c
+                px = rotatedX
+            }
+            return Offset(px + pivotX + tx, py + pivotY + ty)
+        }
+
         companion object {
             val Identity = PairTransform(1f, 1f, 0f, 0f, 0f, 0f, 0f)
 
@@ -2187,4 +2320,17 @@ class MorphRenderer {
         }
     }
 
+    /**
+     * One resolved draw anchor recorded for the debug overlay (start/direction coordination
+     * plan rule 7): the pair-transform-mapped vector-space position where the pen began,
+     * the configured [direction] (its `DirectionMath.axisFor` travel vector orients the
+     * overlay arrow), and the arrow's [arrowLength] (≈10% of the recorded contour's bounds
+     * diagonal, computed at the reveal site).
+     */
+    private class ResolvedDrawAnchor(
+        val x: Float,
+        val y: Float,
+        val direction: DrawDirection,
+        val arrowLength: Float,
+    )
 }
