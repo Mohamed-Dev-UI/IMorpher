@@ -23,5 +23,6 @@ class DirectionTraversalConfigTest {
         assertEquals(MorphConfiguration(), MorphConfiguration())
         assertEquals(honored, MorphConfiguration(directionTraversal = DirectionTraversal.HONOR_DIRECTION))
         assertNotEquals(MorphConfiguration(), honored)
+        assertNotEquals(MorphConfiguration(), MorphConfiguration(staggerDelay = 0.2f))
     }
 }

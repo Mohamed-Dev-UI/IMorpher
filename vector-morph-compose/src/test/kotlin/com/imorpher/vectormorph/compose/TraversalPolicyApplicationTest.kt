@@ -136,6 +136,29 @@ class TraversalPolicyApplicationTest {
         }
     }
 
+    /**
+     * Target Contract rule 4 scopes traversal-honoring to OPEN contours: a closed contour
+     * driven by a plain spatial travel axis (LEFT_TO_RIGHT) must render pixel-identical
+     * under both policies — on closed contours CW/CCW remains the traversal control, so
+     * the HONOR_DIRECTION chord-dot must not flip them.
+     */
+    @Test
+    fun closedContourSpatialDirectionIgnoredUnderHonor() {
+        val legacy = harness.renderMorph(
+            squareFrom, squareTo, progress = 0.3f, configuration = legacyConfig,
+            animation = revealAnimation(DrawDirection.LEFT_TO_RIGHT),
+        )
+        val honored = harness.renderMorph(
+            squareFrom, squareTo, progress = 0.3f, configuration = honorConfig,
+            animation = revealAnimation(DrawDirection.LEFT_TO_RIGHT),
+        )
+        assertTrue("closed spatial frame must paint pixels", legacy.litPixelsKey().count > 0)
+        assertTrue(
+            "closed contour + LEFT_TO_RIGHT must render identically under both policies",
+            legacy.sameAs(honored),
+        )
+    }
+
     // ------------------------------------------------------------------ harness
 
     /** One FORWARD stroke-reveal animation of the whole vector toward [direction]. */

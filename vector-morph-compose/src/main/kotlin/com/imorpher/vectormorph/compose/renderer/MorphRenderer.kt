@@ -1419,10 +1419,11 @@ class MorphRenderer {
      * (the frame collector's callback by default).
      *
      * [honorDirection] carries `MorphConfiguration.directionTraversal == HONOR_DIRECTION`
-     * (plan rule 4): a `DrawMode.FORWARD` reveal whose direction claims a travel axis
-     * ([DirectionMath.isSpatial]) samples the arc chord leaving the resolved anchor and
-     * flips to the existing `REVERSE` arm when the contour travels against that axis —
-     * the anchor is resolved once, only the traversal direction changes.
+     * (plan rule 4): a `DrawMode.FORWARD` reveal on an **open** contour whose direction
+     * claims a travel axis ([DirectionMath.isSpatial]) samples the arc chord leaving the
+     * resolved anchor and flips to the existing `REVERSE` arm when the arc travels against
+     * that axis — the anchor is resolved once, only the traversal direction changes.
+     * Closed contours never flip here: CW/CCW stays their traversal control.
      */
     private fun buildRevealedStrokePath(
         source: Path,
@@ -1476,9 +1477,11 @@ class MorphRenderer {
         // an anchor sitting on the contour's end) keep FORWARD as today. Winding-addressed
         // directions never reach this branch (DirectionMath.isSpatial excludes them), so
         // shouldReverseWinding's outcome is untouched — LEGACY and every non-FORWARD mode
-        // ignore the sign entirely.
+        // ignore the sign entirely. Open contours only: rule 4 scopes traversal-honoring
+        // to open contours; on closed contours CW/CCW remains the traversal control.
         val effectiveMode = if (
-            honorDirection && mode == DrawMode.FORWARD && DirectionMath.isSpatial(direction)
+            honorDirection && mode == DrawMode.FORWARD &&
+            DirectionMath.isSpatial(direction) && !closed
         ) {
             val axis = DirectionMath.axisFor(direction)
             val travelX = axis[2] - axis[0]
