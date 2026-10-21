@@ -16,6 +16,8 @@ import com.imorpher.vectormorph.core.model.MotionPreference
 import com.imorpher.vectormorph.core.model.PathMatchingStrategy
 import com.imorpher.vectormorph.core.model.PathStart
 import com.imorpher.vectormorph.core.model.TimingMode
+import com.imorpher.vectormorph.core.reveal.DirectionMath
+import com.imorpher.vectormorph.core.reveal.DrawResolutionWarning
 
 /** Tint style selected in playgrounds: none, one solid color, or a gradient. */
 enum class TintMode { NONE, SOLID, GRADIENT }
@@ -50,7 +52,7 @@ class ShowcaseState {
     // --- reveal geometry
     var drawMode by mutableStateOf(DrawMode.FORWARD)
     var drawDirection by mutableStateOf(DrawDirection.AUTO)
-    var pathStart by mutableStateOf(PathStart.START)
+    var pathStart by mutableStateOf(PathStart.AUTO)
     var fillMode by mutableStateOf(FillMode.DIRECTIONAL)
 
     // --- stagger / order
@@ -72,6 +74,23 @@ class ShowcaseState {
 
     val fromIcon: Any get() = IconCatalog.icon(fromIconName)
     val toIcon: Any get() = IconCatalog.icon(toIconName)
+
+    /**
+     * Coherence diagnostics for the selected start/direction/mode combo, resolved through
+     * `DirectionMath.resolve` (the renderer's anchor-precedence contract): empty when the
+     * pickers agree, otherwise the conflict warnings playgrounds surface as a hint under
+     * the start/direction dropdowns.
+     *
+     * Mode handling: [DrawMode.RADIAL] short-circuits to no warnings — a radial reveal
+     * renders through a circular clip centred on the path centroid, so neither the anchor
+     * nor the direction takes part and a conflict hint would be noise. [DrawMode.CUSTOM]
+     * is not listed in the pickers and resolves like FORWARD inside the resolver, so the
+     * stored value passes through unchanged.
+     */
+    fun startDirectionWarnings(): List<DrawResolutionWarning> {
+        if (drawMode == DrawMode.RADIAL) return emptyList()
+        return DirectionMath.resolve(pathStart, drawDirection, drawMode).warnings
+    }
 
     /**
      * Restores every field to its default so the in-place "Reset playgrounds" action can

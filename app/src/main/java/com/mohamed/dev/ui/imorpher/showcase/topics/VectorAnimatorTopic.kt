@@ -26,6 +26,7 @@ import com.imorpher.vectormorph.compose.VectorAnimator
 import com.imorpher.vectormorph.core.model.DrawOrderStrategy
 import com.mohamed.dev.ui.imorpher.showcase.ApiSignature
 import com.mohamed.dev.ui.imorpher.showcase.CopySnippetButton
+import com.mohamed.dev.ui.imorpher.showcase.DrawConflictHint
 import com.mohamed.dev.ui.imorpher.showcase.LabeledSlider
 import com.mohamed.dev.ui.imorpher.showcase.PlaygroundControls
 import com.mohamed.dev.ui.imorpher.showcase.PreviewTile
@@ -267,6 +268,9 @@ fun VectorAnimatorPlayground(state: ShowcaseState) {
                 ShowcaseOptions.drawDirections,
                 state.drawDirection
             ) { state.drawDirection = it }
+            // Conflicts between the Mode/Start/Direction pickers above resolve into the
+            // state's warnings and surface here while they disagree.
+            DrawConflictHint(state)
             LabeledSlider("Start scale", state.startScale, 0.2f..1.5f, "×") {
                 state.startScale = it
             }

@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.imorpher.vectormorph.core.reveal.DrawResolutionWarning
 import kotlin.math.roundToInt
 
 /** Compact labeled slider used by every playground. */
@@ -86,6 +87,29 @@ fun <T> ShowcaseDropdown(
             }
         }
     }
+}
+
+/** Hint text for one draw-resolution warning, phrased for the playground hint line. */
+private fun DrawResolutionWarning.hintLabel(): String = when (this) {
+    DrawResolutionWarning.START_OVERRIDES_DIRECTION -> "start overrides direction"
+    DrawResolutionWarning.ANCHOR_IGNORED_BY_MODE -> "draw mode ignores the start anchor"
+    DrawResolutionWarning.CENTER_OUT_DIRECTION_ON_STROKE -> "direction only affects fill sweeps"
+    DrawResolutionWarning.MISSING_CONCRETE_ANCHOR -> "direction provides no start anchor"
+}
+
+/**
+ * One secondary-text line listing the conflicts between the playground's start/direction/
+ * mode pickers (empty selection resolves cleanly and renders nothing).
+ */
+@Composable
+fun DrawConflictHint(state: ShowcaseState) {
+    val warnings = state.startDirectionWarnings()
+    if (warnings.isEmpty()) return
+    Text(
+        "⚠ " + warnings.joinToString(" · ") { it.hintLabel() },
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 /** A row of small swatch buttons for one of the three playground colors. */

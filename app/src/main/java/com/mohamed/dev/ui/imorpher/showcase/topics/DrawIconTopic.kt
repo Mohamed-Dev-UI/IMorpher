@@ -22,6 +22,7 @@ import com.imorpher.vectormorph.compose.DrawIcon
 import com.imorpher.vectormorph.core.model.TimingMode
 import com.mohamed.dev.ui.imorpher.showcase.ApiSignature
 import com.mohamed.dev.ui.imorpher.showcase.CopySnippetButton
+import com.mohamed.dev.ui.imorpher.showcase.DrawConflictHint
 import com.mohamed.dev.ui.imorpher.showcase.LabeledSlider
 import com.mohamed.dev.ui.imorpher.showcase.LabeledSlider
 import com.mohamed.dev.ui.imorpher.showcase.SnippetGenerator
@@ -145,6 +146,9 @@ fun DrawIconPlayground(state: ShowcaseState) {
                 ShowcaseDropdown("Start", ShowcaseOptions.pathStarts, state.pathStart) { state.pathStart = it }
             }
             ShowcaseDropdown("Direction", ShowcaseOptions.drawDirections, state.drawDirection) { state.drawDirection = it }
+            // Conflicts between the Mode/Start/Direction pickers above resolve into the
+            // state's warnings and surface here while they disagree.
+            DrawConflictHint(state)
             ShowcaseDropdown("Timing", ShowcaseOptions.timings, state.timing) { state.timing = it }
             LabeledSlider("Stroke width", state.strokeWidth, 0.5f..3f, "f") { state.strokeWidth = it }
         }
