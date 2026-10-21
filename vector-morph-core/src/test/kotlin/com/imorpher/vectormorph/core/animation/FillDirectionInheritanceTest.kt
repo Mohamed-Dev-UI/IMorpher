@@ -35,6 +35,22 @@ class FillDirectionInheritanceTest {
         assertNull(anim.tracks.first { it.prop == PropKey.FILL_PROGRESS }.segments.first().draw!!.fillDirection)
     }
 
+    /**
+     * A default (`AUTO`) stroke direction is NOT an inheritance source: the fill keeps
+     * `fillDirection = null` so the renderer still resolves through
+     * `MorphConfiguration.defaultFillDirection` (Target Contract rule 5's last fallback).
+     * Otherwise the all-defaulted combo would sweep along `axisFor(AUTO)`'s
+     * top-left→bottom-right fallback and break default-fill pixel parity.
+     */
+    @Test
+    fun defaultedStrokeDirectionIsNotInherited() {
+        val anim = VectorAnimation {
+            path("outline") { strokeReveal(interval = 0f..0.5f) }          // direction defaulted (AUTO)
+            path("outline") { fill(mode = FillMode.DIRECTIONAL, interval = 0.5f..1f) }
+        }
+        assertNull(firstFillDirectionOf(anim))
+    }
+
     // ------------------------------------------------------------------ derived contract pins
 
     @Test
