@@ -82,7 +82,7 @@ enum class PathStart {
     TOP_RIGHT,
     BOTTOM_LEFT,
     BOTTOM_RIGHT,
-    /** A custom normalized arc-length offset, see [MorphConfiguration.customStartOffsets]. */
+    /** A custom normalized arc-length anchor, see [MorphConfiguration.customDrawAnchors]. */
     CUSTOM,
 }
 

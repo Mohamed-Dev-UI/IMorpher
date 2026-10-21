@@ -866,7 +866,7 @@ class MorphRenderer {
                     val path = staticPath(contour)
                     val shown = if (custom.strokeRevealContours != null) path else buildRevealedStrokePath(
                         path, drawP, drawCfg?.mode ?: DrawMode.FORWARD, drawCfg?.start ?: PathStart.AUTO,
-                        drawCfg?.direction ?: DrawDirection.AUTO, null, config.customStartOffsets[side.name] ?: 0f,
+                        drawCfg?.direction ?: DrawDirection.AUTO, null, drawAnchorFor(config, side.name, side.name),
                         config.timing,
                         warnings = { drawWarnings.addAll(it) },
                     )
@@ -1160,9 +1160,7 @@ class MorphRenderer {
                         } else {
                             val strokeGeometry = if (cp.from.closed && shouldReverseWinding(cp.from.windingSign, direction))
                                 morphContourPath(pair.index, ci, cp, morphT, reverse = true) else path
-                            val customStart = config.customStartOffsets[f.name]
-                                ?: config.customStartOffsets[t.name]
-                                ?: 0f
+                            val customStart = drawAnchorFor(config, f.name, t.name)
                             val revealed = buildRevealedStrokePath(
                                 strokeGeometry, drawProgress, mode, start, direction, cp, customStart,
                                 config.timing, ci, pair.contourPairs.size, max(f.totalLength, t.totalLength),
@@ -1577,6 +1575,22 @@ class MorphRenderer {
     }
 
     /**
+     * Resolves the `PathStart.CUSTOM` draw anchor for one stroke-reveal site:
+     * [MorphConfiguration.customDrawAnchors] first (the new per-path draw anchor map), then
+     * [MorphConfiguration.customStartOffsets] (legacy fallback for one release), with the same
+     * `from`-then-`to` name precedence at every site. One definition for all three call sites
+     * fixes the plan's C4 inconsistency (the pair pass used `from ?: to`, the static sites only
+     * looked at their own name); the static single-path sites pass their own path name for
+     * both legs.
+     */
+    private fun drawAnchorFor(config: MorphConfiguration, fromName: String, toName: String): Float =
+        config.customDrawAnchors[fromName]
+            ?: config.customDrawAnchors[toName]
+            ?: config.customStartOffsets[fromName]
+            ?: config.customStartOffsets[toName]
+            ?: 0f
+
+    /**
      * Resolves where the "pen" starts: the arc fraction nearest the resolved anchor (or the
      * literal `0`/`1`/`0.5` values for START/END/CENTER). Anchor arbitration is delegated to
      * [DirectionMath.resolve] so `start` and `direction` follow one precedence contract:
@@ -1871,7 +1885,7 @@ class MorphRenderer {
                             drawConfig?.start ?: PathStart.AUTO,
                             strokeDirection,
                             null,
-                            config.customStartOffsets[side.name] ?: 0f,
+                            drawAnchorFor(config, side.name, side.name),
                             config.timing,
                             contourIndex,
                             side.contours.size,

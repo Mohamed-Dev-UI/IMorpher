@@ -28,8 +28,21 @@ data class MorphConfiguration(
     val staggerOrder: DrawOrderStrategy = DrawOrderStrategy.TOP_LEFT_TO_BOTTOM_RIGHT,
     /** Explicit source→target path name mappings (strategy CUSTOM, or overrides under AUTO). */
     val customMappings: List<PathMapping> = emptyList(),
-    /** Per-path normalized arc-fraction (0..1) start overrides, strategy CUSTOM. */
+    /**
+     * Per-path normalized arc-fraction (0..1) start overrides, strategy CUSTOM — morph
+     * alignment only ([StartPointStrategy.CUSTOM] correspondences).
+     *
+     * Retained as a legacy fallback for `PathStart.CUSTOM` draw anchoring when
+     * [customDrawAnchors] has no entry; prefer [customDrawAnchors] so alignment data never
+     * moves the pen.
+     */
     val customStartOffsets: Map<String, Float> = emptyMap(),
+    /**
+     * Normalized arc fraction (0..1) per path name for `PathStart.CUSTOM` draw anchoring:
+     * where the stroke pen begins on that path. When this map has no entry, the renderer
+     * falls back to [customStartOffsets] (legacy behavior) for that path.
+     */
+    val customDrawAnchors: Map<String, Float> = emptyMap(),
     /** Fill reveal defaults for paths animated through fillProgress without an explicit mode. */
     val defaultFillMode: FillMode = FillMode.DIRECTIONAL,
     val defaultFillDirection: DrawDirection = DrawDirection.TOP_RIGHT_TO_BOTTOM_LEFT,
