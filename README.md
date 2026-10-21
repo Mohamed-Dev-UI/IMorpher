@@ -204,13 +204,15 @@ so the two parameters agree.
 
 `start` and `direction` are two independent parameters resolved by one precedence contract:
 
-- **`start` owns the anchor.** An explicit `start != AUTO` always wins, and a spatial
-  direction that would travel from a different anchor is recorded as `START_OVERRIDES_DIRECTION`
-  instead of being silently dropped. `start = AUTO` (the new sentinel, and the DSL and
-  `DrawConfig` default) derives the anchor from `direction` — with `direction = AUTO` that
-  anchor is the geometric top-left point. `start = START` is a literal anchor: arc position 0
-  of the normalized contour. That was the pre-release default behavior (`start` defaulted to
-  arc 0), and it remains reachable through `AUTO`. The combination `start = AUTO` +
+- **`start` owns the anchor.** An explicit `start != AUTO` always wins, and a direction
+  carrying its own anchor (corner/axis/winding) that would travel from a different anchor is
+  recorded as `START_OVERRIDES_DIRECTION` instead of being silently dropped. `start = AUTO`
+  (the new sentinel, and the DSL and `DrawConfig` default) derives the anchor from
+  `direction` — with `direction = AUTO` that anchor is the geometric top-left point.
+  `start = START` is a literal anchor: arc position 0 of the normalized contour — new
+  semantics in this release. The pre-release `start` default (`PathStart.START`) resolved
+  through the direction table instead, so its anchor derived from `direction`; that
+  derived-anchor behavior remains reachable through `AUTO`. The combination `start = AUTO` +
   `direction = CUSTOM` has no concrete anchor to derive: the reveal anchors top-left and
   records `MISSING_CONCRETE_ANCHOR` (intended — that combo previously anchored at arc 0).
 - **`direction` owns the travel.** With `MorphConfiguration.directionTraversal =
