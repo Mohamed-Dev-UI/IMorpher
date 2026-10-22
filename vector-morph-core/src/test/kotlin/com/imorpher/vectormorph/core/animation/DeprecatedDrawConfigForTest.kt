@@ -32,9 +32,10 @@ import org.junit.Test
  * has no clip-named public accessor (shipped state); renderers read the direction from
  * the [PathFrameValues.clipReveal] slot the evaluator populates.
  *
- * The deprecation wording is pinned for real: Kotlin's `@Deprecated` is RUNTIME-invisible
- * to plain JVM reflection and KDoc is erased at compile time, so the deprecation message
- * is scanned from the compiled class' annotation constant in
+ * The deprecation wording is pinned for real: Kotlin's `@Deprecated` compiles to a runtime-
+ * retained `kotlin.Deprecated` marker WITHOUT a `java.lang.Deprecated` mirror, so reflection on
+ * `java.lang.Deprecated` cannot observe it, and KDoc is erased at compile time — so the marker's
+ * presence and the deprecation message are scanned from the compiled class' annotation constant in
  * [deprecationMessagePinsTypedReplacementsAndTheFillClipAsymmetry].
  */
 @Suppress("DEPRECATION")
