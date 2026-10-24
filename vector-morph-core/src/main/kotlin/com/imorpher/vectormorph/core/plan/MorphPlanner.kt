@@ -682,6 +682,11 @@ class MorphPlanCache(
         return plan
     }
 
+    /** Returns the cached plan for the pair without building one, or null on a miss. */
+    @Synchronized
+    fun get(from: PreparedVector, to: PreparedVector, config: MorphConfiguration): MorphPlan? =
+        cache[Key(from.contentKey, to.contentKey, config)]
+
     /**
      * Evicts least-recently-used plans until the cache holds at most [bytes] estimated bytes.
      * Wire this to `ComponentCallbacks2.onTrimMemory` (see `MorphCaches.trim` in the compose

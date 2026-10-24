@@ -2,7 +2,6 @@ package com.imorpher.vectormorph.compose
 
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -10,6 +9,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,6 +35,7 @@ import com.imorpher.vectormorph.core.plan.MorphPlanner
 import com.imorpher.vectormorph.compose.renderer.MorphRenderer
 import com.imorpher.vectormorph.core.model.FallbackStrategy
 import java.util.WeakHashMap
+import kotlinx.coroutines.flow.first
 
 /**
  * A reusable single-vector animation definition.
@@ -57,20 +58,27 @@ data class VectorAnimationDefinition(
 fun rememberVectorAnimation(
     targetProgress: Float = 1f,
     animationSpec: AnimationSpec<Float> = tween(400),
-    motionPreference: MotionPreference = MotionPreference.FULL,
+    motionPreference: MotionPreference? = null,
 ): State<Float> {
+    val preference = motionPreference ?: rememberMotionPreference()
     val bounded = targetProgress.coerceIn(0f, 1f)
-    val spec = when (motionPreference) {
-        MotionPreference.REDUCED -> tween<Float>(durationMillis = 120)
-        else -> animationSpec
-    }
-    val animated = animateFloatAsState(
-        targetValue = bounded,
-        animationSpec = spec,
-        label = "vectorAnimationProgress",
+    // Animatable (not animateFloatAsState) so the target change keys the effect and the spec is
+    // read through rememberUpdatedState: default `tween(...)` expressions allocate a new instance
+    // on every recomposition, and keying an effect on that identity restarts the animation each
+    // frame — the animation never settles and onSettled never fires.
+    val progress = remember { Animatable(bounded) }
+    val state = remember(progress) { derivedStateOf { progress.value } }
+    val latestSpec = rememberUpdatedState(
+        if (preference == MotionPreference.REDUCED) tween<Float>(durationMillis = 120) else animationSpec,
     )
+    LaunchedEffect(bounded, preference) {
+        when (preference) {
+            MotionPreference.INSTANT -> progress.snapTo(bounded)
+            else -> progress.animateTo(bounded, latestSpec.value)
+        }
+    }
     val instant = rememberUpdatedState(bounded)
-    return if (motionPreference == MotionPreference.INSTANT) instant else animated
+    return if (preference == MotionPreference.INSTANT) instant else state
 }
 
 /** Variant keyed to a reusable [VectorAnimationDefinition]. */
@@ -79,7 +87,7 @@ fun rememberVectorAnimation(
     animation: VectorAnimationDefinition,
     targetProgress: Float = 1f,
     animationSpec: AnimationSpec<Float> = tween(400),
-    motionPreference: MotionPreference = MotionPreference.FULL,
+    motionPreference: MotionPreference? = null,
 ): State<Float> = rememberVectorAnimation(targetProgress, animationSpec, motionPreference)
 
 // ------------------------------------------------------------------ morphs, untinted
@@ -130,18 +138,22 @@ fun MorphIcon(
     configuration: MorphConfiguration = MorphConfiguration.Default,
     animation: VectorAnimationSpec? = configuration.animation,
     contentDescription: String? = null,
-    motionPreference: MotionPreference = MotionPreference.FULL,
+    motionPreference: MotionPreference? = null,
+    onSettled: ((Boolean) -> Unit)? = null,
     width: Dp = to.defaultWidth,
     height: Dp = to.defaultHeight,
     alignment: Alignment = Alignment.Center,
 ) {
     val effectiveConfiguration = configuration.copy(animation = animation)
-    val progress by rememberVectorAnimation(
+    val resolvedMotion = motionPreference ?: rememberMotionPreference()
+    val progressState = rememberVectorAnimation(
         targetProgress = if (selected) 1f else 0f,
         animationSpec = animationSpec,
-        motionPreference = motionPreference,
+        motionPreference = resolvedMotion,
     )
-    val renderConfiguration = if (motionPreference == MotionPreference.CROSSFADE_ONLY) {
+    val progress by progressState
+    observeSettled(selected, progressState, onSettled)
+    val renderConfiguration = if (resolvedMotion == MotionPreference.CROSSFADE_ONLY) {
         effectiveConfiguration.copy(fallback = FallbackStrategy.CROSSFADE)
     } else effectiveConfiguration
     val plan = rememberPlan(from, to, renderConfiguration)
@@ -221,18 +233,22 @@ fun MorphIcon(
     configuration: MorphConfiguration = MorphConfiguration.Default,
     animation: VectorAnimationSpec? = configuration.animation,
     contentDescription: String? = null,
-    motionPreference: MotionPreference = MotionPreference.FULL,
+    motionPreference: MotionPreference? = null,
+    onSettled: ((Boolean) -> Unit)? = null,
     width: Dp = to.defaultWidth,
     height: Dp = to.defaultHeight,
     alignment: Alignment = Alignment.Center,
 ) {
     val effectiveConfiguration = configuration.copy(animation = animation)
-    val progress by rememberVectorAnimation(
+    val resolvedMotion = motionPreference ?: rememberMotionPreference()
+    val progressState = rememberVectorAnimation(
         targetProgress = if (selected) 1f else 0f,
         animationSpec = animationSpec,
-        motionPreference = motionPreference,
+        motionPreference = resolvedMotion,
     )
-    val renderConfiguration = if (motionPreference == MotionPreference.CROSSFADE_ONLY) {
+    val progress by progressState
+    observeSettled(selected, progressState, onSettled)
+    val renderConfiguration = if (resolvedMotion == MotionPreference.CROSSFADE_ONLY) {
         effectiveConfiguration.copy(fallback = FallbackStrategy.CROSSFADE)
     } else effectiveConfiguration
     val plan = rememberPlan(from, to, renderConfiguration)
@@ -316,18 +332,22 @@ fun MorphIcon(
     configuration: MorphConfiguration = MorphConfiguration.Default,
     animation: VectorAnimationSpec? = configuration.animation,
     contentDescription: String? = null,
-    motionPreference: MotionPreference = MotionPreference.FULL,
+    motionPreference: MotionPreference? = null,
+    onSettled: ((Boolean) -> Unit)? = null,
     width: Dp = to.defaultWidth,
     height: Dp = to.defaultHeight,
     alignment: Alignment = Alignment.Center,
 ) {
     val effectiveConfiguration = configuration.copy(animation = animation)
-    val progress by rememberVectorAnimation(
+    val resolvedMotion = motionPreference ?: rememberMotionPreference()
+    val progressState = rememberVectorAnimation(
         targetProgress = if (selected) 1f else 0f,
         animationSpec = animationSpec,
-        motionPreference = motionPreference,
+        motionPreference = resolvedMotion,
     )
-    val renderConfiguration = if (motionPreference == MotionPreference.CROSSFADE_ONLY) {
+    val progress by progressState
+    observeSettled(selected, progressState, onSettled)
+    val renderConfiguration = if (resolvedMotion == MotionPreference.CROSSFADE_ONLY) {
         effectiveConfiguration.copy(fallback = FallbackStrategy.CROSSFADE)
     } else effectiveConfiguration
     val plan = rememberPlan(from, to, renderConfiguration)
@@ -358,7 +378,7 @@ fun VectorAnimation(
     animationSpec: AnimationSpec<Float> = tween(400),
     configuration: MorphConfiguration = MorphConfiguration.Default,
     contentDescription: String? = null,
-    motionPreference: MotionPreference = MotionPreference.FULL,
+    motionPreference: MotionPreference? = null,
     width: Dp = vector.defaultWidth,
     height: Dp = vector.defaultHeight,
     alignment: Alignment = Alignment.Center,
@@ -396,7 +416,7 @@ fun VectorAnimation(
     animationSpec: AnimationSpec<Float> = tween(400),
     configuration: MorphConfiguration = MorphConfiguration.Default,
     contentDescription: String? = null,
-    motionPreference: MotionPreference = MotionPreference.FULL,
+    motionPreference: MotionPreference? = null,
     width: Dp = vector.defaultWidth,
     height: Dp = vector.defaultHeight,
     alignment: Alignment = Alignment.Center,
@@ -439,7 +459,7 @@ fun VectorAnimation(
     animationSpec: AnimationSpec<Float> = tween(400),
     configuration: MorphConfiguration = MorphConfiguration.Default,
     contentDescription: String? = null,
-    motionPreference: MotionPreference = MotionPreference.FULL,
+    motionPreference: MotionPreference? = null,
     width: Dp = vector.defaultWidth,
     height: Dp = vector.defaultHeight,
     alignment: Alignment = Alignment.Center,
@@ -476,22 +496,23 @@ private fun rememberAutoPlayProgress(
     vector: ImageVector,
     animation: VectorAnimationSpec,
     animationSpec: AnimationSpec<Float>,
-    motionPreference: MotionPreference,
+    motionPreference: MotionPreference?,
     enabled: Boolean,
 ): State<Float> {
-    val effectiveSpec = when (motionPreference) {
+    val preference = motionPreference ?: rememberMotionPreference()
+    val effectiveSpec = when (preference) {
         MotionPreference.REDUCED -> tween<Float>(durationMillis = 120)
         else -> animationSpec
     }
     val progress = remember(vector, animation) { Animatable(0f) }
-    val fallback = rememberUpdatedState(if (motionPreference == MotionPreference.INSTANT) 1f else 0f)
+    val fallback = rememberUpdatedState(if (preference == MotionPreference.INSTANT) 1f else 0f)
     val animatedProgress = remember(progress) { derivedStateOf { progress.value } }
-    LaunchedEffect(vector, animation, animationSpec, motionPreference, enabled) {
-        if (!enabled || motionPreference == MotionPreference.INSTANT) return@LaunchedEffect
+    LaunchedEffect(vector, animation, animationSpec, preference, enabled) {
+        if (!enabled || preference == MotionPreference.INSTANT) return@LaunchedEffect
         progress.snapTo(0f)
         progress.animateTo(1f, effectiveSpec)
     }
-    return if (enabled && motionPreference != MotionPreference.INSTANT) animatedProgress else fallback
+    return if (enabled && preference != MotionPreference.INSTANT) animatedProgress else fallback
 }
 
 /** Fully manual animation driver: the caller owns progress and can seek deterministically. */
@@ -588,7 +609,7 @@ fun DrawIcon(
     animationSpec: AnimationSpec<Float> = tween(400),
     configuration: MorphConfiguration = MorphConfiguration.Default,
     contentDescription: String? = null,
-    motionPreference: MotionPreference = MotionPreference.FULL,
+    motionPreference: MotionPreference? = null,
     width: Dp = vector.defaultWidth,
     height: Dp = vector.defaultHeight,
     alignment: Alignment = Alignment.Center,
@@ -616,7 +637,7 @@ fun DrawIcon(
     animationSpec: AnimationSpec<Float> = tween(400),
     configuration: MorphConfiguration = MorphConfiguration.Default,
     contentDescription: String? = null,
-    motionPreference: MotionPreference = MotionPreference.FULL,
+    motionPreference: MotionPreference? = null,
     width: Dp = vector.defaultWidth,
     height: Dp = vector.defaultHeight,
     alignment: Alignment = Alignment.Center,
@@ -646,7 +667,7 @@ fun DrawIcon(
     animationSpec: AnimationSpec<Float> = tween(400),
     configuration: MorphConfiguration = MorphConfiguration.Default,
     contentDescription: String? = null,
-    motionPreference: MotionPreference = MotionPreference.FULL,
+    motionPreference: MotionPreference? = null,
     width: Dp = vector.defaultWidth,
     height: Dp = vector.defaultHeight,
     alignment: Alignment = Alignment.Center,
@@ -664,6 +685,28 @@ fun DrawIcon(
     height = height,
     alignment = alignment,
 )
+
+/**
+ * Fires [onSettled] once each time [progress] comes to rest at the current selection.
+ *
+ * A selection change restarts the effect, so an interrupted transition never reports a settled
+ * state it did not reach; the callback runs exactly once per completed transition.
+ */
+@Composable
+private fun observeSettled(
+    selected: Boolean,
+    progress: State<Float>,
+    onSettled: ((Boolean) -> Unit)?,
+) {
+    val callback = rememberUpdatedState(onSettled)
+    val target = if (selected) 1f else 0f
+    // `animationSpec` and `motionPreference` are intentionally not keys: callers commonly pass a
+    // fresh `tween(...)` instance per composition, which would restart the observer every frame.
+    LaunchedEffect(selected) {
+        snapshotFlow { progress.value }.first { it == target }
+        callback.value?.invoke(selected)
+    }
+}
 
 // ------------------------------------------------------------------ shared plumbing
 
@@ -778,5 +821,5 @@ private fun rememberPlan(
 
 /** Compiles [vector] once per instance, sharing the result across all morphs that use it. */
 @Synchronized
-private fun prepared(vector: ImageVector): PreparedVector =
+internal fun prepared(vector: ImageVector): PreparedVector =
     preparedVectors.getOrPut(vector) { VectorCompiler.compile(vector) }
