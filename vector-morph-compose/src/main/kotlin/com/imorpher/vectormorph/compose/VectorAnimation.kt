@@ -11,6 +11,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -97,6 +98,7 @@ fun MorphVector(
     contentDescription: String? = null,
     width: Dp = to.defaultWidth,
     height: Dp = to.defaultHeight,
+    alignment: Alignment = Alignment.Center,
 ) {
     val plan = rememberPlan(from, to, configuration)
     VectorPlanCanvas(
@@ -110,6 +112,7 @@ fun MorphVector(
         height = height,
         tintFrom = null,
         tintTo = null,
+        alignment = alignment,
     )
 }
 
@@ -130,6 +133,7 @@ fun MorphIcon(
     motionPreference: MotionPreference = MotionPreference.FULL,
     width: Dp = to.defaultWidth,
     height: Dp = to.defaultHeight,
+    alignment: Alignment = Alignment.Center,
 ) {
     val effectiveConfiguration = configuration.copy(animation = animation)
     val progress by rememberVectorAnimation(
@@ -152,6 +156,7 @@ fun MorphIcon(
         height = height,
         tintFrom = null,
         tintTo = null,
+        alignment = alignment,
     )
 }
 
@@ -178,6 +183,7 @@ fun MorphVector(
     contentDescription: String? = null,
     width: Dp = to.defaultWidth,
     height: Dp = to.defaultHeight,
+    alignment: Alignment = Alignment.Center,
 ) {
     val plan = rememberPlan(from, to, configuration)
     VectorPlanCanvas(
@@ -191,6 +197,7 @@ fun MorphVector(
         height = height,
         tintFrom = tintFrom,
         tintTo = tintTo,
+        alignment = alignment,
     )
 }
 
@@ -217,6 +224,7 @@ fun MorphIcon(
     motionPreference: MotionPreference = MotionPreference.FULL,
     width: Dp = to.defaultWidth,
     height: Dp = to.defaultHeight,
+    alignment: Alignment = Alignment.Center,
 ) {
     val effectiveConfiguration = configuration.copy(animation = animation)
     val progress by rememberVectorAnimation(
@@ -239,6 +247,7 @@ fun MorphIcon(
         height = height,
         tintFrom = tintFrom,
         tintTo = tintTo,
+        alignment = alignment,
     )
 }
 
@@ -267,6 +276,7 @@ fun MorphVector(
     contentDescription: String? = null,
     width: Dp = to.defaultWidth,
     height: Dp = to.defaultHeight,
+    alignment: Alignment = Alignment.Center,
 ) {
     val plan = rememberPlan(from, to, configuration)
     VectorPlanCanvas(
@@ -280,6 +290,7 @@ fun MorphVector(
         height = height,
         tintFrom = tintFrom,
         tintTo = tintTo,
+        alignment = alignment,
     )
 }
 
@@ -308,6 +319,7 @@ fun MorphIcon(
     motionPreference: MotionPreference = MotionPreference.FULL,
     width: Dp = to.defaultWidth,
     height: Dp = to.defaultHeight,
+    alignment: Alignment = Alignment.Center,
 ) {
     val effectiveConfiguration = configuration.copy(animation = animation)
     val progress by rememberVectorAnimation(
@@ -330,6 +342,7 @@ fun MorphIcon(
         height = height,
         tintFrom = tintFrom,
         tintTo = tintTo,
+        alignment = alignment,
     )
 }
 
@@ -348,6 +361,7 @@ fun VectorAnimation(
     motionPreference: MotionPreference = MotionPreference.FULL,
     width: Dp = vector.defaultWidth,
     height: Dp = vector.defaultHeight,
+    alignment: Alignment = Alignment.Center,
 ) {
     val automaticProgress by rememberAutoPlayProgress(
         vector = vector,
@@ -385,6 +399,7 @@ fun VectorAnimation(
     motionPreference: MotionPreference = MotionPreference.FULL,
     width: Dp = vector.defaultWidth,
     height: Dp = vector.defaultHeight,
+    alignment: Alignment = Alignment.Center,
 ) {
     val automaticProgress by rememberAutoPlayProgress(
         vector = vector,
@@ -398,6 +413,7 @@ fun VectorAnimation(
         progress = progress ?: automaticProgress,
         tintFrom = tintFrom,
         tintTo = tintTo,
+        alignment = alignment,
         modifier = modifier,
         contentDescription = contentDescription,
         width = width,
@@ -426,6 +442,7 @@ fun VectorAnimation(
     motionPreference: MotionPreference = MotionPreference.FULL,
     width: Dp = vector.defaultWidth,
     height: Dp = vector.defaultHeight,
+    alignment: Alignment = Alignment.Center,
 ) {
     val automaticProgress by rememberAutoPlayProgress(
         vector = vector,
@@ -439,6 +456,7 @@ fun VectorAnimation(
         progress = progress ?: automaticProgress,
         tintFrom = tintFrom,
         tintTo = tintTo,
+        alignment = alignment,
         modifier = modifier,
         contentDescription = contentDescription,
         width = width,
@@ -485,12 +503,14 @@ fun VectorAnimator(
     contentDescription: String? = null,
     width: Dp = animation.vector.defaultWidth,
     height: Dp = animation.vector.defaultHeight,
+    alignment: Alignment = Alignment.Center,
 ) {
     VectorAnimatorCore(
         animation = animation,
         progress = progress,
         tintFrom = null,
         tintTo = null,
+        alignment = alignment,
         modifier = modifier,
         contentDescription = contentDescription,
         width = width,
@@ -513,12 +533,14 @@ fun VectorAnimator(
     contentDescription: String? = null,
     width: Dp = animation.vector.defaultWidth,
     height: Dp = animation.vector.defaultHeight,
+    alignment: Alignment = Alignment.Center,
 ) {
     VectorAnimatorCore(
         animation = animation,
         progress = progress,
         tintFrom = tintFrom,
         tintTo = tintTo,
+        alignment = alignment,
         modifier = modifier,
         contentDescription = contentDescription,
         width = width,
@@ -542,12 +564,14 @@ fun VectorAnimator(
     contentDescription: String? = null,
     width: Dp = animation.vector.defaultWidth,
     height: Dp = animation.vector.defaultHeight,
+    alignment: Alignment = Alignment.Center,
 ) {
     VectorAnimatorCore(
         animation = animation,
         progress = progress,
         tintFrom = tintFrom,
         tintTo = tintTo,
+        alignment = alignment,
         modifier = modifier,
         contentDescription = contentDescription,
         width = width,
@@ -567,6 +591,7 @@ fun DrawIcon(
     motionPreference: MotionPreference = MotionPreference.FULL,
     width: Dp = vector.defaultWidth,
     height: Dp = vector.defaultHeight,
+    alignment: Alignment = Alignment.Center,
 ) = VectorAnimation(
     vector = vector,
     animation = animation,
@@ -576,7 +601,8 @@ fun DrawIcon(
     contentDescription = contentDescription,
     motionPreference = motionPreference,
     width = width,
-    height = height
+    height = height,
+    alignment = alignment,
 )
 
 /** Convenience drawing entry point with a color tint that transitions from [tintFrom] to [tintTo]. */
@@ -593,6 +619,7 @@ fun DrawIcon(
     motionPreference: MotionPreference = MotionPreference.FULL,
     width: Dp = vector.defaultWidth,
     height: Dp = vector.defaultHeight,
+    alignment: Alignment = Alignment.Center,
 ) = VectorAnimation(
     vector = vector,
     animation = animation,
@@ -604,7 +631,8 @@ fun DrawIcon(
     contentDescription = contentDescription,
     motionPreference = motionPreference,
     width = width,
-    height = height
+    height = height,
+    alignment = alignment,
 )
 
 /** Convenience drawing entry point with a gradient tint that transitions from [tintFrom] to [tintTo]. */
@@ -621,6 +649,7 @@ fun DrawIcon(
     motionPreference: MotionPreference = MotionPreference.FULL,
     width: Dp = vector.defaultWidth,
     height: Dp = vector.defaultHeight,
+    alignment: Alignment = Alignment.Center,
 ) = VectorAnimation(
     vector = vector,
     animation = animation,
@@ -632,7 +661,8 @@ fun DrawIcon(
     contentDescription = contentDescription,
     motionPreference = motionPreference,
     width = width,
-    height = height
+    height = height,
+    alignment = alignment,
 )
 
 // ------------------------------------------------------------------ shared plumbing
@@ -649,6 +679,7 @@ private fun VectorAnimatorCore(
     progress: Float,
     tintFrom: Any?,
     tintTo: Any?,
+    alignment: Alignment,
     modifier: Modifier,
     contentDescription: String?,
     width: Dp,
@@ -667,6 +698,7 @@ private fun VectorAnimatorCore(
         height = height,
         tintFrom = tintFrom,
         tintTo = tintTo,
+        alignment = alignment,
     )
 }
 
@@ -689,6 +721,7 @@ private fun VectorPlanCanvas(
     height: Dp,
     tintFrom: Any?,
     tintTo: Any?,
+    alignment: Alignment,
 ) {
     val planningAnimation = animation ?: configuration.animation
     val evaluator = remember(plan, planningAnimation, configuration.colorSpace, configuration.staggerDelay, configuration.staggerOrder) {
@@ -711,7 +744,7 @@ private fun VectorPlanCanvas(
     }
     Canvas(modifier = accessibleModifier.size(width, height)) {
         evaluator?.evaluate(progress.coerceIn(0f, 1f), frame)
-        renderer.render(this, plan, frame, progress, configuration, tintFrom, tintTo)
+        renderer.render(this, plan, frame, progress, configuration, tintFrom, tintTo, alignment)
     }
 }
 

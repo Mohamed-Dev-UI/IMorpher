@@ -1,11 +1,14 @@
 package com.imorpher.vectormorph.compose.renderer
 
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.PathMeasure
@@ -21,10 +24,13 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import com.imorpher.vectormorph.core.animation.EvaluatedFrame
 import com.imorpher.vectormorph.core.animation.PropKey
 import com.imorpher.vectormorph.core.animation.TimelineEvaluator
 import com.imorpher.vectormorph.core.animation.VectorAnimation
+import com.imorpher.vectormorph.core.animation.CustomVectorAnimation
 import com.imorpher.vectormorph.core.animation.CustomVectorPathOverrides
 import com.imorpher.vectormorph.core.animation.CustomVectorPathState
 import com.imorpher.vectormorph.core.geometry.ContourData
@@ -51,6 +57,7 @@ import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
@@ -157,6 +164,8 @@ class MorphRenderer {
     /** Reused paint for the tint saveLayer (kept here so tinting allocates nothing per frame). */
     private val tintLayerPaint = Paint()
 
+
+
     /** Layer paint for the per-path isolation saveLayer used by tint compositing. */
     private val isolatePaint = Paint()
 
@@ -207,6 +216,7 @@ class MorphRenderer {
         config: MorphConfiguration,
         tintFrom: Any? = null,
         tintTo: Any? = null,
+        alignment: Alignment = Alignment.Center,
     ) {
         drawWarnings.clear()
         drawAnchors.clear()
@@ -222,8 +232,24 @@ class MorphRenderer {
         val scaleX = drawScope.size.width / vw
         val scaleY = drawScope.size.height / vh
         val uniform = min(scaleX, scaleY)
-        val dx = (drawScope.size.width - vw * uniform) / 2f
-        val dy = (drawScope.size.height - vh * uniform) / 2f
+        val contentWidth = vw * uniform
+        val contentHeight = vh * uniform
+        // Alignment.Center keeps the exact historical float centering; other alignments resolve
+        // through Compose's Alignment contract (integer layout offsets, LTR).
+        val dx: Float
+        val dy: Float
+        if (alignment === Alignment.Center) {
+            dx = (drawScope.size.width - contentWidth) / 2f
+            dy = (drawScope.size.height - contentHeight) / 2f
+        } else {
+            val offset = alignment.align(
+                size = IntSize(contentWidth.roundToInt(), contentHeight.roundToInt()),
+                space = IntSize(drawScope.size.width.roundToInt(), drawScope.size.height.roundToInt()),
+                layoutDirection = LayoutDirection.Ltr,
+            )
+            dx = offset.x.toFloat()
+            dy = offset.y.toFloat()
+        }
 
         val vAlpha = frame.vectorProps[PropKey.ALPHA.ordinal].takeUnless { it.isNaN() } ?: 1f
         val tintFromSpec = tintSpecOf(tintFrom, drawScope.size, fromEndpoint = true)
@@ -274,17 +300,27 @@ class MorphRenderer {
         // premultiply exactly (mix of colors at the icon's own alpha) instead of the
         // double-attenuation two SrcIn passes would produce.
         val canvas = drawScope.drawContext.canvas
+        // Tight layer bounds: the icon rect plus a margin for strokes and animated transforms,
+        // instead of a full viewport of padding on every side. saveLayer cost scales with the
+        // layer area, so this is the dominant tint optimization for large icon surfaces.
+        val margin = max(contentWidth, contentHeight) * 0.5f + maxStrokeWidth(plan) * uniform
         val layerRect = Rect(
-            -dx - uniform * vw,
-            -dy - uniform * vh,
-            drawScope.size.width + uniform * vw,
-            drawScope.size.height + uniform * vh,
+            dx - margin,
+            dy - margin,
+            dx + contentWidth + margin,
+            dy + contentHeight + margin,
         )
+        // Solid tints need no SrcIn repaint rect: the layer's color filter recolors every pixel
+        // while keeping its alpha, exactly like the rect path but without a full-canvas draw.
+        val solidTint = ((tintResult as? GradientInterpolator.Result.Interpolated)?.brush as? SolidColor)
+        if (solidTint != null) {
+            tintLayerPaint.colorFilter = ColorFilter.tint(solidTint.value, BlendMode.SrcIn)
+        }
         canvas.saveLayer(layerRect, tintLayerPaint)
         try {
             drawIconContents()
             when (tintResult) {
-                is GradientInterpolator.Result.Interpolated -> drawScope.drawRect(
+                is GradientInterpolator.Result.Interpolated -> if (solidTint == null) drawScope.drawRect(
                     brush = tintResult.brush,
                     topLeft = Offset.Zero,
                     size = drawScope.size,
@@ -310,8 +346,39 @@ class MorphRenderer {
             }
         } finally {
             canvas.restore()
+            tintLayerPaint.colorFilter = null
         }
         drawDebug()
+    }
+
+    /** Largest authored stroke width in [plan]'s viewport units (tint layer padding). */
+    private fun maxStrokeWidth(plan: MorphPlan): Float {
+        var widest = 0f
+        for (pair in plan.pairs) {
+            pair.fromPath?.let { widest = max(widest, it.strokeWidth) }
+            pair.toPath?.let { widest = max(widest, it.strokeWidth) }
+        }
+        return widest
+    }
+
+    /**
+     * Runs a [CustomVectorAnimation] callback exactly once per failing instance: exceptions are
+     * caught, recorded as a draw warning, and the callback is skipped from then on.
+     */
+    private fun runCustomizer(
+        animation: VectorAnimation?,
+        state: CustomVectorPathState,
+    ): CustomVectorPathOverrides? {
+        val customizer = animation?.customizer ?: return null
+        if (customizer in failedCustomizers) return null
+        return try {
+            customizer.transform(state)
+        } catch (exception: Exception) {
+            failedCustomizers.add(customizer)
+            drawWarnings.add(DrawResolutionWarning.CUSTOM_ANIMATION_FAILED)
+            CustomizerFailures.record(exception)
+            null
+        }
     }
 
     /**
@@ -409,6 +476,15 @@ class MorphRenderer {
 
     private companion object {
         fun configOrderDefault() = com.imorpher.vectormorph.core.model.DrawOrderStrategy.BY_INDEX
+
+        /**
+         * Custom animation callbacks that threw once, process-wide. A callback is disabled after
+         * its first failure so a buggy per-frame callback cannot crash every subsequent frame
+         * (or every new renderer); the failure is surfaced through the frame's draw warnings and
+         * the pair renders exactly as if no customizer were set.
+         */
+        val failedCustomizers: MutableSet<CustomVectorAnimation> =
+            java.util.Collections.newSetFromMap(java.util.WeakHashMap())
     }
 
     /** Rebuilds the per-plan scratch state (group names, merged props, contour extras). */
@@ -774,7 +850,8 @@ class MorphRenderer {
         val props = frame.pathProps[pair.index]
         var alphaOverride = props.props[PropKey.ALPHA.ordinal].takeUnless { it.isNaN() }
         val morphProgress = TimelineEvaluator.morphFraction(props.props, p)
-        val custom = config.animation?.customizer?.transform(
+        val custom = runCustomizer(
+            config.animation,
             CustomVectorPathState(
                 pair.index, pair.fromPath, pair.toPath, p, morphProgress,
                 props.props[PropKey.DRAW_PROGRESS.ordinal].takeUnless { it.isNaN() } ?: p,

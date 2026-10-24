@@ -269,6 +269,9 @@ enum class DrawResolutionWarning {
     CENTER_OUT_DIRECTION_ON_STROKE,
     /** The direction supplied no concrete anchor to derive (e.g. `DrawDirection.CUSTOM`). */
     MISSING_CONCRETE_ANCHOR,
+
+    /** A `CustomVectorAnimation` callback threw and has been disabled for this renderer. */
+    CUSTOM_ANIMATION_FAILED,
 }
 
 /**
