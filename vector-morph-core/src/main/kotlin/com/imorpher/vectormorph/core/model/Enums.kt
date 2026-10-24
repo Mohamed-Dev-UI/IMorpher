@@ -98,6 +98,23 @@ enum class PathStart {
     CUSTOM,
 }
 
+/**
+ * How a target vector's viewport is mapped into the source viewport before planning.
+ *
+ * Icons are authored against different viewport boxes; morphing requires both sides in one
+ * coordinate space.
+ */
+enum class ViewportNormalization {
+    /** Scale X and Y independently so the target fills the source viewport exactly. */
+    STRETCH,
+
+    /**
+     * Scale uniformly by the smaller axis ratio and centre the result: the target keeps its
+     * authored aspect ratio, letterboxed inside the source viewport instead of distorted.
+     */
+    FIT,
+}
+
 /** How closed contours align their starting points before morphing. */
 enum class StartPointStrategy {
     /**

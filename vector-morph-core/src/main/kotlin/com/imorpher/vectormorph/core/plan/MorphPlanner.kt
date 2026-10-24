@@ -21,6 +21,7 @@ import com.imorpher.vectormorph.core.model.PreparedPath
 import com.imorpher.vectormorph.core.model.PathStart
 import com.imorpher.vectormorph.core.model.StartPointStrategy
 import com.imorpher.vectormorph.core.model.StrokeFillStrategy
+import com.imorpher.vectormorph.core.model.ViewportNormalization
 import com.imorpher.vectormorph.core.validation.MorphValidator
 import kotlin.math.abs
 import kotlin.math.hypot
@@ -54,7 +55,7 @@ object MorphPlanner {
         // ImageVector paths are expressed in viewport coordinates. Put both vectors in the
         // source viewport before matching so equal normalized shapes are compared and rendered
         // at the same size even when their authored viewport dimensions differ.
-        val normalizedTo = normalizeViewport(to, from.viewportWidth, from.viewportHeight)
+        val normalizedTo = normalizeViewport(to, from.viewportWidth, from.viewportHeight, config.viewportNormalization)
         val (rawMatches, pathWarnings) = PathMatcher.match(from, normalizedTo, config.pathMatching, config.customMappings)
         val (matches, nearestWarnings) = if (config.missingPath == MissingPathBehavior.MORPH_FROM_NEAREST) {
             pairNearestOrphans(rawMatches)
@@ -138,18 +139,41 @@ object MorphPlanner {
         )
     }
 
-    /** Scales prepared target geometry into the source viewport once, before matching/planning. */
-    private fun normalizeViewport(vector: PreparedVector, width: Float, height: Float): PreparedVector {
+    /**
+     * Scales prepared target geometry into the source viewport once, before matching/planning.
+     * [ViewportNormalization.STRETCH] scales each axis independently; [ViewportNormalization.FIT]
+     * uses one uniform scale and centres the letterboxed geometry.
+     */
+    private fun normalizeViewport(
+        vector: PreparedVector,
+        width: Float,
+        height: Float,
+        normalization: ViewportNormalization = ViewportNormalization.STRETCH,
+    ): PreparedVector {
         if (vector.viewportWidth <= 0f || vector.viewportHeight <= 0f || width <= 0f || height <= 0f ||
             (vector.viewportWidth == width && vector.viewportHeight == height)
         ) return vector
 
         val sx = width / vector.viewportWidth
         val sy = height / vector.viewportHeight
-        val strokeScale = kotlin.math.sqrt(kotlin.math.abs(sx * sy))
+        val matrix: FloatArray
+        val strokeScale: Float
+        when (normalization) {
+            ViewportNormalization.STRETCH -> {
+                matrix = scaleMatrix(sx, sy)
+                strokeScale = kotlin.math.sqrt(kotlin.math.abs(sx * sy))
+            }
+            ViewportNormalization.FIT -> {
+                val uniform = minOf(sx, sy)
+                val offsetX = (width - vector.viewportWidth * uniform) / 2f
+                val offsetY = (height - vector.viewportHeight * uniform) / 2f
+                matrix = affineMatrix(uniform, uniform, offsetX, offsetY)
+                strokeScale = uniform
+            }
+        }
         val paths = vector.paths.map { path ->
-            val contours = path.contours.map { com.imorpher.vectormorph.core.compiler.VectorCompiler.transformContour(it, scaleMatrix(sx, sy)) }
-            val clips = path.clipContours.map { com.imorpher.vectormorph.core.compiler.VectorCompiler.transformContour(it, scaleMatrix(sx, sy)) }
+            val contours = path.contours.map { com.imorpher.vectormorph.core.compiler.VectorCompiler.transformContour(it, matrix) }
+            val clips = path.clipContours.map { com.imorpher.vectormorph.core.compiler.VectorCompiler.transformContour(it, matrix) }
             var minX = Float.MAX_VALUE; var minY = Float.MAX_VALUE
             var maxX = -Float.MAX_VALUE; var maxY = -Float.MAX_VALUE
             var area = 0f; var length = 0f
@@ -220,6 +244,14 @@ object MorphPlanner {
         0f, sy, 0f, 0f,
         0f, 0f, 1f, 0f,
         0f, 0f, 0f, 1f,
+    )
+
+    /** Column-major 4x4 scale-then-translate matrix (translation in slots 12/13). */
+    private fun affineMatrix(sx: Float, sy: Float, tx: Float, ty: Float) = floatArrayOf(
+        sx, 0f, 0f, 0f,
+        0f, sy, 0f, 0f,
+        0f, 0f, 1f, 0f,
+        tx, ty, 0f, 1f,
     )
 
     /** Replaces orphaned pairs with nearest one-to-one geometry morphs when requested. */
@@ -394,12 +426,13 @@ object MorphPlanner {
     private fun hasFillRuleHole(contours: List<ContourData>): Boolean =
         contours.any { ContourAligner.isFillRuleHole(it, contours) }
 
-    /** Greedy minimum-cost contour assignment; matching by centroid/area/length avoids index-only
-     * mismatches for multi-contour icons while keeping unmatched contours available for fades. */
+    /**
+     * Minimum-cost contour assignment by centroid/area/length (exact for small multi-contour
+     * paths, greedy beyond that). Avoiding index-only mismatches keeps holes paired with holes
+     * while unmatched contours stay available for fades.
+     */
     private fun matchContours(from: List<ContourData>, to: List<ContourData>): List<Pair<Int, Int>> {
         if (from.isEmpty() || to.isEmpty()) return emptyList()
-        data class Candidate(val from: Int, val to: Int, val cost: Float)
-        val candidates = ArrayList<Candidate>(from.size * to.size)
         var minX = Float.MAX_VALUE; var minY = Float.MAX_VALUE
         var maxX = -Float.MAX_VALUE; var maxY = -Float.MAX_VALUE
         (from + to).forEach { contour ->
@@ -414,7 +447,8 @@ object MorphPlanner {
         val toAreas = to.map { abs(com.imorpher.vectormorph.core.geometry.signedArea(it)) }
         val fromCentroids = from.map(::centroid)
         val toCentroids = to.map(::centroid)
-        for (fi in from.indices) for (ti in to.indices) {
+
+        fun contourCost(fi: Int, ti: Int): Float {
             val dx = fromCentroids[fi][0] - toCentroids[ti][0]
             val dy = fromCentroids[fi][1] - toCentroids[ti][1]
             val centerCost = (hypot(dx, dy) / diagonal).coerceAtMost(2f)
@@ -422,7 +456,22 @@ object MorphPlanner {
             val lengthCost = abs(fromLengths[fi].totalLength - toLengths[ti].totalLength) /
                 maxOf(fromLengths[fi].totalLength, toLengths[ti].totalLength, 1e-3f)
             val closureCost = if (from[fi].closed == to[ti].closed) 0f else 0.75f
-            candidates.add(Candidate(fi, ti, centerCost * 0.48f + areaCost * 0.27f + lengthCost * 0.2f + closureCost * 0.05f))
+            return centerCost * 0.48f + areaCost * 0.27f + lengthCost * 0.2f + closureCost * 0.05f
+        }
+
+        if (maxOf(from.size, to.size) <= com.imorpher.vectormorph.core.matching.Assignment.MAX_OPTIMAL_SIZE) {
+            val matrix = Array(from.size) { fi -> FloatArray(to.size) { ti -> contourCost(fi, ti) } }
+            val assignment = com.imorpher.vectormorph.core.matching.Assignment.solve(matrix)
+            return from.indices.mapNotNull { fi ->
+                val ti = assignment[fi]
+                if (ti in to.indices) fi to ti else null
+            }
+        }
+
+        data class Candidate(val from: Int, val to: Int, val cost: Float)
+        val candidates = ArrayList<Candidate>(from.size * to.size)
+        for (fi in from.indices) for (ti in to.indices) {
+            candidates.add(Candidate(fi, ti, contourCost(fi, ti)))
         }
         candidates.sortWith(compareBy<Candidate> { it.cost }.thenBy { it.from }.thenBy { it.to })
         val usedFrom = BooleanArray(from.size)

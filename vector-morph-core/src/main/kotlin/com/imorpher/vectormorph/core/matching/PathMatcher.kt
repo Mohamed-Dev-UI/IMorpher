@@ -128,9 +128,9 @@ object PathMatcher {
     }
 
     /**
-     * Greedy one-to-one assignment: all (source, target) edges sorted by ascending [cost],
-     * cheapest edges claim their paths first. Unpaired sources become fade-outs and unpaired
-     * targets fade-ins, appended after the matched pairs.
+     * Minimum-cost one-to-one assignment: exact (Hungarian) for small path sets, greedy
+     * cheapest-edge otherwise. Unpaired sources become fade-outs and unpaired targets
+     * fade-ins, appended after the matched pairs.
      */
     private fun matchByCost(
         fromPaths: List<PreparedPath>,
@@ -139,6 +139,12 @@ object PathMatcher {
         warnings: MutableList<String>,
     ): List<PathMatch> {
         val diag = maxOf(fromVectorDiag(fromPaths), fromVectorDiag(toPaths)).coerceAtLeast(1f)
+        if (fromPaths.isEmpty() || toPaths.isEmpty()) {
+            return fromPaths.map { PathMatch(it, null) } + toPaths.map { PathMatch(null, it) }
+        }
+        if (maxOf(fromPaths.size, toPaths.size) <= Assignment.MAX_OPTIMAL_SIZE) {
+            return optimalAssignment(fromPaths, toPaths, cost, diag)
+        }
         val edges = ArrayList<Triple<Int, Int, Float>>(fromPaths.size * toPaths.size)
         for ((i, f) in fromPaths.withIndex()) {
             for ((j, t) in toPaths.withIndex()) {
@@ -168,6 +174,34 @@ object PathMatcher {
             if (!usedTargets[j]) list.add(PathMatch(null, t))
         }
         return list
+    }
+
+    /** Exact assignment for small inputs; unmatched only when one side has surplus paths. */
+    private fun optimalAssignment(
+        fromPaths: List<PreparedPath>,
+        toPaths: List<PreparedPath>,
+        cost: (PreparedPath, PreparedPath, Float) -> Float,
+        diag: Float,
+    ): List<PathMatch> {
+        val matrix = Array(fromPaths.size) { i ->
+            FloatArray(toPaths.size) { j -> cost(fromPaths[i], toPaths[j], diag) }
+        }
+        val assignment = Assignment.solve(matrix)
+        val usedTargets = BooleanArray(toPaths.size)
+        val matched = ArrayList<PathMatch>(fromPaths.size + toPaths.size)
+        for (i in fromPaths.indices) {
+            val j = assignment[i]
+            if (j in toPaths.indices) {
+                usedTargets[j] = true
+                matched.add(PathMatch(fromPaths[i], toPaths[j]))
+            } else {
+                matched.add(PathMatch(fromPaths[i], null))
+            }
+        }
+        for (j in toPaths.indices) {
+            if (!usedTargets[j]) matched.add(PathMatch(null, toPaths[j]))
+        }
+        return matched
     }
 
     /**

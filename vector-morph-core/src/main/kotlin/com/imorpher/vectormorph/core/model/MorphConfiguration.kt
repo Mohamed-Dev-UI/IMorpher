@@ -70,6 +70,12 @@ data class MorphConfiguration(
      * largest count that fits the budget, so interpolation still sees equal segment counts.
      */
     val simplificationTolerance: Float = 0.25f,
+    /**
+     * How the target viewport is mapped into the source viewport. [ViewportNormalization.STRETCH]
+     * (default) keeps the historical per-axis scaling; [ViewportNormalization.FIT] preserves the
+     * target's aspect ratio and centres it instead.
+     */
+    val viewportNormalization: ViewportNormalization = ViewportNormalization.STRETCH,
 ) {
     companion object {
         /** Plain, well-behaved default: geometry morph with auto strategies. */
