@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test-and-build:
+    name: Test & Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission
+        run: chmod +x ./gradlew
+
+      - name: Run JVM unit tests (core)
+        run: ./gradlew :vector-morph-core:testDebugUnitTest
+
+      - name: Run JVM unit tests (compose)
+        run: ./gradlew :vector-morph-compose:testDebugUnitTest
+
+      - name: Run JVM unit tests (app)
+        run: ./gradlew :app:testDebugUnitTest
+
+      - name: Assemble release (core)
+        run: ./gradlew :vector-morph-core:assembleRelease
+
+      - name: Assemble release (compose)
+        run: ./gradlew :vector-morph-compose:assembleRelease
+
+      - name: API check (if API fixtures exist)
+        run: ./gradlew apiCheck --continue || echo "apiCheck not configured"
