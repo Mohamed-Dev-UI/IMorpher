@@ -419,7 +419,26 @@ object MorphPlanner {
             strokeFillDraw = strokeFillDraw,
             score = PathMatcher.scorePair(f, t),
             warnings = pairWarnings,
+            clipPairs = alignClipContours(f.clipContours, t.clipContours, config),
         )
+    }
+
+    /**
+     * Aligns inherited clip masks for geometric morphing. Only all-paired clips are aligned:
+     * a mask that drops or invents a contour mid-morph would cut the icon unpredictably, so
+     * unequal counts (or a partial assignment) keep the renderer's legacy midpoint switch.
+     */
+    private fun alignClipContours(
+        from: List<ContourData>,
+        to: List<ContourData>,
+        config: MorphConfiguration,
+    ): List<ContourPairPlan> {
+        if (from.isEmpty() || to.isEmpty() || from.size != to.size) return emptyList()
+        val matches = matchContours(from, to)
+        if (matches.size != from.size) return emptyList()
+        return matches.map { (fi, ti) ->
+            alignContourPair(from[fi], to[ti], config, preserveTargetWinding = false)
+        }
     }
 
     /** Whether any closed contour of the set winds opposite to its enclosing contour. */
@@ -502,9 +521,26 @@ object MorphPlanner {
         ti: Int,
         config: MorphConfiguration,
         preserveTargetWinding: Boolean,
+    ): ContourPairPlan = alignContourPair(
+        sourceContour = f.contours[ci],
+        targetContour = t.contours[ti],
+        config = config,
+        preserveTargetWinding = preserveTargetWinding,
+        customSourceOffset = config.customStartOffsets[f.name],
+        customTargetOffset = config.customStartOffsets[t.name],
+    )
+
+    /** Aligns two contours (winding, start point, subdivision, packing) for interpolation. */
+    private fun alignContourPair(
+        sourceContour: ContourData,
+        targetContour: ContourData,
+        config: MorphConfiguration,
+        preserveTargetWinding: Boolean,
+        customSourceOffset: Float? = null,
+        customTargetOffset: Float? = null,
     ): ContourPairPlan {
-        var source = f.contours[ci]
-        var target = t.contours[ti]
+        var source = sourceContour
+        var target = targetContour
 
         // 1) winding normalization (see the path-level parity guard in [planMorphPair]).
         val strategy = if (preserveTargetWinding) PathDirectionStrategy.PRESERVE else config.pathDirection
@@ -514,8 +550,8 @@ object MorphPlanner {
         // 2) start-point alignment
         val (s2, t2, offset) = ContourAligner.alignStartPoints(
             source, target, config.startPoint,
-            customSourceOffset = config.customStartOffsets[f.name],
-            customTargetOffset = config.customStartOffsets[t.name],
+            customSourceOffset = customSourceOffset,
+            customTargetOffset = customTargetOffset,
         )
         source = s2; target = t2
 

@@ -2,6 +2,7 @@ package com.imorpher.vectormorph.core.plan
 
 import com.imorpher.vectormorph.core.geometry.ArcLengthData
 import com.imorpher.vectormorph.core.geometry.ContourData
+import com.imorpher.vectormorph.core.geometry.Cubic
 import com.imorpher.vectormorph.core.model.FallbackStrategy
 import com.imorpher.vectormorph.core.model.PreparedPath
 import com.imorpher.vectormorph.core.model.PreparedVector
@@ -85,7 +86,46 @@ class PathPairPlan(
     val score: Float = 1f,
     /** Human-readable warnings attached to this pair. */
     val warnings: List<String> = emptyList(),
+    /**
+     * Aligned clip-mask correspondence, present only when both sides carry the same number of
+     * inherited clip contours and every one found a partner. When empty the renderer keeps the
+     * historical midpoint switch between the source and target masks.
+     */
+    val clipPairs: List<ContourPairPlan> = emptyList(),
 )
+
+/**
+ * Interpolates this pair's aligned clip masks at [morphT] (0 = source clips, 1 = target).
+ *
+ * Returns an empty list when the pair has no aligned clip pairs (mismatched clip counts, a
+ * clip on one side only, or a path without group clips), so callers keep the legacy endpoint
+ * switch unchanged. Geometry is packed in [ContourPairPlan] and this is a pure coordinate lerp.
+ */
+fun PathPairPlan.interpolatedClipContours(morphT: Float): List<ContourData> {
+    if (clipPairs.isEmpty()) return emptyList()
+    val t = morphT.coerceIn(0f, 1f)
+    val mt = 1f - t
+    return clipPairs.map { cp ->
+        val n = cp.from.segmentCount
+        val a = cp.from.coords
+        val b = cp.to.coords
+        val segments = ArrayList<Cubic>(n)
+        for (s in 0 until n) {
+            val o = s * 8
+            segments += Cubic(
+                a[o] * mt + b[o] * t,
+                a[o + 1] * mt + b[o + 1] * t,
+                a[o + 2] * mt + b[o + 2] * t,
+                a[o + 3] * mt + b[o + 3] * t,
+                a[o + 4] * mt + b[o + 4] * t,
+                a[o + 5] * mt + b[o + 5] * t,
+                a[o + 6] * mt + b[o + 6] * t,
+                a[o + 7] * mt + b[o + 7] * t,
+            )
+        }
+        ContourData(segments, if (t < 0.5f) cp.from.closed else cp.to.closed)
+    }
+}
 
 /**
  * The fully prepared morph: everything expensive (matching, alignment, subdivision, measurement)

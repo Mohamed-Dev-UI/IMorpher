@@ -50,6 +50,7 @@ import com.imorpher.vectormorph.core.plan.ContourPairPlan
 import com.imorpher.vectormorph.core.plan.MorphPlan
 import com.imorpher.vectormorph.core.plan.PairKind
 import com.imorpher.vectormorph.core.plan.PathPairPlan
+import com.imorpher.vectormorph.core.plan.interpolatedClipContours
 import com.imorpher.vectormorph.core.reveal.DirectionMath
 import com.imorpher.vectormorph.core.reveal.DrawOrder
 import com.imorpher.vectormorph.core.reveal.DrawResolutionWarning
@@ -1186,7 +1187,16 @@ class MorphRenderer {
         val clipProgress = props.props[PropKey.CLIP_PROGRESS.ordinal].takeUnless { it.isNaN() } ?: 1f
         val clipDirection = clipCfg?.direction ?: DrawDirection.TOP_LEFT_TO_BOTTOM_RIGHT
         // Group clips live in viewport space; use the active endpoint while its contents morph.
-        val clipContours = if (morphT < 0.5f) f.clipContours else t.clipContours
+        // Aligned clip masks morph with the geometry instead of switching at the midpoint.
+        // Endpoints keep the exact source/target masks (pixel-identical resting frames);
+        // misaligned or one-sided clips keep the historical switch.
+        val clipContours = if (pair.clipPairs.isNotEmpty() && morphT > 0f && morphT < 1f) {
+            pair.interpolatedClipContours(morphT)
+        } else if (morphT < 0.5f) {
+            f.clipContours
+        } else {
+            t.clipContours
+        }
         val fillCfg = props.fillReveal
             ?: config.animation?.takeIf { fillProgress != null }?.fillRevealFor(
                 f.name, t.name, f.index, t.index, PropKey.FILL_PROGRESS, f.groupNames, t.groupNames,

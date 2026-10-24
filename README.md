@@ -401,7 +401,9 @@ val custom = VectorAnimation {
 
 Group `clipPathData` is retained during compilation. `clipReveal(...)` progressively opens the
 inherited mask along a directional edge, and the renderer applies clips to both morphing and
-static/fading paths. For custom masks and optional geometry boolean operations, convert normalized
+static/fading paths. When both sides declare the same number of inherited clip contours they are
+matched and interpolated along with the geometry, so the mask itself morphs; mismatched or
+one-sided masks switch at the midpoint. For custom masks and optional geometry boolean operations, convert normalized
 contours with `BooleanGeometry.path(...)`, then use `union`, `intersection`, `difference`, or
 `subtract` on Compose `Path`s. These operations run during preparation/callback work, not in the
 normal geometry compiler.
@@ -461,9 +463,9 @@ renderer.
 
 The engine preserves the data exposed by Compose `ImageVector`: viewport and intrinsic size,
 static nested group transforms, paths, fill/stroke brushes and alpha, stroke geometry, path order,
-and group clipping paths. Clip geometry switches between source and target at the midpoint of a
-morph; it is not itself geometrically morphed. Boolean geometry functions operate on Compose
-`Path`s and are opt-in. Custom callbacks run on the drawing thread and should be deterministic and
+and group clipping paths. Aligned group clip masks morph with the geometry; mismatched or
+one-sided masks switch between source and target at the midpoint. Boolean geometry functions
+operate on Compose `Path`s and are opt-in. Custom callbacks run on the drawing thread and should be deterministic and
 lightweight; a callback that throws is disabled after its first failure instead of crashing the
 frame. Unknown custom brushes crossfade.
 
