@@ -82,6 +82,16 @@ class TimelineEvaluator(
     private val tracks: List<VectorAnimation.Track> = animation.tracks
     private val brushTracks: List<VectorAnimation.BrushTrack> = animation.brushTracks
 
+    // ---- per-brush-track result memo -------------------------------------------------
+    // One brush track usually drives many pairs (AllPaths, a group, a repeated name) and
+    // every one of them asks for the same painted brush at the same eased progress. The
+    // memo returns the exact Result computed for the identical (segment, eased) input, so
+    // output stays bit-for-bit unchanged while a frame builds each gradient at most once.
+    private val brushMemoValid = BooleanArray(brushTracks.size)
+    private val brushMemoSegment = arrayOfNulls<VectorAnimation.BrushSegment>(brushTracks.size)
+    private val brushMemoEasedBits = IntArray(brushTracks.size)
+    private val brushMemoResult = arrayOfNulls<GradientInterpolator.Result>(brushTracks.size)
+
     /** Per-pair fill presence, for FILL tracks that must not invent paint on stroke-only paths. */
     private val pairHasFill: BooleanArray = BooleanArray(plan.pairs.size) { i ->
         plan.pairs[i].fromPath?.fill != null || plan.pairs[i].toPath?.fill != null
@@ -264,10 +274,11 @@ class TimelineEvaluator(
             }
         }
 
-        for (bt in brushTracks) {
+        for (brushTrackIndex in brushTracks.indices) {
+            val bt = brushTracks[brushTrackIndex]
             when (val target = bt.target) {
                 is AnimationTarget.Vector -> {
-                    val result = evaluateBrush(bt, p) ?: continue
+                    val result = evaluateBrush(brushTrackIndex, bt, p) ?: continue
                     if (bt.channel == BrushChannel.FILL) {
                         when (result) {
                             is GradientInterpolator.Result.Interpolated -> {
@@ -308,7 +319,7 @@ class TimelineEvaluator(
                         if (i in frame.pathProps.indices) {
                             val localProgress = if (target is AnimationTarget.Group) progressForGroup(p, target.name)
                                 else progressForPair(p, i)
-                            val result = evaluateBrush(bt, localProgress) ?: continue
+                            val result = evaluateBrush(brushTrackIndex, bt, localProgress) ?: continue
                             // A FILL track may only recolor paint that exists: applying it
                             // to a stroke-only path would INVENT a fill (a stroked chevron
                             // would render as a filled triangle — the path's implicit
@@ -404,12 +415,33 @@ class TimelineEvaluator(
         TimingMode.BY_PATH, TimingMode.BY_COMMAND, TimingMode.UNIFORM -> progress
     }
 
-    /** Resolves the active [VectorAnimation.BrushSegment] and interpolates its paint specs. */
-    private fun evaluateBrush(track: VectorAnimation.BrushTrack, progress: Float): GradientInterpolator.Result? {
+    /**
+     * Resolves the active [VectorAnimation.BrushSegment] and interpolates its paint specs,
+     * memoizing the exact [GradientInterpolator.Result] per track. A hit requires the same
+     * segment instance AND identical eased-progress bits, so repeated lookups inside one frame
+     * (many pairs sharing a target) reuse the built brush without perturbing any pixel.
+     */
+    private fun evaluateBrush(
+        trackIndex: Int,
+        track: VectorAnimation.BrushTrack,
+        progress: Float,
+    ): GradientInterpolator.Result? {
         val segment = activeSegment(track.segments, progress) ?: return null
         val localT = segmentLocalT(segment.start, segment.end, progress)
         val eased = segment.easing.transform(localT)
-        return GradientInterpolator.interpolate(segment.from, segment.to, eased, colorSpace)
+        val bits = eased.toRawBits()
+        if (brushMemoValid[trackIndex] &&
+            brushMemoSegment[trackIndex] === segment &&
+            brushMemoEasedBits[trackIndex] == bits
+        ) {
+            return brushMemoResult[trackIndex]
+        }
+        val result = GradientInterpolator.interpolate(segment.from, segment.to, eased, colorSpace)
+        brushMemoValid[trackIndex] = true
+        brushMemoSegment[trackIndex] = segment
+        brushMemoEasedBits[trackIndex] = bits
+        brushMemoResult[trackIndex] = result
+        return result
     }
 
     /**
