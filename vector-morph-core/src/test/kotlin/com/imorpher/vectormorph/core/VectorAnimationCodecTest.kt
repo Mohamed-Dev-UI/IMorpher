@@ -21,6 +21,7 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
@@ -159,15 +160,13 @@ class VectorAnimationCodecTest {
     }
 
     /**
-     * Golden-bytes pin for the typed reveal split (Review Focus 2): VERSION stays 1 and every
-     * reveal record keeps the documented V1 field layout — the mode/start/direction string
-     * slots followed by the nullable fill pair. The stroke record spells the real trio plus
-     * two `false` fill flags; the fill record writes `FORWARD`/`START`/`AUTO` placeholder
-     * strings that no consumer reads and then the real fill pair; the clip record writes
-     * the `FORWARD`/`START` placeholders plus its real moving-edge direction. Decoding the
-     * literal bytes yields the three typed reveals exactly, and re-encoding the decoded
-     * animation replays the same layout (byte-length equality + spot fields + identical
-     * reveals after a second decode).
+     * Golden-bytes pin for v1 decoding (Review Focus 5): the VERSION-1 field layout — the
+     * mode/start/direction string slots followed by the nullable fill pair — must keep decoding
+     * now that the writer emits version 2 typed records. The stroke record spells the real trio
+     * plus two `false` fill flags; the fill record writes `FORWARD`/`START`/`AUTO` placeholder
+     * strings that no consumer reads and then the real fill pair; the clip record writes the
+     * `FORWARD`/`START` placeholders plus its real moving-edge direction. Decoding yields the
+     * three typed reveals exactly; re-encoding switches to version 2 without losing structure.
      */
     @Test
     fun goldenVersionOneBytesDecodeIntoTypedRevealsAndReEncodeToTheSameLayout() {
@@ -205,28 +204,16 @@ class VectorAnimationCodecTest {
                 as ClipRevealConfig,
         )
 
-        // Byte-length equality, then spot fields at the same absolute offsets.
-        assertEquals(layout.bytes.size, reEncoded.size)
-        // (1) the full stroke record replays byte for byte (real trio + two false fill slots)
-        assertArrayEquals(
-            layout.bytes.copyOfRange(layout.strokeRecordStart, layout.strokeRecordEnd),
-            reEncoded.copyOfRange(layout.strokeRecordStart, layout.strokeRecordEnd),
+        // Version 2 writes typed records and 257 easing samples, so a re-encode does NOT
+        // reproduce the v1 byte layout. What must hold is the semantic round-trip and the
+        // version bump; the golden v1 blob above is the forward-compatibility pin.
+        val header = java.io.DataInputStream(java.io.ByteArrayInputStream(reEncoded))
+        assertEquals(0x564D414E, header.readInt())
+        assertEquals("re-encoding a legacy definition writes the current version", 2, header.readInt())
+        assertTrue(
+            "typed records are narrower than the v1 five-slot layout",
+            reEncoded.size != layout.bytes.size,
         )
-        // (2) the fill record's real pair replays byte for byte
-        assertArrayEquals(
-            layout.bytes.copyOfRange(layout.fillPairStart, layout.fillPairEnd),
-            reEncoded.copyOfRange(layout.fillPairStart, layout.fillPairEnd),
-        )
-        // (3) the clip record's real moving-edge field replays at the same position
-        assertArrayEquals(
-            layout.bytes.copyOfRange(layout.clipDirectionStart, layout.clipDirectionEnd),
-            reEncoded.copyOfRange(layout.clipDirectionStart, layout.clipDirectionEnd),
-        )
-        // (4) the legacy trailing null flags (fill-pair slots on stroke/clip) hold their spot
-        assertEquals(layout.bytes[layout.strokeFillModeNullOffset], reEncoded[layout.strokeFillModeNullOffset])
-        assertEquals(layout.bytes[layout.strokeFillDirectionNullOffset], reEncoded[layout.strokeFillDirectionNullOffset])
-        assertEquals(layout.bytes[layout.strokeFillModeNullOffset], 0.toByte())
-        assertEquals(layout.bytes[layout.strokeFillDirectionNullOffset], 0.toByte())
     }
 
     /**
