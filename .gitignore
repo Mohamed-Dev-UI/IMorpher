@@ -25,3 +25,4 @@ local.properties
 /vector-morph-core/build/
 /tools/screen-analyzer/
 /.freebuff/
+/benchmark/build/

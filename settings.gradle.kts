@@ -26,3 +26,4 @@ rootProject.name = "IMorpher"
 include(":app")
 include(":vector-morph-core")
 include(":vector-morph-compose")
+include(":benchmark")
