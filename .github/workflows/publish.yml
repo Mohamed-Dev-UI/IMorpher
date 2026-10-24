@@ -81,6 +81,15 @@ jobs:
       - name: Run unit tests
         run: ./gradlew :vector-morph-core:testDebugUnitTest :vector-morph-compose:testDebugUnitTest :app:testDebugUnitTest
 
+      - name: Build Dokka docs
+        run: ./gradlew dokkaGenerate
+
+      - name: Upload docs
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs
+          path: build/dokka/
+
       - name: Resolve version and release mode
         id: meta
         env:
