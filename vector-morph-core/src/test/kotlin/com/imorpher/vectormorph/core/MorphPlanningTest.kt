@@ -252,7 +252,6 @@ class MorphPlanningTest {
             strokeLineJoin = source.strokeLineJoin,
             strokeLineMiter = source.strokeLineMiter,
             pathFillType = source.pathFillType,
-            blendMode = source.blendMode,
             clipContours = source.clipContours,
             sourceTransform = source.sourceTransform,
             bounds = source.bounds,

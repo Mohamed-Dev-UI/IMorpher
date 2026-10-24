@@ -205,7 +205,7 @@ object MorphPlanner {
                 strokeWidth = path.strokeWidth * strokeScale,
                 strokeLineCap = path.strokeLineCap, strokeLineJoin = path.strokeLineJoin,
                 strokeLineMiter = path.strokeLineMiter, pathFillType = path.pathFillType,
-                blendMode = path.blendMode, clipContours = clips, sourceTransform = path.sourceTransform,
+                clipContours = clips, sourceTransform = path.sourceTransform,
                 bounds = pathBounds, centroidX = cx, centroidY = cy, area = area,
                 totalLength = length, contourLengths = contourLengths, windingSigns = windings,
                 arcLengths = arcs, startFractions = starts,
@@ -573,22 +573,30 @@ object MorphPlanner {
 }
 
 /**
- * LRU-ish cache keyed by (from identity, to identity, configuration).
+ * LRU cache keyed by structural content ([PreparedVector.contentKey]) plus configuration.
+ *
+ * Keying by content rather than instance identity means equal-but-distinct `ImageVector`s share
+ * one plan. Byte accounting approximates the packed geometry the plan holds, so a few enormous
+ * icons cannot pin unbounded memory: every insert evicts the least-recently-used entries until
+ * both the entry-count and byte budgets hold.
+ *
  * Compiled [PreparedVector]s and [MorphPlan]s are immutable, so caching is always safe.
  */
-class MorphPlanCache(private val maxEntries: Int = 32) {
+class MorphPlanCache(
+    private val maxEntries: Int = DEFAULT_MAX_ENTRIES,
+    private val maxBytes: Long = DEFAULT_MAX_BYTES,
+) {
 
     private data class Key(
-        val from: PreparedVector,
-        val to: PreparedVector,
+        val fromKey: String,
+        val toKey: String,
         val config: MorphConfiguration,
     )
 
     /** Access-ordered LRU; plans are immutable so eviction only costs re-planning. */
-    private val cache = object : LinkedHashMap<Key, MorphPlan>(16, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Key, MorphPlan>): Boolean =
-            size > maxEntries
-    }
+    private val cache = LinkedHashMap<Key, MorphPlan>(16, 0.75f, true)
+    private val bytesByKey = HashMap<Key, Long>()
+    private var currentBytes = 0L
 
     /**
      * Returns the cached plan for (from, to, config), building and inserting it via [build]
@@ -596,17 +604,84 @@ class MorphPlanCache(private val maxEntries: Int = 32) {
      */
     @Synchronized
     fun getOrPut(from: PreparedVector, to: PreparedVector, config: MorphConfiguration, build: () -> MorphPlan): MorphPlan {
-        val key = Key(from, to, config)
-        return cache.getOrPut(key, build)
+        val key = Key(from.contentKey, to.contentKey, config)
+        cache[key]?.let { return it }
+        val plan = build()
+        cache[key] = plan
+        val bytes = estimateBytes(plan)
+        bytesByKey[key] = bytes
+        currentBytes += bytes
+        evictToFit()
+        return plan
+    }
+
+    /**
+     * Evicts least-recently-used plans until the cache holds at most [bytes] estimated bytes.
+     * Wire this to `ComponentCallbacks2.onTrimMemory` (see `MorphCaches.trim` in the compose
+     * module) to release memory under pressure.
+     */
+    @Synchronized
+    fun trimToBytes(bytes: Long) {
+        val target = bytes.coerceAtLeast(0L)
+        val iterator = cache.entries.iterator()
+        while (currentBytes > target && iterator.hasNext()) {
+            val entry = iterator.next()
+            currentBytes -= bytesByKey.remove(entry.key) ?: 0L
+            iterator.remove()
+        }
+    }
+
+    /** Evicts eldest entries until the entry-count and byte budgets both hold. */
+    private fun evictToFit() {
+        val iterator = cache.entries.iterator()
+        while ((cache.size > maxEntries || currentBytes > maxBytes) && iterator.hasNext()) {
+            val entry = iterator.next()
+            currentBytes -= bytesByKey.remove(entry.key) ?: 0L
+            iterator.remove()
+        }
     }
 
     /** Drops every cached plan (call after large icon-set changes to release memory). */
     @Synchronized
-    fun clear() = cache.clear()
+    fun clear() {
+        cache.clear()
+        bytesByKey.clear()
+        currentBytes = 0L
+    }
 
     /** Current number of cached plans. */
     @get:Synchronized
     val size: Int get() = cache.size
+
+    /** Current estimated bytes held by cached plans. */
+    @get:Synchronized
+    val byteSize: Long get() = currentBytes
+
+    companion object {
+        /** Default LRU entry cap. */
+        const val DEFAULT_MAX_ENTRIES = 32
+
+        /** Default estimated-byte cap (16 MiB) — a guard rail, not a hard memory limit. */
+        const val DEFAULT_MAX_BYTES: Long = 16L * 1024 * 1024
+
+        /** Per-pair bookkeeping overhead (pair + contour-pair objects) in bytes. */
+        private const val PAIR_OVERHEAD_BYTES = 220L
+
+        /**
+         * Approximates the heap held by [plan]'s packed geometry: 4 bytes per coordinate plus
+         * a fixed per-pair overhead. Used for eviction decisions only, never for correctness.
+         */
+        fun estimateBytes(plan: MorphPlan): Long {
+            var bytes = plan.pairs.size * PAIR_OVERHEAD_BYTES
+            for (pair in plan.pairs) {
+                for (contourPair in pair.contourPairs) {
+                    bytes += (contourPair.from.coords.size + contourPair.to.coords.size) * 4L
+                    bytes += (contourPair.from.arcLength.segmentLengths.size + contourPair.to.arcLength.segmentLengths.size) * 4L
+                }
+            }
+            return bytes
+        }
+    }
 }
 
 /** Convenience: compile both vectors and plan. */

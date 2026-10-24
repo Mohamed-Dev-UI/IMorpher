@@ -719,7 +719,7 @@ private fun VectorPlanCanvas(
 private val preparedVectors = WeakHashMap<ImageVector, PreparedVector>()
 
 /** Process-wide plan cache; plans are immutable, so sharing them across callers is safe. */
-private val planCache = MorphPlanCache(maxEntries = 64)
+internal val planCache = MorphPlanCache(maxEntries = 64)
 
 /**
  * Compiles [from]/[to] and plans their morph, cached on two levels: prepared vectors in a

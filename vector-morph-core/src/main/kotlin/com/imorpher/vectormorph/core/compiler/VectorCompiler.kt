@@ -1,6 +1,5 @@
 package com.imorpher.vectormorph.core.compiler
 
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -173,7 +172,6 @@ object VectorCompiler {
                         strokeLineCap = node.strokeLineCap,
                         strokeLineJoin = node.strokeLineJoin,
                         strokeLineMiter = node.strokeLineMiter,
-                        blendMode = BlendMode.SrcOver,
                         pathFillType = node.pathFillType,
                         clipContours = clip,
                         sourceTransform = decompose2D(matrix),
