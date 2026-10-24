@@ -469,14 +469,23 @@ object MorphPlanner {
         )
         source = s2; target = t2
 
-        // 3) equalize segment counts with arc-length-proportional subdivision
-        val target0 = maxOf(source.segments.size, target.segments.size)
-        var a = Subdivider.equalize(source, target0)
-        var b = Subdivider.equalize(target, target0)
+        // 3) equalize segment counts: subdivide up to the natural max, or simplify both sides
+        //    when the caller set a cheaper segment budget.
+        val natural = maxOf(source.segments.size, target.segments.size)
+        val budget = config.segmentBudget?.coerceAtLeast(2)?.let { minOf(it, natural) } ?: natural
+        var a = fitToBudget(source, budget, config.simplificationTolerance)
+        var b = fitToBudget(target, budget, config.simplificationTolerance)
+        if (a.segments.size != b.segments.size) {
+            // Error-driven reduction may stop at different counts; interpolation requires equal
+            // counts, so lift the smaller side to the larger (both stay within the budget).
+            val common = maxOf(a.segments.size, b.segments.size)
+            a = Subdivider.equalize(a, common)
+            b = Subdivider.equalize(b, common)
+        }
 
         // If subdivision ballooned (very different command counts), re-align once more so the
         // newly inserted split points also correspond well.
-        if (abs(source.segments.size - target.segments.size) > 2 && target0 > 8) {
+        if (abs(source.segments.size - target.segments.size) > 2 && natural > 8) {
             val (ra, rb, _) = ContourAligner.alignStartPoints(a, b, StartPointStrategy.AUTO)
             a = ra; b = rb
         }
@@ -500,6 +509,14 @@ object MorphPlanner {
             startAlignmentOffset = offset,
         )
     }
+
+    /** Brings one contour to [budget] segments by subdividing up or simplifying down. */
+    private fun fitToBudget(contour: ContourData, budget: Int, tolerance: Float): ContourData =
+        if (contour.segments.size <= budget) {
+            Subdivider.equalize(contour, budget)
+        } else {
+            Subdivider.reduce(contour, budget, tolerance)
+        }
 
     /**
      * Whether the stroke→fill transition should draw the stroke first and sweep the fill in

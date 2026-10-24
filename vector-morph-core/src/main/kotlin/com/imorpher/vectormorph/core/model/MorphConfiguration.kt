@@ -58,6 +58,18 @@ data class MorphConfiguration(
      * winding-reversal behavior unchanged.
      */
     val directionTraversal: DirectionTraversal = DirectionTraversal.LEGACY,
+    /**
+     * Optional cap on the cubic segments each contour pair uses. Null keeps the natural
+     * `max(source, target)` count. A budget trades silhouette detail for cheaper per-frame
+     * interpolation of dense icons; see [simplificationTolerance].
+     */
+    val segmentBudget: Int? = null,
+    /**
+     * Maximum sampled deviation (in viewport units) tolerated while [segmentBudget] reduces a
+     * contour. When no merge stays within tolerance the two sides are re-equalized at the
+     * largest count that fits the budget, so interpolation still sees equal segment counts.
+     */
+    val simplificationTolerance: Float = 0.25f,
 ) {
     companion object {
         /** Plain, well-behaved default: geometry morph with auto strategies. */
