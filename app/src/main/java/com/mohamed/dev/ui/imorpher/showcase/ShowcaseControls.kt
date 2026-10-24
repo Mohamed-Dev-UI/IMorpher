@@ -95,6 +95,7 @@ private fun DrawResolutionWarning.hintLabel(): String = when (this) {
     DrawResolutionWarning.ANCHOR_IGNORED_BY_MODE -> "draw mode ignores the start anchor"
     DrawResolutionWarning.CENTER_OUT_DIRECTION_ON_STROKE -> "direction only affects fill sweeps"
     DrawResolutionWarning.MISSING_CONCRETE_ANCHOR -> "direction provides no start anchor"
+    DrawResolutionWarning.CUSTOM_ANIMATION_FAILED -> "custom animation callback failed and was disabled"
 }
 
 /**

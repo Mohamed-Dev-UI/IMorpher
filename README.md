@@ -19,7 +19,7 @@ IMorpher is published to Maven Central — add it through your version catalog
 
 ```toml
 [versions]
-imorpher = "0.1.0"
+imorpher = "0.2.0"
 
 [libraries]
 imorpher-compose = { group = "io.github.mohamed-dev-ui", name = "vector-morph-compose", version.ref = "imorpher" }
@@ -44,14 +44,14 @@ Without a version catalog:
 
 ```kotlin
 dependencies {
-    implementation("io.github.mohamed-dev-ui:vector-morph-compose:0.1.0")
+    implementation("io.github.mohamed-dev-ui:vector-morph-compose:0.2.0")
 }
 ```
 
 `mavenCentral()` is already part of every standard Android Studio template; otherwise
 add it to your `dependencyResolutionManagement` repositories. The Compose artifact
 targets Android API 23+ and uses Jetpack Compose. Enable the Kotlin Compose compiler
-plugin in the consuming Android app module. Replace `0.1.0` with the latest release
+plugin in the consuming Android app module. Replace `0.2.0` with the latest release
 available on [Maven Central](https://central.sonatype.com/artifact/io.github.mohamed-dev-ui/vector-morph-compose).
 
 ## Demo app
@@ -104,8 +104,37 @@ MorphIcon(
 ```
 
 `MotionPreference` supports `FULL`, `REDUCED` (short tween), `CROSSFADE_ONLY`, and `INSTANT`.
-The animation canvas does not consume pointer input; the caller owns click handling and touch
-targets. A provided `contentDescription` is exposed as Compose semantics.
+Leave `motionPreference` null to resolve it from the system animator-duration scale
+(`rememberMotionPreference()`), so "Remove animations" accessibility settings are respected
+automatically. The animation canvas does not consume pointer input; the caller owns click handling
+and touch targets. A provided `contentDescription` is exposed as Compose semantics.
+
+`MorphIcon(..., onSettled = { selected -> ... })` reports when a transition actually comes to
+rest; an interrupted transition never reports the state it was interrupted on.
+
+### Chain morphing to a changing target
+
+`MorphingIcon` morphs to whatever `target` currently is, starting from the icon it last settled
+on:
+
+```kotlin
+MorphingIcon(
+    target = currentIcon,
+    contentDescription = "Status",
+    motionPreference = MotionPreference.REDUCED,
+)
+```
+
+The first composition draws `target` immediately. If `target` changes mid-flight, the in-progress
+morph is abandoned and the new one restarts from the last settled icon (never from a
+mid-animation frame). Use `MorphPrecompiler.warm(from, to)` on `Dispatchers.Default` ahead of time
+for pairs that must animate on first display.
+
+### Alignment
+
+Every composable accepts `alignment: Alignment = Alignment.Center`. Layout stays aspect-fit; only
+the placement of the fitted icon changes (for example `Alignment.CenterStart` for leading icons).
+Crop/fill content scaling is intentionally out of scope.
 
 ## Tinting
 
@@ -389,25 +418,44 @@ val restored = VectorAnimationCodec.decode(savedBytes)
 VectorAnimator(VectorAnimationDefinition(icon, restored), progress)
 ```
 
-The codec samples each Compose `Easing` at 129 points. Custom callbacks and custom `Brush`
-implementations are executable/runtime values and are rejected with a descriptive error. Linear
-gradient angles can be declared with `linearGradientSpecAtAngle(...)`; angle-marked endpoints take
-the shortest route through 360 degrees while preserving their center and interpolated axis length.
+The codec samples each Compose `Easing` at 257 points. Wire format v2 stores typed reveal
+records (only the fields each reveal kind consumes); version 1 payloads still decode, so cached
+definitions keep working. Custom callbacks and custom `Brush` implementations are executable/
+runtime values and are rejected with a descriptive error. Linear gradient angles can be declared
+with `linearGradientSpecAtAngle(...)`; angle-marked endpoints take the shortest route through 360
+degrees while preserving their center and interpolated axis length.
 
 ## Performance
 
 `VectorCompiler` converts paths into cubic contours and precomputes bounds, centroids, winding,
 and arc lengths. `MorphPlanner` matches paths, normalizes winding/start points, subdivides cubic
-segments with exact de Casteljau splits, and stores packed geometry. `MorphPlanCache` and the
-Compose entry points reuse compiled vectors/plans. The renderer owns reusable Compose paths and
-coordinate buffers. Color and gradient interpolation creates new Compose brush values as progress
-changes, so prefer geometry-only or static-paint tracks for very high-frequency icon swarms.
-Keep `ImageVector`s and animation definitions stable (for example, top-level
-or `remember` values) so Compose and the caches can reuse preparation work.
+segments with exact de Casteljau splits, and stores packed geometry.
+
+- **Structural plan cache** — plans are keyed by a content hash (`PreparedVector.contentKey`),
+  not object identity, so equal-but-distinct `ImageVector` instances share one plan. The cache
+  enforces both an entry cap and an estimated byte budget (16 MiB by default). Call
+  `MorphCaches.trim(bytes)` from `onTrimMemory` to release plans under pressure.
+- **Matching** — path and contour matching solve the assignment problem exactly for up to 32
+  candidates (Hungarian algorithm) instead of committing to locally cheap greedy edges.
+- **Segment budget** — `MorphConfiguration(segmentBudget = 8, simplificationTolerance = 0.25f)`
+  caps the cubic segments per contour pair; reduction merges adjacent curves by least-squares fit
+  and stops before exceeding the tolerance.
+- **Brush memoization** — a brush track driving many paths builds each interpolated brush once
+  per exact (segment, eased progress) input, even inside one frame.
+- **Tinting** — tint layers use content bounds plus a stroke margin instead of a full-viewport
+  pad, and solid tints apply a layer color filter instead of a full-canvas `SrcIn` rect.
+- **R8** — `consumer-rules.pro` keeps the Compose gradient fields `BrushSpec.from` reads
+  reflectively; without it a minified consumer build silently degrades gradients to crossfades.
+
+The renderer owns reusable Compose paths and coordinate buffers. Color and gradient interpolation
+creates new Compose brush values as progress changes, so prefer geometry-only or static-paint
+tracks for very high-frequency icon swarms. Keep `ImageVector`s and animation definitions stable
+(for example, top-level or `remember` values) so Compose and the caches can reuse preparation work.
 
 Plan construction is synchronous the first time a vector pair is seen. For large custom vectors,
-precompile and plan them before the animation is displayed. The current renderer targets Android
-Compose `DrawScope`; it is not a multiplatform renderer.
+precompile with `MorphPrecompiler.warm(...)` (or the plan cache) before the animation is
+displayed. The current renderer targets Android Compose `DrawScope`; it is not a multiplatform
+renderer.
 
 ## Current boundaries
 
@@ -416,11 +464,16 @@ static nested group transforms, paths, fill/stroke brushes and alpha, stroke geo
 and group clipping paths. Clip geometry switches between source and target at the midpoint of a
 morph; it is not itself geometrically morphed. Boolean geometry functions operate on Compose
 `Path`s and are opt-in. Custom callbacks run on the drawing thread and should be deterministic and
-lightweight; precompute large contours outside the callback. Unknown custom brushes crossfade.
-Different target viewport dimensions are scaled into source viewport space during planning. If
-the viewport aspect ratios differ, that normalization stretches target geometry per axis; use
-matching aspect ratios when that is not desired. Intrinsic layout dimensions remain caller
-controlled.
+lightweight; a callback that throws is disabled after its first failure instead of crashing the
+frame. Unknown custom brushes crossfade.
+
+Different target viewport dimensions are scaled into source viewport space during planning.
+`ViewportNormalization.STRETCH` (the default) scales each axis independently; use
+`ViewportNormalization.FIT` to scale uniformly and center the letterboxed target instead. Intrinsic
+layout dimensions remain caller controlled.
+
+Layout is always aspect-fit; `Alignment` changes placement only. Crop/fill `ContentScale` and
+multiplatform (KMP) rendering are not part of this release.
 
 ## Tests
 
