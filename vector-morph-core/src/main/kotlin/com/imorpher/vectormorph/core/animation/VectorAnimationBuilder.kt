@@ -87,6 +87,9 @@ class VectorAnimationBuilder internal constructor() {
         val easing: Easing,
     )
 
+    /** Human-readable build diagnostics (dropped intervals, duplicate keys, overlaps). */
+    private val warnings = ArrayList<String>()
+
     /** Scalar track requests recorded by the DSL scopes. */
     private val scalars = ArrayList<ScalarRequest>()
 
@@ -116,6 +119,9 @@ class VectorAnimationBuilder internal constructor() {
         val scope = KeyframeScope()
         scope.block()
         val t = time.coerceIn(0f, 1f)
+        if (keyframes.containsKey(t)) {
+            warnings.add("duplicate keyframe time $t: values merge and later keys win")
+        }
         val map = keyframes.getOrPut(t) { mutableMapOf() }
         map.putAll(scope.values)
         scope.color?.let { keyframeColors[t] = it }
@@ -287,7 +293,10 @@ class VectorAnimationBuilder internal constructor() {
     ) {
         val start = interval.start.coerceIn(0f, 1f)
         val end = interval.endInclusive.coerceIn(0f, 1f)
-        if (end <= start) return
+        if (end <= start) {
+            warnings.add("degenerate interval $interval for ${prop.name} on $target dropped")
+            return
+        }
         scalars.add(ScalarRequest(target, prop, start, end, from, to, easing, reveal))
         if (prop != PropKey.ALPHA && prop != PropKey.FILL_ALPHA && prop != PropKey.STROKE_ALPHA) {
             appearanceOnly = false
@@ -306,7 +315,10 @@ class VectorAnimationBuilder internal constructor() {
     ) {
         val normalizedStart = start.coerceIn(0f, 1f)
         val normalizedEnd = end.coerceIn(0f, 1f)
-        if (normalizedStart.isNaN() || normalizedEnd.isNaN() || normalizedEnd <= normalizedStart) return
+        if (normalizedStart.isNaN() || normalizedEnd.isNaN() || normalizedEnd <= normalizedStart) {
+            warnings.add("degenerate brush interval $start..$end on $target dropped")
+            return
+        }
         brushes.add(BrushRequest(target, channel, normalizedStart, normalizedEnd, from, to, easing))
     }
 
@@ -369,6 +381,7 @@ class VectorAnimationBuilder internal constructor() {
         }
         for ((targetAndProperty, requests) in scalars.groupBy { it.target to it.prop }) {
             val target = targetAndProperty.first
+            sortedByStartAndCheckOverlap(requests, targetAndProperty.second)
             val inheritedStrokeDirection = if (targetAndProperty.second == PropKey.FILL_PROGRESS) {
                 firstDrawDirectionByTarget[target]
             } else {
@@ -427,7 +440,24 @@ class VectorAnimationBuilder internal constructor() {
             )
         }
 
-        return VectorAnimation(compiledScalars, compiledBrushes, appearanceOnly, staggerDelay, staggerOrder, customizer)
+        return VectorAnimation(
+            compiledScalars, compiledBrushes, appearanceOnly, staggerDelay, staggerOrder,
+            customizer, warnings.toList(),
+        )
+    }
+
+    /** Records an overlap warning when two explicit intervals for one property intersect. */
+    private fun sortedByStartAndCheckOverlap(requests: List<ScalarRequest>, prop: PropKey) {
+        val sorted = requests.sortedBy { it.start }
+        for (i in 1 until sorted.size) {
+            if (sorted[i].start < sorted[i - 1].end - 1e-6f) {
+                warnings.add(
+                    "overlapping ${prop.name} intervals " +
+                        "${sorted[i - 1].start}..${sorted[i - 1].end} and " +
+                        "${sorted[i].start}..${sorted[i].end}; the later segment wins",
+                )
+            }
+        }
     }
 
     /**

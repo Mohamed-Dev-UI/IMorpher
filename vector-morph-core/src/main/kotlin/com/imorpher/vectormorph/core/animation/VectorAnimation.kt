@@ -83,6 +83,12 @@ class VectorAnimation internal constructor(
         com.imorpher.vectormorph.core.model.DrawOrderStrategy.TOP_LEFT_TO_BOTTOM_RIGHT,
     /** Optional per-pair custom rendering callback. */
     val customizer: CustomVectorAnimation? = null,
+    /**
+     * Build-time diagnostics collected by the DSL: dropped degenerate intervals, duplicate
+     * keyframe times, and overlapping explicit segments. Warnings are advisory and are never
+     * serialized by [VectorAnimationCodec] (decoded animations start with an empty list).
+     */
+    val warnings: List<String> = emptyList(),
 ) {
     /** One interval of a scalar track: [from]→[to] eased across the normalized timeline. */
     internal class Segment(
