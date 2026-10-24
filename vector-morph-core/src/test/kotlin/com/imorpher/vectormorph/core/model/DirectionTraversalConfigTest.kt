@@ -6,23 +6,31 @@ import org.junit.Test
 
 /**
  * Task 4 probes (start/direction coordination plan rule 4): the traversal policy rides on
- * [MorphConfiguration] — `LEGACY` by default (today's contour-order behavior) — and must
- * survive data-class equality so `remember`-style cache keys stay sound.
+ * [MorphConfiguration] — `HONOR_DIRECTION` by default since 0.2.0 — and must survive
+ * data-class equality so `remember`-style cache keys stay sound.
  */
 class DirectionTraversalConfigTest {
 
     @Test
-    fun defaultIsLegacy() {
-        assertEquals(DirectionTraversal.LEGACY, MorphConfiguration().directionTraversal)
-        assertEquals(DirectionTraversal.LEGACY, MorphConfiguration.Default.directionTraversal)
+    fun defaultHonorsDirection() {
+        assertEquals(DirectionTraversal.HONOR_DIRECTION, MorphConfiguration().directionTraversal)
+        assertEquals(DirectionTraversal.HONOR_DIRECTION, MorphConfiguration.Default.directionTraversal)
+    }
+
+    @Test
+    fun legacyRemainsOptIn() {
+        val legacy = MorphConfiguration(directionTraversal = DirectionTraversal.LEGACY)
+        assertNotEquals(MorphConfiguration(), legacy)
+        assertEquals(DirectionTraversal.LEGACY, legacy.directionTraversal)
     }
 
     @Test
     fun honorFlagSurvivesEquality() {
         val honored = MorphConfiguration(directionTraversal = DirectionTraversal.HONOR_DIRECTION)
-        assertEquals(MorphConfiguration(), MorphConfiguration())
+        val legacy = MorphConfiguration(directionTraversal = DirectionTraversal.LEGACY)
+        assertEquals(MorphConfiguration(), honored)
         assertEquals(honored, MorphConfiguration(directionTraversal = DirectionTraversal.HONOR_DIRECTION))
-        assertNotEquals(MorphConfiguration(), honored)
+        assertNotEquals(legacy, honored)
         assertNotEquals(MorphConfiguration(), MorphConfiguration(staggerDelay = 0.2f))
     }
 }

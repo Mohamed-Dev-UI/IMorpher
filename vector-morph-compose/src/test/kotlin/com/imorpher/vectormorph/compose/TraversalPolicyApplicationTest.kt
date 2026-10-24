@@ -20,7 +20,7 @@ import org.robolectric.annotation.GraphicsMode
 /**
  * Task 4 application probes (start/direction coordination plan rule 4):
  * [MorphConfiguration.directionTraversal] must let a `DrawMode.FORWARD` stroke reveal on an
- * open contour honor its draw direction's axis. Under `LEGACY` (default) the pen follows the
+ * open contour honor its draw direction's axis. Under `LEGACY` (opt-in) the pen follows the
  * contour's own point order; under `HONOR_DIRECTION` a contour leaving the resolved anchor
  * against the requested axis reveals backwards from the same anchor instead. Closed contours
  * keep their winding reversal untouched — `CLOCKWISE`/`COUNTER_CLOCKWISE` must render
@@ -78,8 +78,9 @@ class TraversalPolicyApplicationTest {
     private val squareFrom by lazy { harness.stroked("from", harness.squareAt(8f, 8f)) }
     private val squareTo by lazy { harness.stroked("to", harness.squareAt(9f, 9f)) }
 
-    private val legacyConfig = MorphConfiguration()
-    private val honorConfig = MorphConfiguration(directionTraversal = DirectionTraversal.HONOR_DIRECTION)
+    // HONOR_DIRECTION is the 0.2.0 default; these probes compare against an explicit LEGACY opt-in.
+    private val legacyConfig = MorphConfiguration(directionTraversal = DirectionTraversal.LEGACY)
+    private val honorConfig = MorphConfiguration()
 
     // ------------------------------------------------------------------ probes
 

@@ -494,6 +494,7 @@ object MorphPlanner {
      * to a common segment count, optional re-alignment for large command-count mismatches,
      * and packing into the per-frame float arrays.
      */
+    @Suppress("DEPRECATION") // customStartOffsets is the documented legacy alignment fallback
     private fun alignContours(
         f: com.imorpher.vectormorph.core.model.PreparedPath,
         ci: Int,

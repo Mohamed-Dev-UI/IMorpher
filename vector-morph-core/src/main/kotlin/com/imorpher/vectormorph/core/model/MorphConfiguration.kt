@@ -36,6 +36,12 @@ data class MorphConfiguration(
      * [customDrawAnchors] has no entry; prefer [customDrawAnchors] so alignment data never
      * moves the pen.
      */
+    @Deprecated(
+        message = "Use customDrawAnchors for pen anchors; alignment offsets belong in " +
+            "StartPointStrategy.CUSTOM correspondences only.",
+        level = DeprecationLevel.WARNING,
+        replaceWith = ReplaceWith("customDrawAnchors"),
+    )
     val customStartOffsets: Map<String, Float> = emptyMap(),
     /**
      * Normalized arc fraction (0..1) per path name for `PathStart.CUSTOM` draw anchoring:
@@ -51,13 +57,13 @@ data class MorphConfiguration(
     /** Render paths strictly in declaration order even when a draw order strategy reorders reveals. */
     val keepRenderOrder: Boolean = true,
     /**
-     * How `DrawMode.FORWARD` stroke reveals travel on open contours: [DirectionTraversal.LEGACY]
-     * (the default, in this release) keeps today's contour-order traversal, HONOR_DIRECTION
-     * traverses toward the draw direction's axis. Explicit `DrawMode.REVERSE`/`CENTER_OUT`/
+     * How `DrawMode.FORWARD` stroke reveals travel on open contours: [DirectionTraversal.HONOR_DIRECTION]
+     * (the default since 0.2.0) traverses toward the draw direction's axis; [DirectionTraversal.LEGACY]
+     * keeps the historical contour-order traversal. Explicit `DrawMode.REVERSE`/`CENTER_OUT`/
      * `OUTSIDE_IN` modes always win over either policy, and closed contours keep their
      * winding-reversal behavior unchanged.
      */
-    val directionTraversal: DirectionTraversal = DirectionTraversal.LEGACY,
+    val directionTraversal: DirectionTraversal = DirectionTraversal.HONOR_DIRECTION,
     /**
      * Optional cap on the cubic segments each contour pair uses. Null keeps the natural
      * `max(source, target)` count. A budget trades silhouette detail for cheaper per-frame
