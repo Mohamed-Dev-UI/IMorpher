@@ -107,6 +107,21 @@ class DrawOrderAndDirectionTest {
     }
 
     @Test
+    fun byNameIgnoresCustomOrderList() {
+        val plan = twoSquarePlan()
+        val withList = DrawOrder.orderIndices(
+            plan, DrawOrderStrategy.BY_NAME,
+            listOf("top", "right", "bottom", "left"),
+        )
+        val plain = DrawOrder.orderIndices(plan, DrawOrderStrategy.BY_NAME, emptyList())
+        assertTrue(
+            "BY_NAME must derive name ranks itself; customDrawOrder is CUSTOM-only " +
+                "(paths=${withList.toList()} vs plain=${plain.toList()})",
+            withList.contentEquals(plain),
+        )
+    }
+
+    @Test
     fun staggerOffsetsFollowRevealRanks() {
         val plan = twoSquarePlan()
         val order = intArrayOf(2, 0, 3, 1)

@@ -23,9 +23,10 @@ object DrawOrder {
         when (strategy) {
             DrawOrderStrategy.BY_INDEX -> Unit
             DrawOrderStrategy.BY_NAME -> {
-                val order = customOrder.ifEmpty {
-                    pairs.mapNotNull { p -> listOfNotNull(p.fromPath?.name, p.toPath?.name).firstOrNull() }.sorted()
-                }
+                // BY_NAME derives its ranks from the pair names alone: customDrawOrder is
+                // reserved for CUSTOM. Letting the list reorder BY_NAME made the two
+                // strategies indistinguishable when any list was supplied.
+                val order = pairs.mapNotNull { pathOf(it)?.name }.sorted()
                 sortByNames(idx, pairs, order)
             }
             DrawOrderStrategy.BY_POSITION,
