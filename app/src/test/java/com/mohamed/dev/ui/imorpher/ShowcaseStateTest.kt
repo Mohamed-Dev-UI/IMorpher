@@ -449,6 +449,29 @@ class ShowcaseStateTest {
         }
     }
 
+    @Test
+    fun staggerSnippetAlwaysEmitsTheDrawOrderArgument() {
+        // VectorAnimationBuilder.stagger(delay, order) has NO default for `order`, so the
+        // pasted snippet only compiles when the argument is spelled out — even at AUTO.
+        for (target in listOf(SnippetGenerator.Target.VECTOR_ANIMATOR, SnippetGenerator.Target.DRAW_ICON)) {
+            val autoState = ShowcaseState().apply { staggerDelay = 0.2f }
+            val autoSnippet = SnippetGenerator.generate(autoState, target)
+            assertTrue(
+                "$target must emit the order argument at AUTO (stagger has no order default)",
+                autoSnippet.contains("stagger(0.2f, DrawOrderStrategy.AUTO)"),
+            )
+            val orderedState = ShowcaseState().apply {
+                staggerDelay = 0.2f
+                staggerOrder = com.imorpher.vectormorph.core.model.DrawOrderStrategy.COUNTER_CLOCKWISE
+            }
+            val orderedSnippet = SnippetGenerator.generate(orderedState, target)
+            assertTrue(
+                "$target must emit the chosen order",
+                orderedSnippet.contains("stagger(0.2f, DrawOrderStrategy.COUNTER_CLOCKWISE)"),
+            )
+        }
+    }
+
     // ------------------------------------------------------------------ options + suggestions
 
     @Test

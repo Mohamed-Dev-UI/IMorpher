@@ -275,9 +275,13 @@ object SnippetGenerator {
         if (state.drawMode != DrawMode.FORWARD) add("mode = DrawMode.${state.drawMode.name},")
     }
 
-    /** Draw-order suffix for the `stagger(delay, order)` DSL call, omitted at the default. */
+    /**
+     * Draw-order suffix for the `stagger(delay, order)` DSL call — ALWAYS emitted, because
+     * [VectorAnimationBuilder.stagger] has no default for the order argument (AUTO is a valid
+     * argument and compiles fine, unlike omission).
+     */
     private fun staggerOrderSuffix(state: ShowcaseState): String =
-        if (state.staggerOrder == DrawOrderStrategy.AUTO) "" else ", DrawOrderStrategy.${state.staggerOrder.name}"
+        ", DrawOrderStrategy.${state.staggerOrder.name}"
 
     // ------------------------------------------------------------------ formatting
 
