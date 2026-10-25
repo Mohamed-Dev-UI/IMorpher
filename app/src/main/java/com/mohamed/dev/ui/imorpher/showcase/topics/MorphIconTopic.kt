@@ -25,8 +25,10 @@ import com.imorpher.vectormorph.compose.MorphIcon
 import com.imorpher.vectormorph.core.model.MotionPreference
 import com.imorpher.vectormorph.core.model.PathMatchingStrategy
 import com.mohamed.dev.ui.imorpher.showcase.ApiSignature
+import com.mohamed.dev.ui.imorpher.showcase.ConfigurationPanel
 import com.mohamed.dev.ui.imorpher.showcase.CopySnippetButton
 import com.mohamed.dev.ui.imorpher.showcase.IconCatalog
+import com.mohamed.dev.ui.imorpher.showcase.PairSuggestions
 import com.mohamed.dev.ui.imorpher.showcase.PairSuggestionsSection
 import com.mohamed.dev.ui.imorpher.showcase.SnippetGenerator
 import com.mohamed.dev.ui.imorpher.showcase.IconPairs
@@ -34,17 +36,20 @@ import com.mohamed.dev.ui.imorpher.showcase.PlaygroundControls
 import com.mohamed.dev.ui.imorpher.showcase.PreviewTile
 import com.mohamed.dev.ui.imorpher.showcase.ShowcaseCard
 import com.mohamed.dev.ui.imorpher.showcase.ShowcaseCardHeader
-import com.mohamed.dev.ui.imorpher.showcase.ShowcaseDropdown
-import com.mohamed.dev.ui.imorpher.showcase.ShowcaseOptions
 import com.mohamed.dev.ui.imorpher.showcase.ShowcaseRow
 import com.mohamed.dev.ui.imorpher.showcase.ShowcaseState
 import com.mohamed.dev.ui.imorpher.showcase.TintBuilders
 import com.mohamed.dev.ui.imorpher.showcase.TintMode
 import com.mohamed.dev.ui.imorpher.showcase.TopicHeader
 import com.mohamed.dev.ui.imorpher.showcase.resolveIcon
+import com.mohamed.dev.ui.imorpher.showcase.toAlignment
+import com.mohamed.dev.ui.imorpher.showcase.toAnimationSpec
 import com.mohamed.dev.ui.imorpher.showcase.toConfiguration
 import com.imorpher.vectormorph.core.animation.VectorAnimation as VectorAnimationSpec
 import com.imorpher.vectormorph.core.model.MorphConfiguration as EngineConfiguration
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.roundToInt
 
 /** Selected state with a bouncy spring and name-based path matching. */
@@ -171,11 +176,13 @@ fun MotionPreferenceShowcase() {
 
 /**
  * The global MorphIcon playground: every parameter of the API is adjustable and applied to
- * one live icon, including the untinted/tinted overload selection.
+ * one live icon, including the untinted/tinted overload selection and settled-state events.
  */
 @Composable
 fun MorphIconPlayground(state: ShowcaseState) {
     var selected by remember { mutableStateOf(false) }
+    var settleLog by remember { mutableStateOf(listOf<String>()) }
+    val stamp = remember { SimpleDateFormat("HH:mm:ss", Locale.ROOT) }
     ShowcaseCard {
         ShowcaseCardHeader(
             number = "GP",
@@ -183,7 +190,16 @@ fun MorphIconPlayground(state: ShowcaseState) {
             description = "Every MorphIcon parameter, live: icons, tint endpoints, timing, and configuration.",
         )
         ShowcaseRow(
-            preview = { PlaygroundPreview(state = state, selected = selected) },
+            preview = {
+                PlaygroundPreview(
+                    state = state,
+                    selected = selected,
+                    onSettled = { settled ->
+                        settleLog = (settleLog + "${if (settled) "settled" else "interrupted"} · ${stamp.format(Date())}")
+                            .takeLast(4)
+                    },
+                )
+            },
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
                 Text(if (selected) "Selected" else "Not selected", fontWeight = FontWeight.SemiBold)
@@ -196,25 +212,21 @@ fun MorphIconPlayground(state: ShowcaseState) {
             Switch(checked = selected, onCheckedChange = { selected = it })
         }
         PlaygroundControls(state) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                ShowcaseDropdown("Match", ShowcaseOptions.pathMatchings, state.pathMatching) { state.pathMatching = it }
-                ShowcaseDropdown("Missing", ShowcaseOptions.missingPaths, state.missingPath) { state.missingPath = it }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                ShowcaseDropdown("Fallback", ShowcaseOptions.fallbacks, state.fallback) { state.fallback = it }
-                ShowcaseDropdown("Timing", ShowcaseOptions.timings, state.timing) { state.timing = it }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                ShowcaseDropdown("Colors", ShowcaseOptions.colorSpaces, state.colorSpace) { state.colorSpace = it }
-                ShowcaseDropdown("Motion", ShowcaseOptions.motionPreferences, state.motionPreference) { state.motionPreference = it }
-            }
-            // No stagger controls: MorphIcon runs a plain geometry morph without a
-            // timeline, so staggerDelay would have nothing to fan out.
+            // The shared ConfigurationPanel owns every MorphConfiguration knob, so the
+            // playgrounds cannot drift apart; overrides below are MorphIcon-specific.
+            ConfigurationPanel(state, pathNames = PairSuggestions.pathNamesFor(state.fromIconName, state.toIconName))
             PairSuggestionsSection(state) { suggestion ->
                 state.fromIconName = suggestion.fromName
                 state.toIconName = suggestion.toName
             }
             CopySnippetButton(SnippetGenerator.generate(state, SnippetGenerator.Target.MORPH_ICON))
+        }
+        if (settleLog.isNotEmpty()) {
+            Text(
+                "onSettled log\n" + settleLog.joinToString("\n"),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         ApiSignature("MorphIcon(from, to, selected, tintFrom, tintTo, …, configuration)")
     }
@@ -222,11 +234,16 @@ fun MorphIconPlayground(state: ShowcaseState) {
 
 /** One live MorphIcon wired to the shared playground state, honoring the tint mode. */
 @Composable
-internal fun PlaygroundPreview(state: ShowcaseState, selected: Boolean) {
+internal fun PlaygroundPreview(
+    state: ShowcaseState,
+    selected: Boolean,
+    onSettled: ((Boolean) -> Unit)? = null,
+) {
     PreviewTile {
         val from = resolveIcon(state.fromIconName)
         val to = resolveIcon(state.toIconName)
-        val spec = tween<Float>(state.durationMillis.roundToInt())
+        val spec = state.toAnimationSpec()
+        val placement = state.toAlignment()
         when (state.tintMode) {
             TintMode.NONE -> MorphIcon(
                 from = from,
@@ -234,10 +251,12 @@ internal fun PlaygroundPreview(state: ShowcaseState, selected: Boolean) {
                 selected = selected,
                 animationSpec = spec,
                 motionPreference = state.motionPreference,
+                onSettled = onSettled,
                 configuration = state.toConfiguration(),
                 contentDescription = "Playground icon",
-                width = 52.dp,
-                height = 52.dp,
+                width = (state.iconWidthDp ?: 52f).dp,
+                height = (state.iconHeightDp ?: 52f).dp,
+                alignment = placement,
             )
             TintMode.SOLID -> MorphIcon(
                 from = from,
@@ -247,10 +266,12 @@ internal fun PlaygroundPreview(state: ShowcaseState, selected: Boolean) {
                 tintTo = TintBuilders.toColor(state),
                 animationSpec = spec,
                 motionPreference = state.motionPreference,
+                onSettled = onSettled,
                 configuration = state.toConfiguration(),
                 contentDescription = "Playground icon",
-                width = 52.dp,
-                height = 52.dp,
+                width = (state.iconWidthDp ?: 52f).dp,
+                height = (state.iconHeightDp ?: 52f).dp,
+                alignment = placement,
             )
             TintMode.GRADIENT -> MorphIcon(
                 from = from,
@@ -260,10 +281,12 @@ internal fun PlaygroundPreview(state: ShowcaseState, selected: Boolean) {
                 tintTo = TintBuilders.toBrush(state),
                 animationSpec = spec,
                 motionPreference = state.motionPreference,
+                onSettled = onSettled,
                 configuration = state.toConfiguration(),
                 contentDescription = "Playground icon",
-                width = 52.dp,
-                height = 52.dp,
+                width = (state.iconWidthDp ?: 52f).dp,
+                height = (state.iconHeightDp ?: 52f).dp,
+                alignment = placement,
             )
         }
     }

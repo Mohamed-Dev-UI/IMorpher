@@ -55,6 +55,29 @@ object PairSuggestions {
         return ranking
     }
 
+    private var cachedPathNames: MutableMap<Long, List<String>> = mutableMapOf()
+
+    /**
+     * Compiled path names of [from]/[to] (compiler-disambiguated defaults like
+     * "path[1]"), for the configuration editors that key per-path parameters by name.
+     * Cached per pair key; falls back to the default names when planning fails.
+     */
+    fun pathNamesFor(fromName: String, toName: String): List<String> {
+        val key = (fromName.hashCode().toLong() shl 32) or (toName.hashCode().toLong() and 0xFFFFFFFFL)
+        cachedPathNames[key]?.let { return it }
+        val names = runCatching {
+            val plan = planMorph(
+                from = IconCatalog.icon(fromName),
+                to = IconCatalog.icon(toName),
+                config = MorphConfiguration.Default,
+            )
+            plan.pairs.flatMap { pair -> listOfNotNull(pair.fromPath, pair.toPath).map { it.name } }
+                .distinct()
+        }.getOrDefault(DefaultPathNames).ifEmpty { DefaultPathNames }
+        cachedPathNames[key] = names
+        return names
+    }
+
     private fun compute(): List<PairSuggestion> {
         val config = MorphConfiguration.Default
         return IconCatalog.pairs.map { (fromName, toName) ->

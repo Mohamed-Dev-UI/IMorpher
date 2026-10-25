@@ -21,10 +21,11 @@ import androidx.compose.ui.unit.dp
 import com.imorpher.vectormorph.compose.DrawIcon
 import com.imorpher.vectormorph.core.model.TimingMode
 import com.mohamed.dev.ui.imorpher.showcase.ApiSignature
+import com.mohamed.dev.ui.imorpher.showcase.ConfigurationPanel
 import com.mohamed.dev.ui.imorpher.showcase.CopySnippetButton
 import com.mohamed.dev.ui.imorpher.showcase.DrawConflictHint
 import com.mohamed.dev.ui.imorpher.showcase.LabeledSlider
-import com.mohamed.dev.ui.imorpher.showcase.LabeledSlider
+import com.mohamed.dev.ui.imorpher.showcase.PairSuggestions
 import com.mohamed.dev.ui.imorpher.showcase.SnippetGenerator
 import com.mohamed.dev.ui.imorpher.showcase.PlaygroundControls
 import com.mohamed.dev.ui.imorpher.showcase.PreviewTile
@@ -38,6 +39,8 @@ import com.mohamed.dev.ui.imorpher.showcase.TintBuilders
 import com.mohamed.dev.ui.imorpher.showcase.TintMode
 import com.mohamed.dev.ui.imorpher.showcase.TopicHeader
 import com.mohamed.dev.ui.imorpher.showcase.resolveIcon
+import com.mohamed.dev.ui.imorpher.showcase.toAlignment
+import com.mohamed.dev.ui.imorpher.showcase.toAnimationSpec
 import com.mohamed.dev.ui.imorpher.showcase.toConfiguration
 import com.imorpher.vectormorph.core.animation.VectorAnimation as VectorAnimationSpec
 import androidx.compose.foundation.layout.size as layoutSize
@@ -141,6 +144,9 @@ fun DrawIconPlayground(state: ShowcaseState) {
         }
         PlaygroundControls(state, secondIcon = false) {
             // DrawIcon animates a single vector: no second icon and no pair suggestions.
+            // The shared panel owns every configuration knob including timing (DrawIcon
+            // forwards its animationSpec to the auto-playing entry point).
+            ConfigurationPanel(state, pathNames = PairSuggestions.pathNamesFor(state.fromIconName, state.fromIconName))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 ShowcaseDropdown("Mode", ShowcaseOptions.drawModes, state.drawMode) { state.drawMode = it }
                 ShowcaseDropdown("Start", ShowcaseOptions.pathStarts, state.pathStart) { state.pathStart = it }
@@ -149,8 +155,8 @@ fun DrawIconPlayground(state: ShowcaseState) {
             // Conflicts between the Mode/Start/Direction pickers above resolve into the
             // state's warnings and surface here while they disagree.
             DrawConflictHint(state)
-            ShowcaseDropdown("Timing", ShowcaseOptions.timings, state.timing) { state.timing = it }
             LabeledSlider("Stroke width", state.strokeWidth, 0.5f..3f, "f") { state.strokeWidth = it }
+            CopySnippetButton(SnippetGenerator.generate(state, SnippetGenerator.Target.DRAW_ICON))
         }
         ApiSignature("DrawIcon(vector, animation, tintFrom, tintTo, …)")
     }
@@ -160,35 +166,44 @@ fun DrawIconPlayground(state: ShowcaseState) {
 @Composable
 private fun DrawPreview(state: ShowcaseState, animation: VectorAnimationSpec) {
     PreviewTile {
-        val configuration = state.toConfiguration().copy(timing = state.timing)
+        val configuration = state.toConfiguration()
+        val placement = state.toAlignment()
+        val sized = Modifier.layoutSize(
+            width = (state.iconWidthDp ?: 54f).dp,
+            height = (state.iconHeightDp ?: 54f).dp,
+        )
+        val spec = state.toAnimationSpec()
         when (state.tintMode) {
             TintMode.NONE -> DrawIcon(
                 vector = resolveIcon(state.fromIconName),
                 animation = animation,
-                animationSpec = tween(state.durationMillis.roundToInt()),
+                animationSpec = spec,
                 configuration = configuration,
                 contentDescription = "Playground icon",
-                modifier = Modifier.layoutSize(54.dp),
+                modifier = sized,
+                alignment = placement,
             )
             TintMode.SOLID -> DrawIcon(
                 vector = resolveIcon(state.fromIconName),
                 animation = animation,
-                animationSpec = tween(state.durationMillis.roundToInt()),
+                animationSpec = spec,
                 configuration = configuration,
                 tintFrom = TintBuilders.fromColor(state),
                 tintTo = TintBuilders.toColor(state),
                 contentDescription = "Playground icon",
-                modifier = Modifier.layoutSize(54.dp),
+                modifier = sized,
+                alignment = placement,
             )
             TintMode.GRADIENT -> DrawIcon(
                 vector = resolveIcon(state.fromIconName),
                 animation = animation,
-                animationSpec = tween(state.durationMillis.roundToInt()),
+                animationSpec = spec,
                 configuration = configuration,
                 tintFrom = TintBuilders.fromBrush(state),
                 tintTo = TintBuilders.toBrush(state),
                 contentDescription = "Playground icon",
-                modifier = Modifier.layoutSize(54.dp),
+                modifier = sized,
+                alignment = placement,
             )
         }
     }

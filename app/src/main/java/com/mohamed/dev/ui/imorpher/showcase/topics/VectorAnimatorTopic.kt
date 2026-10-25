@@ -25,9 +25,11 @@ import com.imorpher.vectormorph.compose.VectorAnimationDefinition
 import com.imorpher.vectormorph.compose.VectorAnimator
 import com.imorpher.vectormorph.core.model.DrawOrderStrategy
 import com.mohamed.dev.ui.imorpher.showcase.ApiSignature
+import com.mohamed.dev.ui.imorpher.showcase.ConfigurationPanel
 import com.mohamed.dev.ui.imorpher.showcase.CopySnippetButton
 import com.mohamed.dev.ui.imorpher.showcase.DrawConflictHint
 import com.mohamed.dev.ui.imorpher.showcase.LabeledSlider
+import com.mohamed.dev.ui.imorpher.showcase.PairSuggestions
 import com.mohamed.dev.ui.imorpher.showcase.PlaygroundControls
 import com.mohamed.dev.ui.imorpher.showcase.PreviewTile
 import com.mohamed.dev.ui.imorpher.showcase.ShowcaseCard
@@ -35,12 +37,12 @@ import com.mohamed.dev.ui.imorpher.showcase.ShowcaseCardHeader
 import com.mohamed.dev.ui.imorpher.showcase.ShowcaseDropdown
 import com.mohamed.dev.ui.imorpher.showcase.ShowcaseOptions
 import com.mohamed.dev.ui.imorpher.showcase.ShowcaseRow
-import com.mohamed.dev.ui.imorpher.showcase.ShowcaseSlider
 import com.mohamed.dev.ui.imorpher.showcase.ShowcaseState
 import com.mohamed.dev.ui.imorpher.showcase.SnippetGenerator
 import com.mohamed.dev.ui.imorpher.showcase.TintBuilders
 import com.mohamed.dev.ui.imorpher.showcase.TintMode
 import com.mohamed.dev.ui.imorpher.showcase.resolveIcon
+import com.mohamed.dev.ui.imorpher.showcase.toAlignment
 import com.mohamed.dev.ui.imorpher.showcase.toConfiguration
 import kotlinx.coroutines.launch
 import com.imorpher.vectormorph.core.animation.VectorAnimation as VectorAnimationSpec
@@ -248,9 +250,16 @@ fun VectorAnimatorPlayground(state: ShowcaseState) {
                 )
             }
         }
-        PlaygroundControls(state, secondIcon = false, durationSlider = false) {
+        PlaygroundControls(state, secondIcon = false) {
             // VectorAnimator animates ONE vector driven by caller progress: no second
-            // icon, no duration spec, and pair suggestions would be unrelated here.
+            // icon, and pair suggestions would be unrelated here. The shared panel
+            // hides duration/spec (no animationSpec parameter exists) but keeps all
+            // MorphConfiguration knobs, including the stagger block wired below.
+            ConfigurationPanel(
+                state,
+                pathNames = PairSuggestions.pathNamesFor(state.fromIconName, state.fromIconName),
+                includeSpec = false,
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 ShowcaseDropdown(
                     "Mode",
@@ -284,18 +293,6 @@ fun VectorAnimatorPlayground(state: ShowcaseState) {
             LabeledSlider("End rotation", state.endRotation, -180f..180f, "°") {
                 state.endRotation = it
             }
-            ShowcaseSlider(
-                label = "Stagger delay",
-                value = state.staggerDelay,
-                onValueChange = { state.staggerDelay = it },
-                valueRange = 0f..0.3f,
-                format = { "%.2f".format(it) },
-            )
-            ShowcaseDropdown(
-                "Stagger order",
-                ShowcaseOptions.staggerOrders,
-                state.staggerOrder
-            ) { state.staggerOrder = it }
             CopySnippetButton(
                 SnippetGenerator.generate(
                     state,
@@ -325,8 +322,9 @@ internal fun AnimatorPreview(
                 animation = definition,
                 progress = progress,
                 contentDescription = "Playground icon",
-                width = 56.dp,
-                height = 56.dp,
+                width = (state.iconWidthDp ?: 56f).dp,
+                height = (state.iconHeightDp ?: 56f).dp,
+                alignment = state.toAlignment(),
             )
 
             TintMode.SOLID -> VectorAnimator(
@@ -335,8 +333,9 @@ internal fun AnimatorPreview(
                 tintFrom = TintBuilders.fromColor(state),
                 tintTo = TintBuilders.toColor(state),
                 contentDescription = "Playground icon",
-                width = 56.dp,
-                height = 56.dp,
+                width = (state.iconWidthDp ?: 56f).dp,
+                height = (state.iconHeightDp ?: 56f).dp,
+                alignment = state.toAlignment(),
             )
 
             TintMode.GRADIENT -> VectorAnimator(
@@ -345,8 +344,9 @@ internal fun AnimatorPreview(
                 tintFrom = TintBuilders.fromBrush(state),
                 tintTo = TintBuilders.toBrush(state),
                 contentDescription = "Playground icon",
-                width = 56.dp,
-                height = 56.dp,
+                width = (state.iconWidthDp ?: 56f).dp,
+                height = (state.iconHeightDp ?: 56f).dp,
+                alignment = state.toAlignment(),
             )
         }
     }

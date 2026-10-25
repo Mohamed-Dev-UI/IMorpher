@@ -19,8 +19,10 @@ import androidx.compose.ui.unit.dp
 import com.imorpher.vectormorph.compose.MorphVector
 import com.imorpher.vectormorph.core.model.MissingPathBehavior
 import com.mohamed.dev.ui.imorpher.showcase.ApiSignature
+import com.mohamed.dev.ui.imorpher.showcase.ConfigurationPanel
 import com.mohamed.dev.ui.imorpher.showcase.CopySnippetButton
 import com.mohamed.dev.ui.imorpher.showcase.IconCatalog
+import com.mohamed.dev.ui.imorpher.showcase.PairSuggestions
 import com.mohamed.dev.ui.imorpher.showcase.PairSuggestionsSection
 import com.mohamed.dev.ui.imorpher.showcase.SnippetGenerator
 import com.mohamed.dev.ui.imorpher.showcase.IconPairs
@@ -29,14 +31,13 @@ import com.mohamed.dev.ui.imorpher.showcase.PlaygroundControls
 import com.mohamed.dev.ui.imorpher.showcase.PreviewTile
 import com.mohamed.dev.ui.imorpher.showcase.ShowcaseCard
 import com.mohamed.dev.ui.imorpher.showcase.ShowcaseCardHeader
-import com.mohamed.dev.ui.imorpher.showcase.ShowcaseDropdown
-import com.mohamed.dev.ui.imorpher.showcase.ShowcaseOptions
 import com.mohamed.dev.ui.imorpher.showcase.ShowcaseRow
 import com.mohamed.dev.ui.imorpher.showcase.ShowcaseState
 import com.mohamed.dev.ui.imorpher.showcase.TintBuilders
 import com.mohamed.dev.ui.imorpher.showcase.TintMode
 import com.mohamed.dev.ui.imorpher.showcase.TopicHeader
 import com.mohamed.dev.ui.imorpher.showcase.resolveIcon
+import com.mohamed.dev.ui.imorpher.showcase.toAlignment
 import com.mohamed.dev.ui.imorpher.showcase.toConfiguration
 import kotlin.math.roundToInt
 
@@ -156,15 +157,13 @@ fun MorphVectorPlayground(state: ShowcaseState) {
             }
         }
         PlaygroundControls(state) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                ShowcaseDropdown("Match", ShowcaseOptions.pathMatchings, state.pathMatching) { state.pathMatching = it }
-                ShowcaseDropdown("Missing", ShowcaseOptions.missingPaths, state.missingPath) { state.missingPath = it }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                ShowcaseDropdown("Fallback", ShowcaseOptions.fallbacks, state.fallback) { state.fallback = it }
-                ShowcaseDropdown("Timing", ShowcaseOptions.timings, state.timing) { state.timing = it }
-            }
-            ShowcaseDropdown("Colors", ShowcaseOptions.colorSpaces, state.colorSpace) { state.colorSpace = it }
+            // The shared panel replaces the duplicated dropdowns; MorphVector takes no
+            // animationSpec, so the panel hides duration/spec here (includeSpec = false).
+            ConfigurationPanel(
+                state,
+                pathNames = PairSuggestions.pathNamesFor(state.fromIconName, state.toIconName),
+                includeSpec = false,
+            )
             PairSuggestionsSection(state) { suggestion ->
                 state.fromIconName = suggestion.fromName
                 state.toIconName = suggestion.toName
@@ -181,6 +180,7 @@ internal fun VectorPreview(state: ShowcaseState, progress: Float) {
     PreviewTile {
         val from = resolveIcon(state.fromIconName)
         val to = resolveIcon(state.toIconName)
+        val placement = state.toAlignment()
         when (state.tintMode) {
             TintMode.NONE -> MorphVector(
                 from = from,
@@ -188,8 +188,9 @@ internal fun VectorPreview(state: ShowcaseState, progress: Float) {
                 progress = progress,
                 configuration = state.toConfiguration(),
                 contentDescription = "Playground icon",
-                width = 52.dp,
-                height = 52.dp,
+                width = (state.iconWidthDp ?: 52f).dp,
+                height = (state.iconHeightDp ?: 52f).dp,
+                alignment = placement,
             )
             TintMode.SOLID -> MorphVector(
                 from = from,
@@ -199,8 +200,9 @@ internal fun VectorPreview(state: ShowcaseState, progress: Float) {
                 tintTo = TintBuilders.toColor(state),
                 configuration = state.toConfiguration(),
                 contentDescription = "Playground icon",
-                width = 52.dp,
-                height = 52.dp,
+                width = (state.iconWidthDp ?: 52f).dp,
+                height = (state.iconHeightDp ?: 52f).dp,
+                alignment = placement,
             )
             TintMode.GRADIENT -> MorphVector(
                 from = from,
@@ -210,8 +212,9 @@ internal fun VectorPreview(state: ShowcaseState, progress: Float) {
                 tintTo = TintBuilders.toBrush(state),
                 configuration = state.toConfiguration(),
                 contentDescription = "Playground icon",
-                width = 52.dp,
-                height = 52.dp,
+                width = (state.iconWidthDp ?: 52f).dp,
+                height = (state.iconHeightDp ?: 52f).dp,
+                alignment = placement,
             )
         }
     }

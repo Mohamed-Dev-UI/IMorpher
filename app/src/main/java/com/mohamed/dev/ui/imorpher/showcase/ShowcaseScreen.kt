@@ -77,6 +77,16 @@ fun ShowcaseScreen() {
                 state.pathStart, state.fillMode, state.staggerDelay, state.staggerOrder,
                 state.startScale, state.endScale, state.startRotation, state.endRotation,
                 state.strokeWidth, state.revealEnabled, state.colorEnabled,
+                // Panel-only fields (shared ConfigurationPanel): every one must appear so
+                // a change from a collapsed section still triggers the debounced save.
+                state.startPoint, state.pathDirection, state.directionTraversal,
+                state.drawOrder, state.strokeFill, state.defaultFillDirection,
+                state.viewportNormalization, state.segmentBudget, state.simplificationTolerance,
+                state.customAnchors, state.customMappings, state.customDrawOrderNames,
+                state.debugEnabled, state.showPathPoints, state.showPathNumbers,
+                state.showBoundingBoxes, state.showCentroids, state.showDirection,
+                state.showStartPoints, state.showPathMatching, state.markerArcFraction,
+                state.iconWidthDp, state.iconHeightDp, state.alignment, state.specKind,
             )
         }.collect {
             delay(persistenceDebounceMillis.milliseconds)

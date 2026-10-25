@@ -120,7 +120,6 @@ fun ShowcaseRow(preview: @Composable () -> Unit, content: @Composable () -> Unit
 fun PlaygroundControls(
     state: ShowcaseState,
     secondIcon: Boolean = true,
-    durationSlider: Boolean = true,
     extra: @Composable ColumnScope.() -> Unit = {},
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -131,10 +130,6 @@ fun PlaygroundControls(
             IconPicker(slot = "To icon:", selectedName = state.toIconName) { state.toIconName = it }
         }
         TintSelector(state)
-        // VectorAnimator is a manual progress driver; a duration spec would be a no-op.
-        if (durationSlider) {
-            LabeledSlider("Duration", state.durationMillis, 100f..1500f, "ms") { state.durationMillis = it }
-        }
         extra()
     }
 }
