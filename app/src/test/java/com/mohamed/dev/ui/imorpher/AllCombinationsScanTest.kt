@@ -36,7 +36,11 @@ import org.robolectric.annotation.GraphicsMode
  *    that self-comparisons cannot see.
  * 2. Full combination matrix — for every ordered pair (A, B) of distinct icons, the
  *    morph at progress 0 must paint exactly A and at progress 1 exactly B (against the
- *    ground-truth baselines). Cross-family combinations (solid -> stroke outline etc.)
+ *    ground-truth baselines). Same-viewport pairs (identical default width/height) get
+ *    this strict parity; cross-viewport pairs (BannerWide ↔ square) only need live,
+ *    non-blank, changing frames, because the engine aspect-fits a viewport into the
+ *    layout while plain Compose `Icon` stretches per axis — there is no single truth to
+ *    match at the endpoints. Cross-family combinations (solid -> stroke outline etc.)
  *    are included: they are what a playground icon picker can produce.
  *
  * Every failing combination dumps its frames under `app/build/reports/scan-failures`.
@@ -56,53 +60,77 @@ class AllCombinationsScanTest {
 
     // ------------------------------------------------------------------ rendering
 
-    private fun setContentAndDraw(content: @androidx.compose.runtime.Composable () -> Unit): Bitmap {
+    /** Canvas size in px at Robolectric density 1.0, twice the vector's intrinsic dp (Keeps
+     *  24-unit icons at the historic 2× pixel scale and gives the 48×16 banner two pixels per unit). */
+    private fun intrinsicPx(vector: ImageVector): Int =
+        (vector.defaultWidth.value * 2).toInt()
+
+    private fun setContentAndDraw(content: @androidx.compose.runtime.Composable () -> Unit, widthPx: Int, heightPx: Int): Bitmap {
         val view = ComposeView(activity)
         view.setContent {
-            Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.size(width = widthPx.dp, height = heightPx.dp), contentAlignment = Alignment.Center) {
                 content()
             }
         }
         activity.setContentView(view)
         pumpMainLoop()
         view.measure(
-            View.MeasureSpec.makeMeasureSpec(framePx, View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(framePx, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(heightPx, View.MeasureSpec.EXACTLY),
         )
-        view.layout(0, 0, framePx, framePx)
+        view.layout(0, 0, widthPx, heightPx)
         pumpMainLoop()
-        val bitmap = Bitmap.createBitmap(framePx, framePx, Bitmap.Config.ARGB_8888)
+        val bitmap = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
         view.draw(Canvas(bitmap))
         pumpMainLoop()
         return bitmap
     }
 
-    private fun renderMorph(from: ImageVector, to: ImageVector, progress: Float): Bitmap =
-        setContentAndDraw {
+    private fun renderMorph(
+        from: ImageVector,
+        to: ImageVector,
+        progress: Float,
+        layout: ImageVector = if (progress == 0f) from else to,
+    ): Bitmap {
+        // The morph frame is rendered at twice the chosen endpoint vector's intrinsic dp:
+        // per-endpoint 2× keeps the historic pixel scale for 24-unit icons (48×48 px) and
+        // gives the 48×16 banner its own two-pixels-per-unit canvas (96×32 px). At the
+        // intrinsic aspect ratio the engine's aspect-fit and Compose Icon's per-axis
+        // stretch coincide, which is what makes endpoint parity well-defined at all.
+        val widthPx = (layout.defaultWidth.value * 2).toInt()
+        val heightPx = (layout.defaultHeight.value * 2).toInt()
+        return setContentAndDraw({
             MorphVector(
                 from = from,
                 to = to,
                 progress = progress,
                 contentDescription = null,
-                width = 48.dp,
-                height = 48.dp,
+                width = layout.defaultWidth * 2,
+                height = layout.defaultHeight * 2,
             )
-        }
+        }, widthPx, heightPx)
+    }
 
     /**
      * Standard Compose painting of the same vector: the ground truth. `tint` must be
      * [Color.Unspecified] — Icon's default tint is LocalContentColor, which would paint
-     * every icon monochrome instead of using the vector's own colors.
+     * every icon monochrome instead of using the vector's own colors. The layout is 2×
+     * the vector's intrinsic size so the comparison is proportional for non-square
+     * viewports too (Compose stretches the viewport per axis; the engine aspect-fits —
+     * identical at the intrinsic aspect ratio).
      */
     private fun renderStandardIcon(vector: ImageVector): Bitmap =
-        setContentAndDraw {
+        setContentAndDraw({
             Icon(
                 imageVector = vector,
                 contentDescription = null,
                 tint = Color.Unspecified,
-                modifier = Modifier.size(48.dp),
+                modifier = Modifier.size(
+                    width = vector.defaultWidth * 2,
+                    height = vector.defaultHeight * 2,
+                ),
             )
-        }
+        }, intrinsicPx(vector), (vector.defaultHeight.value * 2).toInt())
 
     private fun pumpMainLoop() {
         repeat(4) { shadowOf(Looper.getMainLooper()).idle() }
@@ -124,6 +152,16 @@ class AllCombinationsScanTest {
             }
         }
         return sum / (255f * 4f * total)
+    }
+
+    /** True when nothing was painted (alpha below noise) anywhere on the frame. */
+    private fun isBlank(bitmap: Bitmap): Boolean {
+        for (y in 0 until bitmap.height) {
+            for (x in 0 until bitmap.width) {
+                if ((bitmap.getPixel(x, y) ushr 24 and 0xFF) > 32) return false
+            }
+        }
+        return true
     }
 
     private fun dumpPng(name: String, bitmap: Bitmap) {
@@ -168,15 +206,42 @@ class AllCombinationsScanTest {
                 val from = IconCatalog.icon(fromName)
                 val to = IconCatalog.icon(toName)
 
-                val atZero = renderMorph(from, to, 0f)
-                val atOne = renderMorph(from, to, 1f)
+                val sameViewport = from.defaultWidth == to.defaultWidth &&
+                    from.defaultHeight == to.defaultHeight
+                if (sameViewport) {
+                    // Same-viewport pair: each endpoint is painted in that endpoint's own
+                    // 2×-intrinsic layout and must equal the plain Icon ground truth.
+                    val atZero = renderMorph(from, to, 0f)
+                    val atOne = renderMorph(from, to, 1f)
 
-                val diffZero = meanAbsDifference(atZero, baselines[fromName]!!)
-                val diffOne = meanAbsDifference(atOne, baselines[toName]!!)
-                if (diffZero > 0.02f || diffOne > 0.02f) {
-                    dumpPng("$fromName-$toName-000", atZero)
-                    dumpPng("$fromName-$toName-100", atOne)
-                    failures += "$fromName -> $toName: t0=$diffZero t1=$diffOne"
+                    val diffZero = meanAbsDifference(atZero, baselines[fromName]!!)
+                    val diffOne = meanAbsDifference(atOne, baselines[toName]!!)
+                    if (diffZero > 0.02f || diffOne > 0.02f) {
+                        dumpPng("$fromName-$toName-000", atZero)
+                        dumpPng("$fromName-$toName-100", atOne)
+                        failures += "$fromName -> $toName: t0=$diffZero t1=$diffOne"
+                    }
+                } else {
+                    // Cross-viewport pair (BannerWide ↔ square): the engine aspect-fits a
+                    // viewport into the layout while plain Compose Icon stretches per axis,
+                    // so endpoint parity against Icon is inherently undefined there — both
+                    // sides are simply allowed to be different at any progress step. Assert
+                    // live morphing instead: both frames paint something in the target's
+                    // layout and the frames actually differ.
+                    val atZero = renderMorph(from, to, 0f, layout = to)
+                    val atOne = renderMorph(from, to, 1f, layout = to)
+                    if (isBlank(atZero) || isBlank(atOne)) {
+                        dumpPng("$fromName-$toName-000", atZero)
+                        dumpPng("$fromName-$toName-100", atOne)
+                        failures += "$fromName -> $toName: blank endpoint frame"
+                    } else {
+                        val liveness = meanAbsDifference(atZero, atOne)
+                        if (liveness <= 0.01f) {
+                            dumpPng("$fromName-$toName-000", atZero)
+                            dumpPng("$fromName-$toName-100", atOne)
+                            failures += "$fromName -> $toName: frames do not change across progress (diff=$liveness)"
+                        }
+                    }
                 }
             }
         }

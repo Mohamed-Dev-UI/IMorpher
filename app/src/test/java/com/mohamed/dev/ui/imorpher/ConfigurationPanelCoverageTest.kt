@@ -96,6 +96,10 @@ class ConfigurationPanelCoverageTest {
         assertTrue("editors need at least one name", names.isNotEmpty())
         // Second call serves the cached list (stable identity keeps remember{} happy).
         assertEquals(names, PairSuggestions.pathNamesFor("AddCircleOutline", "AddCircleSolid"))
+        // The Seal pair authors real path names, so the anchors/mappings/order editors
+        // must surface them instead of `path[i]` fallbacks.
+        val sealNames = PairSuggestions.pathNamesFor("SealOutline", "SealSolid")
+        assertEquals(setOf("ring", "cross", "dot"), sealNames.toSet())
     }
 
     @Test

@@ -29,7 +29,10 @@ import com.mohamed.dev.ui.imorpher.icons.ArrowRight2Solid
 import com.mohamed.dev.ui.imorpher.icons.ArrowUp1
 import com.mohamed.dev.ui.imorpher.icons.ArrowUp2Outline
 import com.mohamed.dev.ui.imorpher.icons.ArrowUp2Solid
+import com.mohamed.dev.ui.imorpher.icons.BannerWide
 import com.mohamed.dev.ui.imorpher.icons.IMorpherIcons
+import com.mohamed.dev.ui.imorpher.icons.SealOutline
+import com.mohamed.dev.ui.imorpher.icons.SealSolid
 
 /** Visual kind of a catalog icon, derived from its name suffix. */
 enum class IconKind { OUTLINE, SOLID, PLAIN }
@@ -75,6 +78,10 @@ object IconCatalog {
         put("ArrowRight2Solid", IMorpherIcons.ArrowRight2Solid)
         put("ArrowUp2Outline", IMorpherIcons.ArrowUp2Outline)
         put("ArrowUp2Solid", IMorpherIcons.ArrowUp2Solid)
+        // named-path / wide demo vectors for the diagnostics and viewport showcases
+        put("BannerWide", IMorpherIcons.BannerWide)
+        put("SealOutline", IMorpherIcons.SealOutline)
+        put("SealSolid", IMorpherIcons.SealSolid)
     }
 
     val entries: List<IconEntry> = entriesByName.keys.map { name ->
@@ -105,6 +112,10 @@ object IconCatalog {
         "ArrowBackUp" to "ArrowDown",
         "ArrowDown1" to "ArrowUp1",
         "ArrowLeft1" to "ArrowRight1",
+        // viewport normalization demo (wide banner ↔ square) and named-path seal pair
+        "BannerWide" to "AddCircleOutline",
+        "BannerWide" to "SealOutline",
+        "SealOutline" to "SealSolid",
     )
 
     fun icon(name: String): ImageVector =
