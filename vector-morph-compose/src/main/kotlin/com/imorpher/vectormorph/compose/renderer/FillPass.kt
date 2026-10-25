@@ -389,18 +389,11 @@ internal class FillPass(
                 val cy = (bMinY + bMaxY) / 2f
                 val r = hypot(w, h)
                 val clockwise = direction != DrawDirection.COUNTER_CLOCKWISE
-                val startAngle = when (direction) {
-                    DrawDirection.CLOCKWISE, DrawDirection.COUNTER_CLOCKWISE -> -90f
-                    else -> {
-                        val anchor = DirectionMath.anchorFor(direction)
-                        Math.toDegrees(kotlin.math.atan2(anchor[1] - 0.5, anchor[0] - 0.5)).toFloat()
-                    }
-                }
                 maskPath.rewind()
                 maskPath.moveTo(cx, cy)
                 maskPath.arcTo(
                     rect = Rect(cx - r, cy - r, cx + r, cy + r),
-                    startAngleDegrees = startAngle,
+                    startAngleDegrees = DirectionMath.sweepStartAngle(direction),
                     sweepAngleDegrees = (if (clockwise) 1f else -1f) * 360f * prog,
                     forceMoveTo = false,
                 )

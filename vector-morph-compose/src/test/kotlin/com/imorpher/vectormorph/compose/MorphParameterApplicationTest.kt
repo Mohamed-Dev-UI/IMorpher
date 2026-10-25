@@ -184,6 +184,31 @@ class MorphParameterApplicationTest {
     }
 
     @Test
+    fun sweepOnPairFillsHonorsDirectionStartAngle() {
+        // Square→square pair fill under a SWEEP reveal: the ClipPass arm historically
+        // hard-coded the -90° top start, so every clockwise direction rendered the same
+        // wedge at the same progress. The anchor-derived start angle must separate them.
+        val from = harness.filled(
+            "grid",
+            harness.squareAt(1f, 1f, 10f),
+            harness.squareAt(13f, 1f, 10f),
+        )
+        val left = harness.renderMorph(
+            from, from, 0.5f,
+            animation = fillReveal(mode = FillMode.SWEEP, direction = DrawDirection.LEFT_TO_RIGHT),
+        )
+        val top = harness.renderMorph(
+            from, from, 0.5f,
+            animation = fillReveal(mode = FillMode.SWEEP, direction = DrawDirection.TOP_TO_BOTTOM),
+        )
+        val delta = difference(left, top)
+        assertTrue(
+            "SWEEP's start angle must follow the direction anchor (stale would be exactly 0; delta=$delta)",
+            delta > 0.01f,
+        )
+    }
+
+    @Test
     fun fadeFillModeActuallyFadesUnderAReveal() {
         // Regression: inside a morph pair's fill legs, FillMode.FADE ignored the reveal
         // progress and popped the fill in at full alpha.

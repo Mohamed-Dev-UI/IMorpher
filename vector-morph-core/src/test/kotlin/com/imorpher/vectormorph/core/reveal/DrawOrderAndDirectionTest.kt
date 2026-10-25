@@ -212,4 +212,17 @@ class DrawOrderAndDirectionTest {
         assertFalse(DirectionMath.isDiagonal(DrawDirection.CENTER_OUT))
         assertFalse(DirectionMath.isDiagonal(DrawDirection.CLOCKWISE))
     }
+
+    @Test
+    fun sweepStartAngleDerivesFromTheDirectionAnchor() {
+        // Spin directions keep the historical top start; every other direction starts
+        // where its anchor sits (Android arcTo degrees, Y-down).
+        assertEquals(-90f, DirectionMath.sweepStartAngle(DrawDirection.CLOCKWISE), 1e-4f)
+        assertEquals(-90f, DirectionMath.sweepStartAngle(DrawDirection.COUNTER_CLOCKWISE), 1e-4f)
+        assertEquals(-90f, DirectionMath.sweepStartAngle(DrawDirection.TOP_TO_BOTTOM), 1e-4f)
+        assertEquals(180f, DirectionMath.sweepStartAngle(DrawDirection.LEFT_TO_RIGHT), 1e-4f)
+        assertEquals(0f, DirectionMath.sweepStartAngle(DrawDirection.RIGHT_TO_LEFT), 1e-4f)
+        assertEquals(90f, DirectionMath.sweepStartAngle(DrawDirection.BOTTOM_TO_TOP), 1e-4f)
+        assertEquals(-135f, DirectionMath.sweepStartAngle(DrawDirection.TOP_LEFT_TO_BOTTOM_RIGHT), 1e-4f)
+    }
 }

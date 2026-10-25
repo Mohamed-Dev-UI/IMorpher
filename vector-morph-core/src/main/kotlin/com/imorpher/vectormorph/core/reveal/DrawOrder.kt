@@ -147,6 +147,23 @@ object DirectionMath {
     fun anchorFor(direction: com.imorpher.vectormorph.core.model.DrawDirection): FloatArray =
         axisFor(direction).let { floatArrayOf(it[0], it[1]) }
 
+    /**
+     * Arc start angle (degrees, Android `arcTo` convention) for a `FillMode.SWEEP` reveal:
+     * CLOCKWISE/COUNTER_CLOCKWISE spin from the top, every other direction starts at the
+     * angle its [anchorFor] anchor sits at (atan2 in Y-down space walks the screen
+     * clockwise). Both sweep sites — the renderer's fill mask and the clip pass's leg
+     * masks — share this so one direction renders the same wedge wherever a fill sweeps.
+     */
+    fun sweepStartAngle(direction: com.imorpher.vectormorph.core.model.DrawDirection): Float = when (direction) {
+        com.imorpher.vectormorph.core.model.DrawDirection.CLOCKWISE,
+        com.imorpher.vectormorph.core.model.DrawDirection.COUNTER_CLOCKWISE,
+        -> -90f
+        else -> {
+            val anchor = anchorFor(direction)
+            Math.toDegrees(atan2(anchor[1] - 0.5, anchor[0] - 0.5)).toFloat()
+        }
+    }
+
     /** Whether an AUTO direction should be treated as diagonal travel. */
     fun isDiagonal(direction: com.imorpher.vectormorph.core.model.DrawDirection): Boolean = when (direction) {
         com.imorpher.vectormorph.core.model.DrawDirection.TOP_LEFT_TO_BOTTOM_RIGHT,

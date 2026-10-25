@@ -189,7 +189,7 @@ internal class ClipPass(
                 maskPath.moveTo(cx, cy)
                 maskPath.arcTo(
                     rect = Rect(cx - r, cy - r, cx + r, cy + r),
-                    startAngleDegrees = -90f,
+                    startAngleDegrees = DirectionMath.sweepStartAngle(direction),
                     sweepAngleDegrees = (if (clockwise) 1f else -1f) * 360f * p,
                     forceMoveTo = false,
                 )
