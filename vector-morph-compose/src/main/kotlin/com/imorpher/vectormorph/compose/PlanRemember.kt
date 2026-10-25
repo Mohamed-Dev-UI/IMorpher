@@ -45,7 +45,11 @@ internal fun VectorPlanCanvas(
     alignment: Alignment,
 ) {
     val planningAnimation = animation ?: configuration.animation
-    val evaluator = remember(plan, planningAnimation, configuration.colorSpace, configuration.staggerDelay, configuration.staggerOrder) {
+    val evaluator = remember(
+        plan, planningAnimation, configuration.colorSpace,
+        configuration.staggerDelay, configuration.staggerOrder,
+        configuration.customDrawOrder, configuration.timing,
+    ) {
         planningAnimation?.let {
             TimelineEvaluator(
                 animation = it,

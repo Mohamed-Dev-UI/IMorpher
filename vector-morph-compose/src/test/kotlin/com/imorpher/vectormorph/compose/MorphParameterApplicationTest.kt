@@ -149,6 +149,69 @@ class MorphParameterApplicationTest {
 
     // ------------------------------------------------------------------ timing / stagger
 
+    /**
+     * Evaluator rebuild contract: `timing` and `customDrawOrder` are consumed by
+     * `TimelineEvaluator` at construction, so a recomposition that changes only those
+     * fields (same PlanningKey → same plan instance) must rebuild the evaluator, not
+     * reuse the stale one. Guard for the planning-key split: a stale evaluator would
+     * replay the stale draws, making the frame delta exactly 0.
+     *
+     * Signal calibration (UNIFORM vs BY_PATH at p=0.5, `fillAlpha(0f,1f)`): BY_PATH
+     * clips rank 0 to 1f (fully lit) and rank 1 to 0f (fully dark) while UNIFORM holds
+     * both at 0.5 — measured deltas run ~0.04 of mean-abs pixel difference, far above
+     * the 0.01 floor, and identical draws measure exactly 0 (Robolectric is
+     * deterministic). `staggerDelay=0.5f` + mirrored CUSTOM orders analogously light
+     * opposite squares (~0.05).
+     */
+    @Test
+    fun recomposingTimingAndCustomDrawOrderRebuildsTheEvaluator() {
+        val from = harness.filled("from", swapFrom[0], swapFrom[1])
+        val to = harness.filled("to", swapTo[0], swapTo[1])
+        val animation = VectorAnimationSpec {
+            defaultEasing(androidx.compose.animation.core.LinearEasing)
+            allPaths { fillAlpha(0f, 1f, interval = 0f..1f) }
+        }
+        val probe = harness.openRecompositionProbe(
+            from, to, 0.5f,
+            initialConfiguration = MorphConfiguration(timing = TimingMode.UNIFORM, animation = animation),
+        )
+        val uniform = probe.capture()
+
+        // Timing-only recomposition (planning key unchanged): path 0 saturates, path 1 vanishes.
+        probe.update(MorphConfiguration(timing = TimingMode.BY_PATH, animation = animation))
+        val byPath = probe.capture()
+        val timingDelta = difference(uniform, byPath)
+        assertTrue(
+            "timing-only recomposition must rebuild the evaluator (stale would be exactly 0; delta=$timingDelta)",
+            timingDelta > 0.01f,
+        )
+
+        // customDrawOrder-only recomposition with CUSTOM stagger: with staggerDelay 0.5,
+        // rank 0 lights fully and rank 1 stays dark — flipping the order mirrors the frame.
+        val bFirst = MorphConfiguration(
+            timing = TimingMode.UNIFORM,
+            staggerDelay = 0.5f,
+            staggerOrder = com.imorpher.vectormorph.core.model.DrawOrderStrategy.CUSTOM,
+            customDrawOrder = listOf("path-1", "path-0"),
+            animation = animation,
+        )
+        val aFirst = bFirst.copy(customDrawOrder = listOf("path-0", "path-1"))
+        probe.update(bFirst)
+        val bFrame = probe.capture()
+        val orderDelta = difference(byPath, bFrame)
+        assertTrue(
+            "customDrawOrder mid-timeline must change the stagger (stale would be exactly 0; delta=$orderDelta)",
+            orderDelta > 0.01f,
+        )
+        probe.update(aFirst)
+        val aFrame = probe.capture()
+        val flipDelta = difference(bFrame, aFrame)
+        assertTrue(
+            "flipping customDrawOrder must mirror the reveal order (stale would be exactly 0; delta=$flipDelta)",
+            flipDelta > 0.01f,
+        )
+    }
+
     @Test
     fun byPathTimingSequencesWholePathsMidMorph() {
         // TimingMode schedules the reveal tracks: with BY_PATH the second path's alpha

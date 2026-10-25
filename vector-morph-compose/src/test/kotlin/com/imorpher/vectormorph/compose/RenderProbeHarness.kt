@@ -16,6 +16,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathNode
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 import com.imorpher.vectormorph.core.animation.VectorAnimation as VectorAnimationSpec
 import com.imorpher.vectormorph.core.model.MorphConfiguration
@@ -120,4 +123,68 @@ internal class RenderProbeHarness(
 
     /** Horizontal line, authored left→right (arc 0 sits at x=3). */
     fun line() = listOf(PathNode.MoveTo(3f, 12f), PathNode.LineTo(21f, 12f))
+
+    /**
+     * Opens a persistent [MorphVector] composition whose configuration can be flipped
+     * in place — the only way to observe a stale `remember` scope, which skip-changes
+     * across *recompositions* (fresh compositions always rebuild every remember block).
+     */
+    fun openRecompositionProbe(
+        from: ImageVector,
+        to: ImageVector,
+        progress: Float,
+        initialConfiguration: MorphConfiguration,
+    ): RecompositionProbe {
+        var currentConfiguration by mutableStateOf(initialConfiguration)
+        // Composition-pass counter, shared by reference: compositionTick advances every
+        // time the content recomposes (diagnostic for stale-remember debugging).
+        val compositionTick = intArrayOf(0)
+        val view = ComposeView(activity)
+        view.setContent {
+            compositionTick[0]++
+            Box(modifier = Modifier.size(framePx.dp), contentAlignment = Alignment.Center) {
+                MorphVector(
+                    from = from,
+                    to = to,
+                    progress = progress,
+                    configuration = currentConfiguration,
+                    contentDescription = null,
+                    width = framePx.dp,
+                    height = framePx.dp,
+                )
+            }
+        }
+        activity.setContentView(view)
+        pumpMainLoop()
+        view.measure(
+            View.MeasureSpec.makeMeasureSpec(framePx, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(framePx, View.MeasureSpec.EXACTLY),
+        )
+        view.layout(0, 0, framePx, framePx)
+        pumpMainLoop()
+        return RecompositionProbe(this, view, compositionTick) { configuration -> currentConfiguration = configuration }
+    }
+
+    /** Flips the configuration of a live composition and captures frames across recompositions. */
+    internal class RecompositionProbe(
+        private val harness: RenderProbeHarness,
+        private val view: ComposeView,
+        private val compositionTick: IntArray,
+        private val applyConfiguration: (MorphConfiguration) -> Unit,
+    ) {
+        /** Composition passes the probe content has run so far (see harness tick comment). */
+        fun compositionPasses(): Int = compositionTick[0]
+
+        fun update(configuration: MorphConfiguration) {
+            harness.activity.runOnUiThread { applyConfiguration(configuration) }
+            harness.pumpMainLoop()
+        }
+
+        fun capture(): Bitmap {
+            val bitmap = Bitmap.createBitmap(harness.framePx, harness.framePx, Bitmap.Config.ARGB_8888)
+            view.draw(Canvas(bitmap))
+            harness.pumpMainLoop()
+            return bitmap
+        }
+    }
 }
