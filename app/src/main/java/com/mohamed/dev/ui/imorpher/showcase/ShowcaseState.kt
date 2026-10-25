@@ -1,8 +1,13 @@
 package com.mohamed.dev.ui.imorpher.showcase
 
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import com.imorpher.vectormorph.core.model.ColorInterpolationSpace
@@ -12,15 +17,45 @@ import com.imorpher.vectormorph.core.model.DrawOrderStrategy
 import com.imorpher.vectormorph.core.model.FillMode
 import com.imorpher.vectormorph.core.model.MissingPathBehavior
 import com.imorpher.vectormorph.core.model.MorphConfiguration
+import com.imorpher.vectormorph.core.model.MorphDebugOptions
 import com.imorpher.vectormorph.core.model.MotionPreference
+import com.imorpher.vectormorph.core.model.PathDirectionStrategy
 import com.imorpher.vectormorph.core.model.PathMatchingStrategy
+import com.imorpher.vectormorph.core.model.PathMapping
 import com.imorpher.vectormorph.core.model.PathStart
+import com.imorpher.vectormorph.core.model.StartPointStrategy
+import com.imorpher.vectormorph.core.model.StrokeFillStrategy
 import com.imorpher.vectormorph.core.model.TimingMode
+import com.imorpher.vectormorph.core.model.DirectionTraversal
+import com.imorpher.vectormorph.core.model.ViewportNormalization
 import com.imorpher.vectormorph.core.reveal.DirectionMath
 import com.imorpher.vectormorph.core.reveal.DrawResolutionWarning
 
 /** Tint style selected in playgrounds: none, one solid color, or a gradient. */
 enum class TintMode { NONE, SOLID, GRADIENT }
+
+/** Overall placement of the fitted icon inside its layout bounds. */
+enum class AlignmentKind(val label: String) {
+    CENTER("Center"),
+    CENTER_START("Center start"),
+    CENTER_END("Center end"),
+    TOP_CENTER("Top center"),
+    BOTTOM_CENTER("Bottom center"),
+}
+
+/** Compose animation spec shape driving the overall morph progress. */
+enum class AnimationSpecKind(val label: String) {
+    TWEEN("Tween"),
+    LINEAR("Tween (linear)"),
+    SPRING_MEDIUM_BOUNCY("Spring (bouncy)"),
+    SPRING_NO_BOUNCY("Spring (no bounce)"),
+}
+
+/** One row of the per-path draw-anchor editor: [pathName] starts at [fraction] (0..1). */
+data class AnchorEntry(val pathName: String, val fraction: Float)
+
+/** One row of the mappings editor: source path [source] morphs into [target]. */
+data class PathMappingEdit(val source: String, val target: String)
 
 /**
  * Shared, fully mutable parameter state behind every playground. Each playground owns one
@@ -48,6 +83,39 @@ class ShowcaseState {
     var timing by mutableStateOf(TimingMode.BY_PATH_LENGTH)
     var colorSpace by mutableStateOf(ColorInterpolationSpace.SRGB)
     var keepRenderOrder by mutableStateOf(true)
+    var startPoint by mutableStateOf(StartPointStrategy.AUTO)
+    var pathDirection by mutableStateOf(PathDirectionStrategy.AUTO)
+    var directionTraversal by mutableStateOf(DirectionTraversal.HONOR_DIRECTION)
+    var drawOrder by mutableStateOf(DrawOrderStrategy.AUTO)
+    var strokeFill by mutableStateOf(StrokeFillStrategy.AUTO)
+    var defaultFillDirection by mutableStateOf(DrawDirection.TOP_RIGHT_TO_BOTTOM_LEFT)
+    var viewportNormalization by mutableStateOf(ViewportNormalization.STRETCH)
+
+    // --- geometry budget
+    var segmentBudget by mutableStateOf<Int?>(null)
+    var simplificationTolerance by mutableStateOf(0.25f)
+
+    // --- editors
+    var customAnchors by mutableStateOf(listOf<AnchorEntry>())
+    var customMappings by mutableStateOf(listOf<PathMappingEdit>())
+    var customDrawOrderNames by mutableStateOf(listOf<String>())
+
+    // --- debug overlays
+    var debugEnabled by mutableStateOf(false)
+    var showPathPoints by mutableStateOf(false)
+    var showPathNumbers by mutableStateOf(false)
+    var showBoundingBoxes by mutableStateOf(false)
+    var showCentroids by mutableStateOf(false)
+    var showDirection by mutableStateOf(false)
+    var showStartPoints by mutableStateOf(false)
+    var showPathMatching by mutableStateOf(false)
+    var markerArcFraction by mutableStateOf(0f)
+
+    // --- sizing/placement
+    var iconWidthDp by mutableStateOf<Float?>(null)
+    var iconHeightDp by mutableStateOf<Float?>(null)
+    var alignment by mutableStateOf(AlignmentKind.CENTER)
+    var specKind by mutableStateOf(AnimationSpecKind.TWEEN)
 
     // --- reveal geometry
     var drawMode by mutableStateOf(DrawMode.FORWARD)
@@ -126,6 +194,31 @@ class ShowcaseState {
         strokeWidth = defaults.strokeWidth
         revealEnabled = defaults.revealEnabled
         colorEnabled = defaults.colorEnabled
+        startPoint = defaults.startPoint
+        pathDirection = defaults.pathDirection
+        directionTraversal = defaults.directionTraversal
+        drawOrder = defaults.drawOrder
+        strokeFill = defaults.strokeFill
+        defaultFillDirection = defaults.defaultFillDirection
+        viewportNormalization = defaults.viewportNormalization
+        segmentBudget = defaults.segmentBudget
+        simplificationTolerance = defaults.simplificationTolerance
+        customAnchors = defaults.customAnchors
+        customMappings = defaults.customMappings
+        customDrawOrderNames = defaults.customDrawOrderNames
+        debugEnabled = defaults.debugEnabled
+        showPathPoints = defaults.showPathPoints
+        showPathNumbers = defaults.showPathNumbers
+        showBoundingBoxes = defaults.showBoundingBoxes
+        showCentroids = defaults.showCentroids
+        showDirection = defaults.showDirection
+        showStartPoints = defaults.showStartPoints
+        showPathMatching = defaults.showPathMatching
+        markerArcFraction = defaults.markerArcFraction
+        iconWidthDp = defaults.iconWidthDp
+        iconHeightDp = defaults.iconHeightDp
+        alignment = defaults.alignment
+        specKind = defaults.specKind
     }
 
     /** Transfers another playground's shared choices (icons, colors, tint) into this one. */
@@ -156,6 +249,16 @@ object ShowcaseOptions {
     val fillModes = FillMode.entries
     val staggerOrders = DrawOrderStrategy.entries.filter { it != DrawOrderStrategy.CUSTOM }
     val tintModes = TintMode.entries
+
+    val startPoints = StartPointStrategy.entries
+    val pathDirections = PathDirectionStrategy.entries
+    val directionTraversals = DirectionTraversal.entries
+    val drawOrders = DrawOrderStrategy.entries.filter { it != DrawOrderStrategy.CUSTOM }
+    val strokeFills = StrokeFillStrategy.entries
+    val viewportNormalizations = ViewportNormalization.entries
+    val alignments = AlignmentKind.entries
+    val specKinds = AnimationSpecKind.entries
+    val fillDirections = DrawDirection.entries.filter { it != DrawDirection.CUSTOM }
 
     val colorSpacesLabeled = listOf("SRGB", "Linear sRGB", "OKLab", "OKLCH")
 }
@@ -200,11 +303,58 @@ object TintBuilders {
 /** Builds a [MorphConfiguration] from the playground's shared choices. */
 fun ShowcaseState.toConfiguration(): MorphConfiguration = MorphConfiguration(
     pathMatching = pathMatching,
+    startPoint = startPoint,
+    pathDirection = pathDirection,
+    drawOrder = drawOrder,
+    customDrawOrder = customDrawOrderNames,
     missingPath = missingPath,
     fallback = fallback,
     timing = timing,
     colorSpace = colorSpace,
-    keepRenderOrder = keepRenderOrder,
+    strokeFill = strokeFill,
+    animation = null,
     staggerDelay = staggerDelay,
     staggerOrder = staggerOrder,
+    customMappings = customMappings.map { PathMapping(source = it.source, target = it.target) },
+    customDrawAnchors = customAnchors.associate { it.pathName to it.fraction },
+    defaultFillMode = fillMode,
+    defaultFillDirection = defaultFillDirection,
+    debug = toDebugOptions(),
+    keepRenderOrder = keepRenderOrder,
+    directionTraversal = directionTraversal,
+    segmentBudget = segmentBudget,
+    simplificationTolerance = simplificationTolerance,
+    viewportNormalization = viewportNormalization,
 )
+
+/** [MorphConfiguration.debug] value for the current state (null while overlays are off). */
+fun ShowcaseState.toDebugOptions(): MorphDebugOptions? {
+    if (!debugEnabled) return null
+    return MorphDebugOptions(
+        showPathPoints = showPathPoints,
+        showPathNumbers = showPathNumbers,
+        showBoundingBoxes = showBoundingBoxes,
+        showCentroids = showCentroids,
+        showDirection = showDirection,
+        showStartPoints = showStartPoints,
+        showPathMatching = showPathMatching,
+        markerArcFraction = markerArcFraction,
+    )
+}
+
+/** Overall progress spec per the selected [AnimationSpecKind]; tween kinds carry [ShowcaseState.durationMillis]. */
+fun ShowcaseState.toAnimationSpec(): AnimationSpec<Float> = when (specKind) {
+    AnimationSpecKind.TWEEN -> tween(durationMillis = durationMillis.toInt())
+    AnimationSpecKind.LINEAR -> tween(durationMillis = durationMillis.toInt(), easing = LinearEasing)
+    AnimationSpecKind.SPRING_MEDIUM_BOUNCY -> spring(dampingRatio = 0.5f, stiffness = 30f)
+    AnimationSpecKind.SPRING_NO_BOUNCY -> spring(dampingRatio = 1f, stiffness = 400f)
+}
+
+/** Compose [Alignment] placement per the selected [AlignmentKind]. */
+fun ShowcaseState.toAlignment(): Alignment = when (alignment) {
+    AlignmentKind.CENTER -> Alignment.Center
+    AlignmentKind.CENTER_START -> Alignment.CenterStart
+    AlignmentKind.CENTER_END -> Alignment.CenterEnd
+    AlignmentKind.TOP_CENTER -> Alignment.TopCenter
+    AlignmentKind.BOTTOM_CENTER -> Alignment.BottomCenter
+}

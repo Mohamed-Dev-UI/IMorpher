@@ -74,6 +74,47 @@ object ShowcaseStatePersistence {
         put("strokeWidth", state.strokeWidth.toDouble())
         put("revealEnabled", state.revealEnabled)
         put("colorEnabled", state.colorEnabled)
+        put("startPoint", state.startPoint.name)
+        put("pathDirection", state.pathDirection.name)
+        put("directionTraversal", state.directionTraversal.name)
+        put("drawOrder", state.drawOrder.name)
+        put("strokeFill", state.strokeFill.name)
+        put("defaultFillDirection", state.defaultFillDirection.name)
+        put("viewportNormalization", state.viewportNormalization.name)
+        put("segmentBudget", state.segmentBudget ?: -1)
+        put("simplificationTolerance", state.simplificationTolerance.toDouble())
+        put("anchorEntries", org.json.JSONArray().apply {
+            state.customAnchors.forEach { entry ->
+                put(org.json.JSONObject().apply {
+                    put("name", entry.pathName)
+                    put("fraction", entry.fraction.toDouble())
+                })
+            }
+        })
+        put("mappings", org.json.JSONArray().apply {
+            state.customMappings.forEach { entry ->
+                put(org.json.JSONObject().apply {
+                    put("source", entry.source)
+                    put("target", entry.target)
+                })
+            }
+        })
+        put("customDrawOrder", org.json.JSONArray().apply {
+            state.customDrawOrderNames.forEach { name -> put(name) }
+        })
+        put("debugEnabled", state.debugEnabled)
+        put("showPathPoints", state.showPathPoints)
+        put("showPathNumbers", state.showPathNumbers)
+        put("showBoundingBoxes", state.showBoundingBoxes)
+        put("showCentroids", state.showCentroids)
+        put("showDirection", state.showDirection)
+        put("showStartPoints", state.showStartPoints)
+        put("showPathMatching", state.showPathMatching)
+        put("markerArcFraction", state.markerArcFraction.toDouble())
+        put("iconWidthDp", state.iconWidthDp ?: -1f)
+        put("iconHeightDp", state.iconHeightDp ?: -1f)
+        put("alignment", state.alignment.name)
+        put("specKind", state.specKind.name)
     }.toString()
 
     private fun fromJson(json: JSONObject, state: ShowcaseState) {
@@ -109,6 +150,43 @@ object ShowcaseStatePersistence {
             strokeWidth = parseNumber(json, "strokeWidth", strokeWidth)
             revealEnabled = json.optBoolean("revealEnabled", revealEnabled)
             colorEnabled = json.optBoolean("colorEnabled", colorEnabled)
+            startPoint = parseEnum(json.optString("startPoint", startPoint.name), startPoint, StartPointEntries)
+            pathDirection = parseEnum(json.optString("pathDirection", pathDirection.name), pathDirection, PathDirectionEntries)
+            directionTraversal = parseEnum(json.optString("directionTraversal", directionTraversal.name), directionTraversal, DirectionTraversalEntries)
+            drawOrder = parseEnum(json.optString("drawOrder", drawOrder.name), drawOrder, DrawOrderEntries)
+            strokeFill = parseEnum(json.optString("strokeFill", strokeFill.name), strokeFill, StrokeFillEntries)
+            defaultFillDirection = parseEnum(
+                json.optString("defaultFillDirection", defaultFillDirection.name),
+                defaultFillDirection, DrawDirectionEntries)
+            viewportNormalization = parseEnum(
+                json.optString("viewportNormalization", viewportNormalization.name),
+                viewportNormalization, ViewportNormalizationEntries)
+            segmentBudget = json.optInt("segmentBudget", -1).takeIf { it >= 2 }
+            simplificationTolerance = parseNumber(json, "simplificationTolerance", simplificationTolerance)
+                .let { if (it < 0f || it.isInfinite()) defaultSimplificationTolerance else it }
+            customAnchors = entries(
+                json.optJSONArray("anchorEntries"),
+                { obj -> AnchorEntry(obj.optString("name"), fractionOf(obj.optDouble("fraction", 0.0))) },
+            )
+            customMappings = entries(
+                json.optJSONArray("mappings"),
+                { obj -> PathMappingEdit(obj.optString("source"), obj.optString("target")) },
+            )
+            customDrawOrderNames = names(json.optJSONArray("customDrawOrder"))
+            debugEnabled = json.optBoolean("debugEnabled", debugEnabled)
+            showPathPoints = json.optBoolean("showPathPoints", showPathPoints)
+            showPathNumbers = json.optBoolean("showPathNumbers", showPathNumbers)
+            showBoundingBoxes = json.optBoolean("showBoundingBoxes", showBoundingBoxes)
+            showCentroids = json.optBoolean("showCentroids", showCentroids)
+            showDirection = json.optBoolean("showDirection", showDirection)
+            showStartPoints = json.optBoolean("showStartPoints", showStartPoints)
+            showPathMatching = json.optBoolean("showPathMatching", showPathMatching)
+            markerArcFraction = parseNumber(json, "markerArcFraction", markerArcFraction)
+                .let { if (it.isNaN()) defaultMarkerArcFraction else it.coerceIn(0f, 1f) }
+            iconWidthDp = parseNumberKey(json, "iconWidthDp")
+            iconHeightDp = parseNumberKey(json, "iconHeightDp")
+            alignment = parseEnum(json.optString("alignment", alignment.name), alignment, AlignmentEntries)
+            specKind = parseEnum(json.optString("specKind", specKind.name), specKind, SpecKindEntries)
         }
     }
 
@@ -142,6 +220,42 @@ object ShowcaseStatePersistence {
         entries: EnumEntries<E>,
     ): E = entries.firstOrNull { it.name == raw } ?: fallback
 
+    /** Parses a nullable dp value: negative/missing/NaN maps off (null), NaN guard included. */
+    private fun parseNumberKey(json: JSONObject, key: String): Float? {
+        if (!json.has(key)) return null
+        val raw = json.optDouble(key, -1.0)
+        if (raw.isNaN() || raw.isInfinite()) return null
+        val value = raw.toFloat()
+        return value.takeIf { it >= 0f }
+    }
+
+    private fun fractionOf(raw: Double): Float {
+        if (raw.isNaN() || raw.isInfinite()) return 0f
+        return raw.toFloat().coerceIn(0f, 1f)
+    }
+
+    private inline fun <reified T> entries(
+        raw: org.json.JSONArray?,
+        build: (JSONObject) -> T,
+    ): List<T> {
+        raw ?: return emptyList()
+        val built = mutableListOf<T>()
+        for (index in 0 until raw.length()) {
+            val element = runCatching { raw.getJSONObject(index) }.getOrNull() ?: continue
+            runCatching { built.add(build(element)) }
+        }
+        return built
+    }
+
+    private fun names(raw: org.json.JSONArray?): List<String> {
+        raw ?: return emptyList()
+        val parsed = mutableListOf<String>()
+        for (index in 0 until raw.length()) {
+            parsed.add(raw.optString(index, ""))
+        }
+        return parsed.filter { it.isNotBlank() }
+    }
+
     // Enum entry lists referenced above (kept as vals so parseEnum stays allocation-free).
     private val MotionPreferenceEntries = com.imorpher.vectormorph.core.model.MotionPreference.entries
     private val PathMatchingEntries = com.imorpher.vectormorph.core.model.PathMatchingStrategy.entries
@@ -154,4 +268,15 @@ object ShowcaseStatePersistence {
     private val PathStartEntries = com.imorpher.vectormorph.core.model.PathStart.entries
     private val FillModeEntries = com.imorpher.vectormorph.core.model.FillMode.entries
     private val DrawOrderEntries = com.imorpher.vectormorph.core.model.DrawOrderStrategy.entries
+    private val StartPointEntries = com.imorpher.vectormorph.core.model.StartPointStrategy.entries
+    private val PathDirectionEntries = com.imorpher.vectormorph.core.model.PathDirectionStrategy.entries
+    private val DirectionTraversalEntries = com.imorpher.vectormorph.core.model.DirectionTraversal.entries
+    private val StrokeFillEntries = com.imorpher.vectormorph.core.model.StrokeFillStrategy.entries
+    private val ViewportNormalizationEntries = com.imorpher.vectormorph.core.model.ViewportNormalization.entries
+    private val AlignmentEntries = AlignmentKind.entries
+    private val SpecKindEntries = AnimationSpecKind.entries
+
+    // Defaults for numeric clamping (kept in sync with ShowcaseState defaults).
+    private const val defaultSimplificationTolerance = 0.25f
+    private const val defaultMarkerArcFraction = 0f
 }

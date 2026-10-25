@@ -16,7 +16,10 @@ import com.mohamed.dev.ui.imorpher.showcase.ShowcaseStatePersistence
 import com.mohamed.dev.ui.imorpher.showcase.SnippetGenerator
 import com.mohamed.dev.ui.imorpher.showcase.TintBuilders
 import com.mohamed.dev.ui.imorpher.showcase.TintMode
+import com.mohamed.dev.ui.imorpher.showcase.toAlignment
+import com.mohamed.dev.ui.imorpher.showcase.toAnimationSpec
 import com.mohamed.dev.ui.imorpher.showcase.toConfiguration
+import com.mohamed.dev.ui.imorpher.showcase.toDebugOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -77,6 +80,31 @@ class ShowcaseStateTest {
         state.strokeWidth = 2.9f
         state.revealEnabled = false
         state.colorEnabled = true
+        state.startPoint = com.imorpher.vectormorph.core.model.StartPointStrategy.MATCH_SOURCE
+        state.pathDirection = com.imorpher.vectormorph.core.model.PathDirectionStrategy.CLOCKWISE
+        state.directionTraversal = com.imorpher.vectormorph.core.model.DirectionTraversal.LEGACY
+        state.drawOrder = com.imorpher.vectormorph.core.model.DrawOrderStrategy.COUNTER_CLOCKWISE
+        state.strokeFill = com.imorpher.vectormorph.core.model.StrokeFillStrategy.MORPH
+        state.defaultFillDirection = com.imorpher.vectormorph.core.model.DrawDirection.BOTTOM_TO_TOP
+        state.viewportNormalization = com.imorpher.vectormorph.core.model.ViewportNormalization.FIT
+        state.alignment = com.mohamed.dev.ui.imorpher.showcase.AlignmentKind.BOTTOM_CENTER
+        state.debugEnabled = true
+        state.showPathPoints = true
+        state.showPathNumbers = true
+        state.showBoundingBoxes = true
+        state.showCentroids = true
+        state.showDirection = true
+        state.showStartPoints = true
+        state.showPathMatching = true
+        state.markerArcFraction = 0.8f
+        state.segmentBudget = 12
+        state.simplificationTolerance = 0.75f
+        state.iconWidthDp = 44f
+        state.iconHeightDp = 44f
+        state.specKind = com.mohamed.dev.ui.imorpher.showcase.AnimationSpecKind.SPRING_MEDIUM_BOUNCY
+        state.customAnchors = listOf(com.mohamed.dev.ui.imorpher.showcase.AnchorEntry("path[1]", 0.4f))
+        state.customMappings = listOf(com.mohamed.dev.ui.imorpher.showcase.PathMappingEdit("a", "b"))
+        state.customDrawOrderNames = listOf("path[2]", "path[1]")
 
         state.resetToDefaults()
 
@@ -104,6 +132,31 @@ class ShowcaseStateTest {
         assertEquals(before.strokeWidth, state.strokeWidth)
         assertEquals(before.revealEnabled, state.revealEnabled)
         assertEquals(before.colorEnabled, state.colorEnabled)
+        assertEquals(before.startPoint, state.startPoint)
+        assertEquals(before.pathDirection, state.pathDirection)
+        assertEquals(before.directionTraversal, state.directionTraversal)
+        assertEquals(before.drawOrder, state.drawOrder)
+        assertEquals(before.strokeFill, state.strokeFill)
+        assertEquals(before.defaultFillDirection, state.defaultFillDirection)
+        assertEquals(before.viewportNormalization, state.viewportNormalization)
+        assertEquals(before.alignment, state.alignment)
+        assertEquals(before.debugEnabled, state.debugEnabled)
+        assertEquals(before.showPathPoints, state.showPathPoints)
+        assertEquals(before.showPathNumbers, state.showPathNumbers)
+        assertEquals(before.showBoundingBoxes, state.showBoundingBoxes)
+        assertEquals(before.showCentroids, state.showCentroids)
+        assertEquals(before.showDirection, state.showDirection)
+        assertEquals(before.showStartPoints, state.showStartPoints)
+        assertEquals(before.showPathMatching, state.showPathMatching)
+        assertEquals(before.markerArcFraction, state.markerArcFraction)
+        assertEquals(before.segmentBudget, state.segmentBudget)
+        assertEquals(before.simplificationTolerance, state.simplificationTolerance)
+        assertEquals(before.iconWidthDp, state.iconWidthDp)
+        assertEquals(before.iconHeightDp, state.iconHeightDp)
+        assertEquals(before.specKind, state.specKind)
+        assertEquals(before.customAnchors, state.customAnchors)
+        assertEquals(before.customMappings, state.customMappings)
+        assertEquals(before.customDrawOrderNames, state.customDrawOrderNames)
     }
 
     @Test
@@ -165,6 +218,27 @@ class ShowcaseStateTest {
             strokeWidth = 2.25f
             revealEnabled = false
             colorEnabled = true
+            startPoint = com.imorpher.vectormorph.core.model.StartPointStrategy.MATCH_TARGET
+            pathDirection = com.imorpher.vectormorph.core.model.PathDirectionStrategy.COUNTER_CLOCKWISE
+            directionTraversal = com.imorpher.vectormorph.core.model.DirectionTraversal.LEGACY
+            drawOrder = com.imorpher.vectormorph.core.model.DrawOrderStrategy.CLOCKWISE
+            strokeFill = com.imorpher.vectormorph.core.model.StrokeFillStrategy.DRAW
+            defaultFillDirection = com.imorpher.vectormorph.core.model.DrawDirection.RIGHT_TO_LEFT
+            viewportNormalization = com.imorpher.vectormorph.core.model.ViewportNormalization.FIT
+            alignment = com.mohamed.dev.ui.imorpher.showcase.AlignmentKind.TOP_CENTER
+            debugEnabled = true
+            showPathNumbers = true
+            showDirection = true
+            showPathMatching = true
+            markerArcFraction = 0.55f
+            segmentBudget = 14
+            simplificationTolerance = 0.5f
+            iconWidthDp = 40f
+            iconHeightDp = 40f
+            specKind = com.mohamed.dev.ui.imorpher.showcase.AnimationSpecKind.SPRING_NO_BOUNCY
+            customAnchors = listOf(com.mohamed.dev.ui.imorpher.showcase.AnchorEntry("path[1]", 0.25f))
+            customMappings = listOf(com.mohamed.dev.ui.imorpher.showcase.PathMappingEdit("path[1]", "path[2]"))
+            customDrawOrderNames = listOf("path[2]", "path[1]")
         }
 
         val restored = ShowcaseState()
@@ -196,6 +270,27 @@ class ShowcaseStateTest {
         assertEquals(original.strokeWidth, restored.strokeWidth)
         assertEquals(original.revealEnabled, restored.revealEnabled)
         assertEquals(original.colorEnabled, restored.colorEnabled)
+        assertEquals(original.startPoint, restored.startPoint)
+        assertEquals(original.pathDirection, restored.pathDirection)
+        assertEquals(original.directionTraversal, restored.directionTraversal)
+        assertEquals(original.drawOrder, restored.drawOrder)
+        assertEquals(original.strokeFill, restored.strokeFill)
+        assertEquals(original.defaultFillDirection, restored.defaultFillDirection)
+        assertEquals(original.viewportNormalization, restored.viewportNormalization)
+        assertEquals(original.alignment, restored.alignment)
+        assertEquals(original.debugEnabled, restored.debugEnabled)
+        assertEquals(original.showPathNumbers, restored.showPathNumbers)
+        assertEquals(original.showDirection, restored.showDirection)
+        assertEquals(original.showPathMatching, restored.showPathMatching)
+        assertEquals(original.markerArcFraction, restored.markerArcFraction)
+        assertEquals(original.segmentBudget, restored.segmentBudget)
+        assertEquals(original.simplificationTolerance, restored.simplificationTolerance)
+        assertEquals(original.iconWidthDp, restored.iconWidthDp)
+        assertEquals(original.iconHeightDp, restored.iconHeightDp)
+        assertEquals(original.specKind, restored.specKind)
+        assertEquals(original.customAnchors, restored.customAnchors)
+        assertEquals(original.customMappings, restored.customMappings)
+        assertEquals(original.customDrawOrderNames, restored.customDrawOrderNames)
     }
 
     @Test
@@ -325,5 +420,158 @@ class ShowcaseStateTest {
             IconCatalog.icon(suggestion.fromName)
             IconCatalog.icon(suggestion.toName)
         }
+    }
+
+    // ------------------------------------------------------------------ full config coverage
+
+    @Test
+    fun toConfigurationMapsEveryParameterField() {
+        val state = ShowcaseState().apply {
+            fromIconName = "ArrangeCircle2Outline"
+            toIconName = "ArrangeCircle2Solid"
+            pathMatching = com.imorpher.vectormorph.core.model.PathMatchingStrategy.BY_GEOMETRY
+            startPoint = com.imorpher.vectormorph.core.model.StartPointStrategy.MATCH_SOURCE
+            pathDirection = com.imorpher.vectormorph.core.model.PathDirectionStrategy.CLOCKWISE
+            drawOrder = com.imorpher.vectormorph.core.model.DrawOrderStrategy.CLOCKWISE
+            customDrawOrderNames = listOf("path[2]", "path[1]")
+            missingPath = MissingPathBehavior.MORPH_FROM_NEAREST
+            fallback = com.imorpher.vectormorph.core.model.FallbackStrategy.SCALE_CROSSFADE
+            timing = TimingMode.BY_COMMAND
+            colorSpace = ColorInterpolationSpace.OKLAB
+            strokeFill = com.imorpher.vectormorph.core.model.StrokeFillStrategy.MORPH
+            staggerDelay = 0.2f
+            staggerOrder = com.imorpher.vectormorph.core.model.DrawOrderStrategy.TOP_RIGHT_TO_BOTTOM_LEFT
+            customMappings = listOf(com.mohamed.dev.ui.imorpher.showcase.PathMappingEdit("path[1]", "path[2]"))
+            customAnchors = listOf(com.mohamed.dev.ui.imorpher.showcase.AnchorEntry("path[1]", 0.25f))
+            fillMode = com.imorpher.vectormorph.core.model.FillMode.SWEEP
+            defaultFillDirection = DrawDirection.LEFT_TO_RIGHT
+            keepRenderOrder = false
+            directionTraversal = com.imorpher.vectormorph.core.model.DirectionTraversal.LEGACY
+            segmentBudget = 12
+            simplificationTolerance = 0.4f
+            viewportNormalization = com.imorpher.vectormorph.core.model.ViewportNormalization.FIT
+            debugEnabled = false
+        }
+        val configuration = state.toConfiguration()
+        val expected = com.imorpher.vectormorph.core.model.MorphConfiguration(
+            pathMatching = com.imorpher.vectormorph.core.model.PathMatchingStrategy.BY_GEOMETRY,
+            startPoint = com.imorpher.vectormorph.core.model.StartPointStrategy.MATCH_SOURCE,
+            pathDirection = com.imorpher.vectormorph.core.model.PathDirectionStrategy.CLOCKWISE,
+            drawOrder = com.imorpher.vectormorph.core.model.DrawOrderStrategy.CLOCKWISE,
+            customDrawOrder = listOf("path[2]", "path[1]"),
+            missingPath = MissingPathBehavior.MORPH_FROM_NEAREST,
+            fallback = com.imorpher.vectormorph.core.model.FallbackStrategy.SCALE_CROSSFADE,
+            timing = TimingMode.BY_COMMAND,
+            colorSpace = ColorInterpolationSpace.OKLAB,
+            strokeFill = com.imorpher.vectormorph.core.model.StrokeFillStrategy.MORPH,
+            animation = null,
+            staggerDelay = 0.2f,
+            staggerOrder = com.imorpher.vectormorph.core.model.DrawOrderStrategy.TOP_RIGHT_TO_BOTTOM_LEFT,
+            customMappings = listOf(com.imorpher.vectormorph.core.model.PathMapping("path[1]", "path[2]")),
+            customDrawAnchors = mapOf("path[1]" to 0.25f),
+            defaultFillMode = com.imorpher.vectormorph.core.model.FillMode.SWEEP,
+            defaultFillDirection = DrawDirection.LEFT_TO_RIGHT,
+            debug = null,
+            keepRenderOrder = false,
+            directionTraversal = com.imorpher.vectormorph.core.model.DirectionTraversal.LEGACY,
+            segmentBudget = 12,
+            simplificationTolerance = 0.4f,
+            viewportNormalization = com.imorpher.vectormorph.core.model.ViewportNormalization.FIT,
+        )
+        assertEquals(expected, configuration)
+    }
+
+    @Suppress("DEPRECATION")
+    @Test
+    fun deprecatedLegacyMapStaysOutOfGeneratedConfiguration() {
+        val configuration = ShowcaseState().toConfiguration()
+        assertEquals(
+            "the deprecated alignment map must not be set by the showcase",
+            emptyMap<String, Float>(),
+            configuration.customStartOffsets,
+        )
+    }
+
+    @Test
+    fun debugOptionsFollowTheMasterSwitch() {
+        val disabled = ShowcaseState().apply {
+            showPathNumbers = true
+            showDirection = true
+        }
+        assertEquals(null, disabled.toDebugOptions())
+        val enabled = ShowcaseState().apply {
+            debugEnabled = true
+            showPathNumbers = true
+            showDirection = true
+            markerArcFraction = 0.3f
+        }
+        assertEquals(
+            com.imorpher.vectormorph.core.model.MorphDebugOptions(
+                showPathNumbers = true,
+                showDirection = true,
+                markerArcFraction = 0.3f,
+            ),
+            enabled.toDebugOptions(),
+        )
+    }
+
+    @Test
+    fun animationSpecsFollowTheSelectedKind() {
+        val state = ShowcaseState().apply { durationMillis = 650f }
+        state.specKind = com.mohamed.dev.ui.imorpher.showcase.AnimationSpecKind.TWEEN
+        assertEquals(androidx.compose.animation.core.tween<Float>(650), state.toAnimationSpec())
+        state.specKind = com.mohamed.dev.ui.imorpher.showcase.AnimationSpecKind.LINEAR
+        assertEquals(
+            androidx.compose.animation.core.tween<Float>(650, easing = androidx.compose.animation.core.LinearEasing),
+            state.toAnimationSpec(),
+        )
+        state.specKind = com.mohamed.dev.ui.imorpher.showcase.AnimationSpecKind.SPRING_MEDIUM_BOUNCY
+        assertEquals(
+            androidx.compose.animation.core.spring<Float>(dampingRatio = 0.5f, stiffness = 30f),
+            state.toAnimationSpec(),
+        )
+        state.specKind = com.mohamed.dev.ui.imorpher.showcase.AnimationSpecKind.SPRING_NO_BOUNCY
+        assertEquals(
+            androidx.compose.animation.core.spring<Float>(dampingRatio = 1f, stiffness = 400f),
+            state.toAnimationSpec(),
+        )
+    }
+
+    @Test
+    fun alignmentsMapToComposeAlignment() {
+        val state = ShowcaseState()
+        state.alignment = com.mohamed.dev.ui.imorpher.showcase.AlignmentKind.CENTER
+        assertEquals(androidx.compose.ui.Alignment.Center, state.toAlignment())
+        state.alignment = com.mohamed.dev.ui.imorpher.showcase.AlignmentKind.CENTER_START
+        assertEquals(androidx.compose.ui.Alignment.CenterStart, state.toAlignment())
+        state.alignment = com.mohamed.dev.ui.imorpher.showcase.AlignmentKind.CENTER_END
+        assertEquals(androidx.compose.ui.Alignment.CenterEnd, state.toAlignment())
+        state.alignment = com.mohamed.dev.ui.imorpher.showcase.AlignmentKind.TOP_CENTER
+        assertEquals(androidx.compose.ui.Alignment.TopCenter, state.toAlignment())
+        state.alignment = com.mohamed.dev.ui.imorpher.showcase.AlignmentKind.BOTTOM_CENTER
+        assertEquals(androidx.compose.ui.Alignment.BottomCenter, state.toAlignment())
+    }
+
+    @Test
+    fun malformedNewFieldsFallBackWithoutThrowing() {
+        val state = ShowcaseState().apply {
+            segmentBudget = 20
+            markerArcFraction = 0.5f
+            specKind = com.mohamed.dev.ui.imorpher.showcase.AnimationSpecKind.LINEAR
+        }
+        val json = ShowcaseStatePersistence.toJsonForTest(ShowcaseState())
+            .replace("\"segmentBudget\":-1", "\"segmentBudget\":-5")
+            .replace("\"markerArcFraction\":0", "\"markerArcFraction\":1000.0")
+            .replace("\"specKind\":\"TWEEN\"", "\"specKind\":\"WARP\"")
+            .replace("\"anchorEntries\":[]", "\"anchorEntries\":\"garbage\"")
+        assertTrue(ShowcaseStatePersistence.applyJsonForTest(json, state))
+        assertEquals("budget sentinel keeps off", null, state.segmentBudget)
+        assertEquals("out-of-range fraction clamps into range", 1f, state.markerArcFraction)
+        assertEquals(
+            "unknown spec kind keeps the current value (load-time fallback convention)",
+            com.mohamed.dev.ui.imorpher.showcase.AnimationSpecKind.LINEAR,
+            state.specKind,
+        )
+        assertEquals(0, state.customAnchors.size)
     }
 }
