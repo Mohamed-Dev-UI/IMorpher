@@ -263,6 +263,20 @@ fun FillRevealShowcase() {
                     ),
                     direction,
                 ) { direction = it }
+                // Live spelling of the same clamps fill() above applies, so the remap is
+                // never silent in the UI.
+                val applied = when {
+                    mode == FillMode.FADE -> "not used (FADE covers the whole path)"
+                    mode == FillMode.SWEEP && direction.isClockwiseStyle() -> direction.name
+                    mode == FillMode.SWEEP -> "${DrawDirection.CLOCKWISE.name} (SWEEP is clockwise-only)"
+                    direction.isClockwiseStyle() -> "AUTO (${mode.name} takes edge/corner directions)"
+                    else -> direction.name
+                }
+                Text(
+                    "Direction applied: $applied",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Button(onClick = {
                     coroutineScope.launch {
                         playhead.snapTo(0f)
