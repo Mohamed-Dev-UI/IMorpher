@@ -159,6 +159,31 @@ class MorphParameterApplicationTest {
     }
 
     @Test
+    fun linearAndDirectionalFillModesRenderDifferentMidFrames() {
+        // Two big matching squares, shape-to-shape, so the whole delta is fill choreography:
+        // LINEAR wipes hard at the edge, DIRECTIONAL feathers across a 0.15*axis band.
+        // Today both modes share one hard clip, so the frames measure exactly 0.
+        val from = harness.filled(
+            "grid",
+            harness.squareAt(1f, 1f, 10f),
+            harness.squareAt(13f, 1f, 10f),
+        )
+        val linear = harness.renderMorph(
+            from, from, 0.5f,
+            animation = fillReveal(mode = FillMode.LINEAR, direction = DrawDirection.LEFT_TO_RIGHT),
+        )
+        val directional = harness.renderMorph(
+            from, from, 0.5f,
+            animation = fillReveal(mode = FillMode.DIRECTIONAL, direction = DrawDirection.LEFT_TO_RIGHT),
+        )
+        val delta = difference(linear, directional)
+        assertTrue(
+            "LINEAR must be a hard wipe vs DIRECTIONAL's feather (stale would be exactly 0; delta=$delta)",
+            delta > 0.005f,
+        )
+    }
+
+    @Test
     fun fadeFillModeActuallyFadesUnderAReveal() {
         // Regression: inside a morph pair's fill legs, FillMode.FADE ignored the reveal
         // progress and popped the fill in at full alpha.

@@ -186,7 +186,11 @@ internal class FillPass(
                 if (revealActive) {
                     // The pen owns the whole path: the fill sweeps in with the
                     // same reveal (directional clip keeps fill-rule holes safe).
-                    clips.withFillRevealClip(this, effectiveFill, fillMode, fillDir, bMinX, bMinY, bMaxX, bMaxY) {
+                    // A fill-reveal track owning the sweep feathers DIRECTIONAL instead.
+                    clips.withFillRevealClip(
+                        this, effectiveFill, fillMode, fillDir, bMinX, bMinY, bMaxX, bMaxY,
+                        feather = fillProgress != null,
+                    ) {
                         paintFillLegDirect(leg, result, fromLeg = true, alpha = fromLegAlpha)
                     }
                 } else {
@@ -196,7 +200,11 @@ internal class FillPass(
             if (toLegAlpha > 0.003f && (pair.contourPairs.isNotEmpty() || toExtras.isNotEmpty())) {
                 val leg = combinedMorphFillPath(pair, morphT, t.pathFillType, slot = 1, extras = toExtras)
                 if (revealActive) {
-                    clips.withFillRevealClip(this, effectiveFill, fillMode, fillDir, bMinX, bMinY, bMaxX, bMaxY) {
+                    // Same DIRECTIONAL-feather rule as the from leg above.
+                    clips.withFillRevealClip(
+                        this, effectiveFill, fillMode, fillDir, bMinX, bMinY, bMaxX, bMaxY,
+                        feather = fillProgress != null,
+                    ) {
                         paintFillLegDirect(leg, result, fromLeg = false, alpha = toLegAlpha)
                     }
                 } else {
@@ -345,7 +353,8 @@ internal class FillPass(
                 drawScope.clipPath(maskPath) { paintFillDirect(path, result, alpha) }
             }
 
-            FillMode.LINEAR, FillMode.DIRECTIONAL -> {
+            FillMode.LINEAR -> {
+                // hard wipe: the clip edge stays hard-edged for LINEAR by design.
                 val axis = DirectionMath.axisFor(direction)
                 val ax0 = bMinX + axis[0] * w; val ay0 = bMinY + axis[1] * h
                 val ax1 = bMinX + axis[2] * w; val ay1 = bMinY + axis[3] * h
@@ -365,6 +374,14 @@ internal class FillPass(
                 maskPath.lineTo(ex - nx * reach, ey - ny * reach)
                 maskPath.close()
                 drawScope.clipPath(maskPath) { paintFillDirect(path, result, alpha) }
+            }
+
+            FillMode.DIRECTIONAL -> {
+                // feathered sweep for standalone fills: the gradient ramp replaces the clip
+                // entirely (see ClipPass.featheredSweep).
+                clips.featheredSweep(drawScope, prog, direction, bMinX, bMinY, bMaxX, bMaxY) { scope ->
+                    scope.paintFillDirect(path, result, alpha)
+                }
             }
 
             FillMode.SWEEP -> {
