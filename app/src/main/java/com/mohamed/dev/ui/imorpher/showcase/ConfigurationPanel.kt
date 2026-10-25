@@ -218,19 +218,23 @@ private fun buildSections(
             }
         },
         section("Size & placement") {
-            val sized = state.iconWidthDp != null
+            val sized = state.iconWidthDp != null || state.iconHeightDp != null
             LabeledSwitch("Override size", sized) { on ->
                 state.iconWidthDp = if (on) 48f else null
                 state.iconHeightDp = if (on) 48f else null
             }
             if (sized) {
                 ShowcaseSlider(
-                    label = "Size",
+                    label = "Icon width",
                     value = state.iconWidthDp ?: 48f,
-                    onValueChange = {
-                        state.iconWidthDp = it
-                        state.iconHeightDp = it
-                    },
+                    onValueChange = { state.iconWidthDp = it },
+                    valueRange = 20f..96f,
+                    format = { "${it.roundToInt()} dp" },
+                )
+                ShowcaseSlider(
+                    label = "Icon height",
+                    value = state.iconHeightDp ?: 48f,
+                    onValueChange = { state.iconHeightDp = it },
                     valueRange = 20f..96f,
                     format = { "${it.roundToInt()} dp" },
                 )
