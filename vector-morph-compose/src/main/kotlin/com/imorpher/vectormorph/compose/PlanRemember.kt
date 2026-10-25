@@ -51,12 +51,18 @@ internal fun VectorPlanCanvas(
         configuration.customDrawOrder, configuration.timing,
     ) {
         planningAnimation?.let {
+            // Field-by-field stagger override: the config competes with the timeline as a
+            // pair, not against staggerDelay===0 — an order-only override (delay 0) must
+            // still replace the timeline's rank order while an unset delay keeps the
+            // timeline's own delay.
+            val configSuppliesStagger = configuration.staggerDelay > 0f ||
+                configuration.staggerOrder != MorphConfiguration.Default.staggerOrder
             TimelineEvaluator(
                 animation = it,
                 plan = plan,
                 colorSpace = configuration.colorSpace,
                 staggerDelay = if (configuration.staggerDelay > 0f) configuration.staggerDelay else it.staggerDelay,
-                staggerOrder = if (configuration.staggerDelay > 0f) configuration.staggerOrder else it.staggerOrder,
+                staggerOrder = if (configSuppliesStagger) configuration.staggerOrder else it.staggerOrder,
                 customDrawOrder = configuration.customDrawOrder,
                 timingMode = configuration.timing,
             )

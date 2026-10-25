@@ -82,13 +82,19 @@ internal class RenderProbeHarness(
     // ------------------------------------------------------------------ builders
 
     /** Filled contour path with the probe-blue solid paint; several contours make one path. */
-    fun filled(name: String, vararg contours: List<PathNode>, alpha: Float = 1f): ImageVector {
+    fun filled(
+        name: String,
+        vararg contours: List<PathNode>,
+        alpha: Float = 1f,
+        /** Optional per-contour path names (index-matched); defaults to "path-$index". */
+        pathNames: List<String>? = null,
+    ): ImageVector {
         val builder = ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f)
         contours.forEachIndexed { index, data ->
             builder.addPath(
                 pathData = data,
                 fill = SolidColor(Color(0xFF12A4D9).copy(alpha = alpha)),
-                name = "path-$index",
+                name = pathNames?.getOrNull(index) ?: "path-$index",
             )
         }
         return builder.build()

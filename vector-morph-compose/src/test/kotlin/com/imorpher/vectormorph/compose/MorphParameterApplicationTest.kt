@@ -213,6 +213,41 @@ class MorphParameterApplicationTest {
     }
 
     @Test
+    fun configStaggerOrderOverridesTimelineOrderWithoutConfigDelay() {
+        // A plausible trap (documented): identical from/to geometry isolates the stagger
+        // signal — planning degenerates to identity morphs, so any frame difference is
+        // pure timeline. Names a/c/b are authored along the BR→TL diagonal, so the
+        // timeline's ranks (b→c→a) differ from BY_NAME's (a→b→c).
+        val from = harness.filled(
+            "grid",
+            harness.squareAt(1f, 1f, 6f),
+            harness.squareAt(8f, 8f, 6f),
+            harness.squareAt(15f, 15f, 6f),
+            pathNames = listOf("a", "c", "b"),
+        )
+        val timeline = VectorAnimationSpec {
+            defaultEasing(androidx.compose.animation.core.LinearEasing)
+            stagger(0.2f, com.imorpher.vectormorph.core.model.DrawOrderStrategy.BOTTOM_RIGHT_TO_TOP_LEFT)
+            allPaths { fillAlpha(0f, 1f, interval = 0f..1f) }
+        }
+        val byName = harness.renderMorph(
+            from, from, 0.5f,
+            configuration = MorphConfiguration(staggerOrder = com.imorpher.vectormorph.core.model.DrawOrderStrategy.BY_NAME),
+            animation = timeline,
+        )
+        val defaulted = harness.renderMorph(
+            from, from, 0.5f,
+            configuration = MorphConfiguration.Default,
+            animation = timeline,
+        )
+        val delta = difference(byName, defaulted)
+        assertTrue(
+            "config staggerOrder must win when the config supplies no delay (stale would be exactly 0; delta=$delta)",
+            delta > 0.005f,
+        )
+    }
+
+    @Test
     fun byPathTimingSequencesWholePathsMidMorph() {
         // TimingMode schedules the reveal tracks: with BY_PATH the second path's alpha
         // ramp only starts after the first finishes; UNIFORM runs both at once.
