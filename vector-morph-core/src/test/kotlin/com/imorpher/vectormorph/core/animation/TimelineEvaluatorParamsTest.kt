@@ -37,6 +37,9 @@ class TimelineEvaluatorParamsTest {
 
     private fun line() = listOf(PathNode.MoveTo(3f, 12f), PathNode.LineTo(21f, 12f))
 
+    /** A path whose contour is ~291x shorter than [triangle]'s (~58 units). */
+    private fun tinyLine() = listOf(PathNode.MoveTo(11.9f, 12f), PathNode.LineTo(12.1f, 12f))
+
     private fun plan(vector: ImageVector) = MorphPlanner.plan(
         VectorCompiler.compile(vector), VectorCompiler.compile(vector), MorphConfiguration.Default,
     )
@@ -243,6 +246,31 @@ class TimelineEvaluatorParamsTest {
             .evaluate(0.5f, frame)
         assertEquals(0.5f, frame.pathProps[0].props[PropKey.ALPHA.ordinal], 1e-4f)
         assertEquals(0.5f, frame.pathProps[1].props[PropKey.ALPHA.ordinal], 1e-4f)
+    }
+
+    @Test
+    fun staggerKeepsShortPathsVisibleUnderPathLengthTiming() {
+        // Mirror of uniformTimingIgnoresPathLengths under stagger: the tiny contour (291x
+        // shorter than the triangle) starts 0.2 into the timeline and unbounded path-length
+        // speed-up saturates it at ~0.203 — long before any viewer can see it. Contract:
+        // under active stagger every path keeps a draw window of at least 0.05 of the timeline.
+        val vector = paths("long" to triangle(), "short" to tinyLine())
+        val animation = VectorAnimation {
+            defaultEasing(LinearEasing)
+            allPaths { alpha(0f, 1f, interval = 0f..1f) }
+            stagger(delay = 0.2f, order = DrawOrderStrategy.BY_INDEX)
+        }
+        val plan = plan(vector)
+        val frame = EvaluatedFrame(plan)
+        TimelineEvaluator(animation, plan, ColorInterpolationSpace.SRGB)
+            .evaluate(0.23f, frame) // just inside the old dead zone (shortOffset + 0.03)
+        val shortAlpha = frame.pathProps[1].props[PropKey.ALPHA.ordinal]
+        val longAlpha = frame.pathProps[0].props[PropKey.ALPHA.ordinal]
+        assertTrue("long path must be visibly underway (alpha=$longAlpha)", longAlpha > 0.1f)
+        assertTrue(
+            "short path must stay mid-draw inside its stagger window (alpha=$shortAlpha)",
+            shortAlpha > 0f && shortAlpha < 1f,
+        )
     }
 
     @Test

@@ -382,6 +382,9 @@ class TimelineEvaluator(
         // then the timing mode maps that clock onto travel distance. Applying the offset after
         // the mode mapping silently cancels the stagger whenever a short path has already
         // saturated its schedule, which is the common case for pen-drawing many short paths.
+        // Under BY_PATH_LENGTH the speed-up is therefore bounded by the path's remaining
+        // window: with stagger active every path keeps a visible draw window of at least
+        // MIN_STAGGER_WINDOW of the timeline instead of burning it inside its stagger slot.
         val staggered = if (maxStaggerOffset <= 0f) {
             progress
         } else {
@@ -392,7 +395,14 @@ class TimelineEvaluator(
             TimingMode.BY_PATH_LENGTH -> {
                 val length = pathLengths[pairIndex]
                 if (length <= 1e-5f || maxPathLength <= 1e-5f) staggered
-                else (staggered * maxPathLength / length).coerceIn(0f, 1f)
+                else {
+                    var speed = maxPathLength / length
+                    if (maxStaggerOffset > 0f) {
+                        val window = (1f - staggerOffsets[pairIndex]).coerceAtLeast(MIN_STAGGER_WINDOW)
+                        speed = speed.coerceAtMost(window / MIN_STAGGER_WINDOW)
+                    }
+                    (staggered * speed).coerceIn(0f, 1f)
+                }
             }
             TimingMode.BY_PATH -> {
                 val count = pathOrderRanks.size.coerceAtLeast(1)
@@ -500,6 +510,9 @@ class TimelineEvaluator(
             PropKey.SCALE_X, PropKey.SCALE_Y, PropKey.ROTATION_DEG,
             PropKey.TRANSLATION_X, PropKey.TRANSLATION_Y, PropKey.PIVOT_X, PropKey.PIVOT_Y,
         )
+
+        /** Smallest visible draw window (in timeline units) any staggered path may keep. */
+        private const val MIN_STAGGER_WINDOW = 0.05f
         /**
          * Resolves the effective morph fraction for a path pair: an explicit
          * MORPH_PROGRESS override if present, otherwise the global progress.
