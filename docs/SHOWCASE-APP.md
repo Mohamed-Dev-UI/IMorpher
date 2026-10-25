@@ -65,7 +65,7 @@ own back button) always returns the same way the system UI expects.
 | --- | --- |
 | Keyframe timeline | Vector keyframes (`scale`, `rotation` over the whole vector) with a scrubbable playhead. |
 | Staggered paths | `stagger(delay, order)` fans each path's clock out around the chosen draw order. |
-| Fill reveal modes | Every `FillMode` (fade, radial, linear, directional, sweep, path traversal) plus a travel direction over one pair. |
+| Fill reveal modes | Every `FillMode` (fade, radial, linear, directional, sweep, path traversal) plus a travel direction over one pair. Invalid combinations are clamped **visibly**: the caption shows the applied direction (FADE ignores it, SWEEP is clockwise-only, other modes ignore clockwise picks). |
 | Gradient endpoints | `gradient()` and `strokeGradient()` move fill and stroke paints between brush specs (solid ↔ linear ramp). |
 | Playground | Compose keyframes, stroke reveals, color tracks, and stagger from every control. |
 
@@ -99,7 +99,7 @@ render's behavior, not a wall of knobs.
 | Motion | `motionPreference`: Full, Reduced, Crossfade-only, Instant. |
 | Geometry budget | `segmentBudget` switch + slider (4–48 cubic segments) and `simplificationTolerance` (0.1–1.0 viewport units) — the trade-off between silhouette detail and per-frame cost. |
 | Viewport | `viewportNormalization`: `STRETCH` (per-axis scaling) vs `FIT` (letterbox). |
-| Size & placement | Optional explicit dp size override (20–96 dp) and out-of-center placements (Center start/end, Top/Bottom center). |
+| Size & placement | Optional explicit dp size override with **independent width and height sliders** (20–96 dp each) and out-of-center placements (Center start/end, Top/Bottom center). |
 | Debug overlays | Master switch, then the seven engine overlays — path points, path numbers, bounding boxes, centroids, direction arrows, start anchors, raw path matching — plus the debug marker's arc fraction (reserved in 0.2.0: the panel asks for a value but the engine does not render it yet). |
 
 Every dropdown is fed straight from the engine enum (`EnumClass.entries`), so the

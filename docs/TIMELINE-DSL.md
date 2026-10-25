@@ -82,8 +82,9 @@ Notes that pin behavior:
   kind (geometry, colors, stops). Mismatched kinds crossfade.
 - `rotation` takes degrees, clockwise, shortest angular route; anchors via `pivot`.
 - Stroke widths animate per path (`strokeWidth(from, to)` in a path scope; viewport
-  units) — a track `strokeFill` also choreographs the outline→filled pairing
-  automatically.
+  units). The outline→filled handover itself is **not a track** — `strokeFill` does not
+  exist in the DSL; that behavior comes from `MorphConfiguration.strokeFill`
+  (`MORPH`, `CROSSFADE`, `DRAW`, `AUTO`), see [CONFIGURATION.md](CONFIGURATION.md).
 
 ## Keyframes
 
