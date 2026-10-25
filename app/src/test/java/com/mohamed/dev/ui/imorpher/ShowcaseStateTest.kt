@@ -2,14 +2,24 @@ package com.mohamed.dev.ui.imorpher
 
 import androidx.compose.ui.graphics.Color
 import com.imorpher.vectormorph.core.model.ColorInterpolationSpace
+import com.imorpher.vectormorph.core.model.DirectionTraversal
 import com.imorpher.vectormorph.core.model.DrawDirection
 import com.imorpher.vectormorph.core.model.DrawMode
+import com.imorpher.vectormorph.core.model.DrawOrderStrategy
 import com.imorpher.vectormorph.core.model.MissingPathBehavior
 import com.imorpher.vectormorph.core.model.MotionPreference
+import com.imorpher.vectormorph.core.model.PathDirectionStrategy
+import com.imorpher.vectormorph.core.model.PathMatchingStrategy
 import com.imorpher.vectormorph.core.model.PathStart
+import com.imorpher.vectormorph.core.model.StartPointStrategy
+import com.imorpher.vectormorph.core.model.StrokeFillStrategy
 import com.imorpher.vectormorph.core.model.TimingMode
+import com.imorpher.vectormorph.core.model.ViewportNormalization
+import com.mohamed.dev.ui.imorpher.showcase.AlignmentKind
+import com.mohamed.dev.ui.imorpher.showcase.AnchorEntry
 import com.mohamed.dev.ui.imorpher.showcase.IconCatalog
 import com.mohamed.dev.ui.imorpher.showcase.PairSuggestions
+import com.mohamed.dev.ui.imorpher.showcase.PathMappingEdit
 import com.mohamed.dev.ui.imorpher.showcase.ShowcaseOptions
 import com.mohamed.dev.ui.imorpher.showcase.ShowcaseState
 import com.mohamed.dev.ui.imorpher.showcase.ShowcaseStatePersistence
@@ -360,6 +370,83 @@ class ShowcaseStateTest {
         assertTrue(snippet.contains("Brush.linearGradient"))
         assertEquals(1, Regex("tintFrom = Brush.linearGradient").findAll(snippet).count())
         assertEquals(1, Regex("tintTo = Brush.linearGradient").findAll(snippet).count())
+    }
+
+    @Test
+    fun snippetEmitsEveryNonDefaultParameter() {
+        val state = ShowcaseState().apply {
+            pathMatching = PathMatchingStrategy.BY_NAME
+            missingPath = MissingPathBehavior.KEEP
+            timing = TimingMode.UNIFORM
+            colorSpace = ColorInterpolationSpace.LINEAR_SRGB
+            strokeFill = StrokeFillStrategy.DRAW
+            startPoint = StartPointStrategy.MATCH_TARGET
+            pathDirection = PathDirectionStrategy.COUNTER_CLOCKWISE
+            directionTraversal = DirectionTraversal.LEGACY
+            drawOrder = DrawOrderStrategy.CLOCKWISE
+            customDrawOrderNames = listOf("ring", "cross")
+            keepRenderOrder = false
+            viewportNormalization = ViewportNormalization.FIT
+            segmentBudget = 12
+            simplificationTolerance = 0.4f
+            defaultFillDirection = DrawDirection.RIGHT_TO_LEFT
+            staggerDelay = 0.2f
+            customAnchors = listOf(AnchorEntry("ring", 0.25f))
+            customMappings = listOf(PathMappingEdit("ring", "ring"))
+            debugEnabled = true
+            showPathPoints = true
+            markerArcFraction = 0.4f
+            iconWidthDp = 56f
+            iconHeightDp = 40f
+            alignment = AlignmentKind.TOP_CENTER
+            durationMillis = 500f
+            motionPreference = MotionPreference.REDUCED
+        }
+        val snippet = SnippetGenerator.generate(state, SnippetGenerator.Target.MORPH_ICON)
+        for (needle in listOf(
+            "pathMatching = PathMatchingStrategy.BY_NAME",
+            "missingPath = MissingPathBehavior.KEEP",
+            "timing = TimingMode.UNIFORM",
+            "colorSpace = ColorInterpolationSpace.LINEAR_SRGB",
+            "strokeFill = StrokeFillStrategy.DRAW",
+            "startPoint = StartPointStrategy.MATCH_TARGET",
+            "pathDirection = PathDirectionStrategy.COUNTER_CLOCKWISE",
+            "directionTraversal = DirectionTraversal.LEGACY",
+            "drawOrder = DrawOrderStrategy.CLOCKWISE",
+            "customDrawOrder = listOf(\"ring\", \"cross\")",
+            "keepRenderOrder = false",
+            "viewportNormalization = ViewportNormalization.FIT",
+            "segmentBudget = 12",
+            "simplificationTolerance = 0.4f",
+            "defaultFillDirection = DrawDirection.RIGHT_TO_LEFT",
+            "staggerDelay = 0.2f",
+            "customDrawAnchors = mapOf(\"ring\" to 0.25f)",
+            "customMappings = listOf(PathMapping(source = \"ring\", target = \"ring\"))",
+            "debug = MorphDebugOptions(",
+            "showPathPoints = true",
+            "markerArcFraction = 0.4f",
+            "width = 56.dp",
+            "height = 40.dp",
+            "alignment = Alignment.TopCenter",
+            "tween(500)",
+            "motionPreference = MotionPreference.REDUCED",
+        )) {
+            assertTrue("snippet must emit '$needle'", snippet.contains(needle))
+        }
+    }
+
+    @Test
+    fun snippetOmitsDefaultConfigurationValues() {
+        val snippet = SnippetGenerator.generate(ShowcaseState(), SnippetGenerator.Target.MORPH_ICON)
+        for (needle in listOf(
+            "pathMatching", "missingPath", "fallback", "timing", "colorSpace", "strokeFill",
+            "startPoint", "pathDirection", "directionTraversal", "drawOrder", "staggerDelay",
+            "customDrawAnchors", "customMappings", "customDrawOrder", "viewportNormalization",
+            "segmentBudget", "simplificationTolerance", "MorphDebugOptions", "keepRenderOrder",
+            "alignment =", "width =", "height =", "animationSpec", "motionPreference",
+        )) {
+            assertFalse("default '$needle' must be omitted from the snippet", snippet.contains(needle))
+        }
     }
 
     // ------------------------------------------------------------------ options + suggestions

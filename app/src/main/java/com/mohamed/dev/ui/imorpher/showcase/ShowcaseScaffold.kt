@@ -156,7 +156,11 @@ fun PairSuggestionsSection(state: ShowcaseState, onApply: (PairSuggestion) -> Un
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
                     best.forEach { suggestion ->
                         SuggestionChip(
-            label = "${suggestion.fromName} → ${suggestion.toName} · ${(suggestion.score * 100).toInt()}%",
+                            label = buildString {
+                                append("${suggestion.fromName} → ${suggestion.toName} · ${(suggestion.score * 100).toInt()}%")
+                                if (suggestion.fallbackUsed) append(" · fallback")
+                                if (suggestion.warnings > 0) append(" · ${suggestion.warnings} ⚠")
+                            },
                             selected = suggestion.fromName == state.fromIconName && suggestion.toName == state.toIconName,
                             onClick = { onApply(suggestion) },
                         )
