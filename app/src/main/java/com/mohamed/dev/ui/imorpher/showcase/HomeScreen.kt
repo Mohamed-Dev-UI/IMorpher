@@ -38,6 +38,7 @@ import com.imorpher.vectormorph.compose.MorphVector
 import com.imorpher.vectormorph.compose.VectorAnimationDefinition
 import com.imorpher.vectormorph.compose.VectorAnimator
 import com.imorpher.vectormorph.core.animation.VectorAnimation as VectorAnimationSpec
+import com.imorpher.vectormorph.core.model.DrawDirection
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -100,6 +101,7 @@ private fun TopicCard(topic: TopicDescriptor, onClick: () -> Unit) {
             ) {
                 Box(modifier = Modifier.size(84.dp), contentAlignment = Alignment.Center) {
                     when (topic.id) {
+                        TopicId.DIAGNOSTICS -> DiagnosticsHomePreview()
                         TopicId.MORPH_ICON -> MorphIconHomePreview()
                         TopicId.MORPH_VECTOR -> MorphVectorHomePreview()
                         TopicId.VECTOR_ANIMATOR -> AnimatorHomePreview()
@@ -115,7 +117,7 @@ private fun TopicCard(topic: TopicDescriptor, onClick: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    "${topic.items.size - 1} showcases · 1 playground",
+                    if (topic.playgroundId == null) "${topic.items.size} diagnostic screens" else "${topic.items.size - 1} showcases · 1 playground",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -228,6 +230,35 @@ private fun DrawIconHomePreview() {
             contentDescription = null,
             width = 56.dp,
             height = 56.dp,
+        )
+    }
+}
+
+/** Repeating clip-reveal preview for the Diagnostics card. */
+@Composable
+private fun DiagnosticsHomePreview() {
+    var replayKey by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(2600.milliseconds)
+            replayKey++
+        }
+    }
+    val animation = remember {
+        VectorAnimationSpec {
+            clipReveal(from = 0f, to = 1f, direction = DrawDirection.LEFT_TO_RIGHT)
+        }
+    }
+    key(replayKey) {
+        DrawIcon(
+            vector = IconCatalog.icon("SealOutline"),
+            animation = animation,
+            animationSpec = tween(2200),
+            tintFrom = ShowcaseColors.indigo,
+            tintTo = ShowcaseColors.cyan,
+            contentDescription = null,
+            width = 52.dp,
+            height = 52.dp,
         )
     }
 }

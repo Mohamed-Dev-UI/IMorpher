@@ -2,6 +2,7 @@ package com.mohamed.dev.ui.imorpher.showcase.topics
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
@@ -18,6 +19,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.imorpher.vectormorph.compose.MorphVector
 import com.imorpher.vectormorph.core.model.MissingPathBehavior
+import com.imorpher.vectormorph.core.model.MorphConfiguration as EngineConfiguration
+import com.imorpher.vectormorph.core.model.ViewportNormalization
 import com.mohamed.dev.ui.imorpher.showcase.ApiSignature
 import com.mohamed.dev.ui.imorpher.showcase.ConfigurationPanel
 import com.mohamed.dev.ui.imorpher.showcase.CopySnippetButton
@@ -107,7 +110,7 @@ fun MissingPathShowcase() {
             },
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf(
                         MissingPathBehavior.FADE,
                         MissingPathBehavior.SCALE,
@@ -129,6 +132,57 @@ fun MissingPathShowcase() {
             }
         }
         ApiSignature("MorphVector(from, to, progress, configuration(missingPath = …))")
+    }
+}
+
+/** Viewport normalization: a wide banner target meets a square source. */
+@Composable
+fun ViewportNormalizationShowcase() {
+    var progress by remember { mutableFloatStateOf(0f) }
+    var normalization by remember { mutableStateOf(ViewportNormalization.STRETCH) }
+    ShowcaseCard {
+        ShowcaseCardHeader(
+            number = "03",
+            title = "Viewport normalization",
+            description = "A wide banner target meets a square source: one mode distorts each axis, the other letterboxes.",
+        )
+        ShowcaseRow(
+            preview = {
+                PreviewTile {
+                    MorphVector(
+                        from = IconCatalog.icon("BannerWide"),
+                        to = IconCatalog.icon("AddCircleOutline"),
+                        progress = progress,
+                        configuration = EngineConfiguration(viewportNormalization = normalization),
+                        contentDescription = "Viewport morph icon",
+                        width = 96.dp,
+                        height = 40.dp,
+                    )
+                }
+            },
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                Text("BannerWide → AddCircleOutline", fontWeight = FontWeight.SemiBold)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        ViewportNormalization.STRETCH,
+                        ViewportNormalization.FIT,
+                    ).forEach { option ->
+                        androidx.compose.material3.Button(onClick = { normalization = option }) {
+                            Text(option.name.lowercase().replaceFirstChar { it.titlecase() })
+                        }
+                    }
+                }
+                LabeledSlider(
+                    label = "Progress",
+                    value = progress,
+                    range = 0f..1f,
+                    suffix = "%",
+                    onValueChange = { progress = (it * 100f).roundToInt() / 100f },
+                )
+            }
+        }
+        ApiSignature("MorphVector(from, to, progress, configuration(viewportNormalization = …))")
     }
 }
 

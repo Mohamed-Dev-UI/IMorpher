@@ -15,7 +15,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import com.imorpher.vectormorph.compose.MorphVector
+import com.imorpher.vectormorph.core.model.MorphConfiguration
 import com.mohamed.dev.ui.imorpher.showcase.IconCatalog
+import com.mohamed.dev.ui.imorpher.showcase.ShowcaseState
+import com.mohamed.dev.ui.imorpher.showcase.toConfiguration
 import java.io.File
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -91,6 +94,7 @@ class AllCombinationsScanTest {
         to: ImageVector,
         progress: Float,
         layout: ImageVector = if (progress == 0f) from else to,
+        configuration: MorphConfiguration = MorphConfiguration(),
     ): Bitmap {
         // The morph frame is rendered at twice the chosen endpoint vector's intrinsic dp:
         // per-endpoint 2× keeps the historic pixel scale for 24-unit icons (48×48 px) and
@@ -104,6 +108,7 @@ class AllCombinationsScanTest {
                 from = from,
                 to = to,
                 progress = progress,
+                configuration = configuration,
                 contentDescription = null,
                 width = layout.defaultWidth * 2,
                 height = layout.defaultHeight * 2,
@@ -247,6 +252,44 @@ class AllCombinationsScanTest {
         }
         assertTrue(
             "${failures.size} broken combinations:\n${failures.joinToString("\n")}",
+            failures.isEmpty(),
+        )
+    }
+
+    /**
+     * The micro-budget + full-debug worst case for every curated catalog pair: the smallest
+     * useful segment budget with every debug overlay enabled. Catches planner thresholds
+     * that silently assume richer tessellation, and overlay draw paths that only work with
+     * default flags — the exact configuration the Diagnostics topic dares users to pick.
+     */
+    @Test
+    fun everyCatalogPairSurvivesBudgetFourWithFullDebug() {
+        val debugState = ShowcaseState().apply {
+            debugEnabled = true
+            showPathPoints = true
+            showPathNumbers = true
+            showBoundingBoxes = true
+            showCentroids = true
+            showDirection = true
+            showStartPoints = true
+            showPathMatching = true
+            markerArcFraction = 0.4f
+        }
+        val config = debugState.toConfiguration().copy(segmentBudget = 4)
+
+        val failures = ArrayList<String>()
+        for ((fromName, toName) in IconCatalog.pairs) {
+            val from = IconCatalog.icon(fromName)
+            val to = IconCatalog.icon(toName)
+            for (progress in listOf(0f, 0.5f, 1f)) {
+                val bitmap = renderMorph(from, to, progress, configuration = config)
+                if (isBlank(bitmap)) {
+                    failures += "$fromName -> $toName paints nothing at t=$progress"
+                }
+            }
+        }
+        assertTrue(
+            "pairs that fail at budget 4 with debug on:\n${failures.joinToString("\n")}",
             failures.isEmpty(),
         )
     }

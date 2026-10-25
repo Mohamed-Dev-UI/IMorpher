@@ -23,7 +23,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.imorpher.vectormorph.compose.VectorAnimationDefinition
 import com.imorpher.vectormorph.compose.VectorAnimator
+import com.imorpher.vectormorph.core.gradients.BrushSpec
+import com.imorpher.vectormorph.core.model.DrawDirection
 import com.imorpher.vectormorph.core.model.DrawOrderStrategy
+import com.imorpher.vectormorph.core.model.FillMode
 import com.mohamed.dev.ui.imorpher.showcase.ApiSignature
 import com.mohamed.dev.ui.imorpher.showcase.ConfigurationPanel
 import com.mohamed.dev.ui.imorpher.showcase.CopySnippetButton
@@ -177,6 +180,217 @@ fun StaggerShowcase() {
             }
         }
         ApiSignature("VectorAnimator(definition, progress) + stagger(delay, order)")
+    }
+}
+
+/** One fill mode chosen per reveal; a dropdown retargets the sweep direction. */
+@Composable
+fun FillRevealShowcase() {
+    var mode by remember { mutableStateOf(FillMode.RADIAL) }
+    var direction by remember { mutableStateOf(DrawDirection.LEFT_TO_RIGHT) }
+    val animation = remember(mode, direction) {
+        VectorAnimationSpec {
+            allPaths {
+                fill(
+                    mode = mode,
+                    // FADE ignores direction; clockwise angles are sweep-only; every other
+                    // mode takes the edge/corner directions.
+                    direction = when {
+                        mode == FillMode.FADE -> null
+                        mode == FillMode.SWEEP && direction.isClockwiseStyle() ->
+                            direction
+                        mode == FillMode.SWEEP -> DrawDirection.CLOCKWISE
+                        direction.isClockwiseStyle() -> DrawDirection.AUTO
+                        else -> direction
+                    },
+                )
+            }
+        }
+    }
+    // The playhead must actually move: VectorAnimator is a fully manual driver, so a
+    // constant progress = 1f shows one static frame.
+    val coroutineScope = rememberCoroutineScope()
+    val playhead = remember { Animatable(0f) }
+    LaunchedEffect(mode, direction) {
+        playhead.snapTo(0f)
+        playhead.animateTo(1f, tween(1600))
+    }
+    ShowcaseCard {
+        ShowcaseCardHeader(
+            number = "03",
+            title = "Fill reveal modes",
+            description = "Every fill mode plus a travel direction over one chosen pair.",
+        )
+        ShowcaseRow(
+            preview = {
+                PreviewTile {
+                    VectorAnimator(
+                        animation = VectorAnimationDefinition(
+                            resolveIcon("AlgorithmSolid"),
+                            animation,
+                        ),
+                        progress = playhead.value,
+                        tintFrom = com.mohamed.dev.ui.imorpher.showcase.ShowcaseColors.indigo,
+                        tintTo = com.mohamed.dev.ui.imorpher.showcase.ShowcaseColors.cyan,
+                        contentDescription = "Fill reveal icon",
+                        width = 56.dp,
+                        height = 56.dp,
+                    )
+                }
+            },
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FillMode.entries.forEach { option ->
+                        Button(onClick = { mode = option }) {
+                            Text(
+                                option.name.lowercase().replaceFirstChar { it.titlecase() },
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
+                ShowcaseDropdown(
+                    "Direction",
+                    listOf(
+                        DrawDirection.AUTO,
+                        DrawDirection.LEFT_TO_RIGHT,
+                        DrawDirection.RIGHT_TO_LEFT,
+                        DrawDirection.TOP_TO_BOTTOM,
+                        DrawDirection.BOTTOM_TO_TOP,
+                        DrawDirection.CLOCKWISE,
+                        DrawDirection.COUNTER_CLOCKWISE,
+                    ),
+                    direction,
+                ) { direction = it }
+                Button(onClick = {
+                    coroutineScope.launch {
+                        playhead.snapTo(0f)
+                        playhead.animateTo(1f, tween(1600))
+                    }
+                }) { Text("Replay") }
+            }
+        }
+        ApiSignature("VectorAnimator(definition, progress) + fill(mode, direction)")
+    }
+}
+
+private fun DrawDirection.isClockwiseStyle(): Boolean =
+    this == DrawDirection.CLOCKWISE || this == DrawDirection.COUNTER_CLOCKWISE
+
+/** gradient()/strokeGradient() endpoints: fill and stroke paints move between brushes. */
+@Composable
+fun GradientTimelineShowcase() {
+    val coroutineScope = rememberCoroutineScope()
+    val playhead = remember { Animatable(0f) }
+    val progress = playhead.value
+    val fillAnimation = remember {
+        VectorAnimationSpec {
+            allPaths {
+                gradient(
+                    from = BrushSpec.Solid(com.mohamed.dev.ui.imorpher.showcase.ShowcaseColors.indigo),
+                    to = BrushSpec.Linear(
+                        colors = listOf(
+                            com.mohamed.dev.ui.imorpher.showcase.ShowcaseColors.indigo,
+                            com.mohamed.dev.ui.imorpher.showcase.ShowcaseColors.cyan,
+                        ),
+                        stops = null,
+                        startX = 0f,
+                        startY = 0f,
+                        endX = 24f,
+                        endY = 24f,
+                    ),
+                    interval = 0.1f..0.9f,
+                )
+            }
+        }
+    }
+    val strokeAnimation = remember {
+        VectorAnimationSpec {
+            allPaths {
+                strokeGradient(
+                    from = BrushSpec.Solid(com.mohamed.dev.ui.imorpher.showcase.ShowcaseColors.slate),
+                    to = BrushSpec.Linear(
+                        colors = listOf(
+                            com.mohamed.dev.ui.imorpher.showcase.ShowcaseColors.cyan,
+                            com.mohamed.dev.ui.imorpher.showcase.ShowcaseColors.coral,
+                        ),
+                        stops = null,
+                        startX = 0f,
+                        startY = 0f,
+                        endX = 24f,
+                        endY = 24f,
+                    ),
+                    interval = 0.1f..0.9f,
+                )
+            }
+        }
+    }
+    ShowcaseCard {
+        ShowcaseCardHeader(
+            number = "04",
+            title = "Gradient endpoints",
+            description = "gradient() and strokeGradient() move fill and stroke paints between brushes.",
+        )
+        ShowcaseRow(
+            preview = {
+                PreviewTile {
+                    VectorAnimator(
+                        animation = VectorAnimationDefinition(
+                            resolveIcon("AlgorithmSolid"),
+                            fillAnimation,
+                        ),
+                        progress = progress,
+                        contentDescription = "Gradient timeline icon",
+                        width = 56.dp,
+                        height = 56.dp,
+                    )
+                }
+            },
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                Text("Fill: solid indigo → diagonal linear ramp", fontWeight = FontWeight.SemiBold)
+                androidx.compose.material3.Slider(
+                    value = progress,
+                    onValueChange = { value -> coroutineScope.launch { playhead.snapTo(value) } },
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Button(onClick = {
+                        coroutineScope.launch {
+                            playhead.snapTo(0f)
+                            playhead.animateTo(1f, animationSpec = tween(1500))
+                        }
+                    }) { Text("Play") }
+                    Button(onClick = { coroutineScope.launch { playhead.snapTo(0f) } }) { Text("Reset") }
+                }
+            }
+        }
+        ShowcaseRow(
+            preview = {
+                PreviewTile {
+                    VectorAnimator(
+                        animation = VectorAnimationDefinition(
+                            resolveIcon("AlgorithmOutline"),
+                            strokeAnimation,
+                        ),
+                        progress = progress,
+                        contentDescription = "Gradient stroke icon",
+                        width = 56.dp,
+                        height = 56.dp,
+                    )
+                }
+            },
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Stroke: slate → cyan/coral ramp", fontWeight = FontWeight.SemiBold)
+                Text(
+                    "One shared playhead drives both timelines; gradient↔gradient and solid↔gradient interpolate.",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        ApiSignature("VectorAnimator(definition, progress) + gradient(from, to) / strokeGradient(from, to)")
     }
 }
 

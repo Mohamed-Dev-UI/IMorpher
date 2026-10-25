@@ -19,6 +19,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.imorpher.vectormorph.compose.DrawIcon
+import com.imorpher.vectormorph.core.model.DrawDirection
+import com.imorpher.vectormorph.core.model.DrawMode
 import com.imorpher.vectormorph.core.model.TimingMode
 import com.mohamed.dev.ui.imorpher.showcase.ApiSignature
 import com.mohamed.dev.ui.imorpher.showcase.ConfigurationPanel
@@ -93,6 +95,92 @@ fun PenRevealShowcase() {
             }
         }
         ApiSignature("DrawIcon(vector, animation) + strokeReveal(start, direction, mode)")
+    }
+}
+
+/** Draw-on with the fill sweeping in behind the pen: reveal(followWithFill = true). */
+@Composable
+fun FollowFillShowcase() {
+    var replayKey by remember { mutableIntStateOf(0) }
+    val animation = remember {
+        VectorAnimationSpec {
+            reveal(mode = DrawMode.FORWARD, interval = 0f..0.95f, followWithFill = true)
+        }
+    }
+    ShowcaseCard {
+        ShowcaseCardHeader(
+            number = "02",
+            title = "Draw then fill",
+            description = "reveal(followWithFill) draws the stroke and sweeps the fill in behind it.",
+        )
+        ShowcaseRow(
+            preview = {
+                key(replayKey) {
+                    PreviewTile {
+                        DrawIcon(
+                            vector = resolveIcon("AddCircleOutline"),
+                            animation = animation,
+                            animationSpec = tween(1500),
+                            contentDescription = "Follow-fill icon",
+                            modifier = Modifier,
+                        )
+                    }
+                }
+            },
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Stroke first, fill follows", fontWeight = FontWeight.SemiBold)
+                Text(
+                    "The fill trails the stroke by ~35% of the timeline and sweeps directionally.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(onClick = { replayKey++ }) { Text("Replay") }
+            }
+        }
+        ApiSignature("DrawIcon(vector, animation) + reveal(followWithFill = true)")
+    }
+}
+
+/** Clip reveal over a clip-carrying demo icon: the inherited mask opens along an edge. */
+@Composable
+fun ClipRevealShowcase() {
+    var replayKey by remember { mutableIntStateOf(0) }
+    val animation = remember {
+        VectorAnimationSpec {
+            clipReveal(from = 0f, to = 1f, direction = DrawDirection.LEFT_TO_RIGHT)
+        }
+    }
+    ShowcaseCard {
+        ShowcaseCardHeader(
+            number = "03",
+            title = "Clip reveal",
+            description = "clipReveal opens a named group's inherited mask along a directional edge.",
+        )
+        ShowcaseRow(
+            preview = {
+                key(replayKey) {
+                    PreviewTile {
+                        DrawIcon(
+                            vector = resolveIcon("SealOutline"),
+                            animation = animation,
+                            animationSpec = tween(1400),
+                            contentDescription = "Clip reveal icon",
+                            modifier = Modifier,
+                        )
+                    }
+                }
+            },
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("SealOutline · left → right mask", fontWeight = FontWeight.SemiBold)
+                Text(
+                    "The vector's group clip grows from zero width to full coverage.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(onClick = { replayKey++ }) { Text("Replay") }
+            }
+        }
+        ApiSignature("DrawIcon(vector, animation) + clipReveal(from, to, direction)")
     }
 }
 

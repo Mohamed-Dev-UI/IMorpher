@@ -7,6 +7,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isToggleable
@@ -61,9 +62,33 @@ class ShowcaseNavigationTest {
     private fun textExists(text: String) =
         composeRule.onAllNodesWithText(text, substring = true).fetchSemanticsNodes().isNotEmpty()
 
+    /**
+     * True when [text] matches a node that is actually placed and on screen. Lazy lists keep
+     * semantics for composed-but-unplaced children with zero bounds; such stubs exist for
+     * text alone but cannot receive taps, so finders must ignore them or clicks land at (0,0).
+     */
+    private fun textDisplayed(text: String): Boolean =
+        composeRule.onAllNodesWithText(text, substring = true)
+            .fetchSemanticsNodes()
+            .any(::isOnScreen)
+
+    private fun isOnScreen(node: androidx.compose.ui.semantics.SemanticsNode): Boolean {
+        val bounds = node.boundsInRoot
+        if (bounds.width <= 1f || bounds.height <= 1f) return false
+        val root = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
+        return bounds.left < root.right && bounds.right > root.left &&
+            bounds.top < root.bottom && bounds.bottom > root.top
+    }
+
     private fun scrollToTop() {
-        repeat(12) {
-            composeRule.onRoot().performTouchInput { swipeDown() }
+        // Small no-fling drags: a swept fling jumps several screens at once and only
+        // ever "rests" at the top or bottom of a LazyColumn, skipping the middle cards.
+        repeat(24) {
+            composeRule.onRoot().performTouchInput {
+                down(center)
+                moveBy(Offset(0f, 90f))
+                up()
+            }
             composeRule.waitForIdle()
         }
     }
@@ -78,14 +103,20 @@ class ShowcaseNavigationTest {
             composeRule.onRoot().performScrollToNode(hasText(text, substring = true))
             composeRule.waitForIdle()
         }
-        if (textExists(text)) return true
+        if (textDisplayed(text)) return true
         scrollToTop()
-        repeat(14) {
-            if (textExists(text)) return true
-            composeRule.onRoot().performTouchInput { swipeUp() }
+        // Sweep with ~110px no-fling drags: resting positions always cross the viewport
+        // without leaping over the target, so every composed card is briefly displayed.
+        repeat(40) {
+            if (textDisplayed(text)) return true
+            composeRule.onRoot().performTouchInput {
+                down(center)
+                moveBy(Offset(0f, -110f))
+                up()
+            }
             composeRule.waitForIdle()
         }
-        return textExists(text)
+        return textDisplayed(text)
     }
 
     /** Scrolls the outer scrollable until [text] is composed; asserts it at the end. */
@@ -93,10 +124,14 @@ class ShowcaseNavigationTest {
         assertTrue("expected '$text' to be reachable", bringTextIntoView(text))
     }
 
-    /** Brings the first node containing [text] into view and clicks it. */
+    /** Brings the first displayed node containing [text] into view and clicks it. */
     private fun clickFirstText(text: String) {
         assertTrue("expected '$text' to be clickable", bringTextIntoView(text))
-        composeRule.onAllNodesWithText(text, substring = true)[0].performClick()
+        // Index into the SAME finder the predicate ran on, so the tap lands on a displayed
+        // node rather than a composed-but-unplaced lazy stub (zero bounds, untappable).
+        val nodes = composeRule.onAllNodesWithText(text, substring = true).fetchSemanticsNodes()
+        val index = nodes.indexOfFirst(::isOnScreen)
+        composeRule.onAllNodesWithText(text, substring = true)[index].performClick()
         composeRule.waitForIdle()
     }
 
@@ -290,5 +325,55 @@ class ShowcaseNavigationTest {
             "VectorAnimator must not offer a To icon picker",
             composeRule.onAllNodesWithText("To icon", substring = true).fetchSemanticsNodes().isEmpty(),
         )
+    }
+
+    // ------------------------------------------------------------------ curated screens round 2
+
+    @Test
+    fun strokeFillShowcasePicksHandoverStrategy() {
+        renderShowcase(TopicId.MORPH_ICON, "morph-icon-fill")
+        clickFirstText("Crossfade")
+        assertReachable(hasContentDescription("Stroke fill morph icon"), "stroke-fill preview")
+    }
+
+    @Test
+    fun chainedMorphingIconCyclesTargets() {
+        renderShowcase(TopicId.MORPH_ICON, "morph-icon-chain")
+        clickFirstText("Next icon")
+        assertReachable(hasContentDescription("Chained morph icon"), "chain preview")
+    }
+
+    @Test
+    fun viewportShowcaseSwitchesNormalization() {
+        renderShowcase(TopicId.MORPH_VECTOR, "morph-vector-viewport")
+        clickFirstText("Fit")
+        assertReachable(hasContentDescription("Viewport morph icon"), "viewport preview")
+    }
+
+    @Test
+    fun fillModesShowcasePicksAFillMode() {
+        renderShowcase(TopicId.VECTOR_ANIMATOR, "vector-animator-fill")
+        clickFirstText("Sweep")
+        assertReachable(hasContentDescription("Fill reveal icon"), "fill-mode preview")
+    }
+
+    @Test
+    fun gradientShowcaseRendersTimeline() {
+        renderShowcase(TopicId.VECTOR_ANIMATOR, "vector-animator-gradient")
+        assertReachable(hasContentDescription("Gradient timeline icon"), "gradient preview")
+    }
+
+    @Test
+    fun followFillShowcaseReplays() {
+        renderShowcase(TopicId.DRAW_ICON, "draw-icon-follow-fill")
+        clickFirstText("Replay")
+        assertReachable(hasContentDescription("Follow-fill icon"), "follow-fill preview")
+    }
+
+    @Test
+    fun clipRevealShowcaseReplays() {
+        renderShowcase(TopicId.DRAW_ICON, "draw-icon-clip")
+        clickFirstText("Replay")
+        assertReachable(hasContentDescription("Clip reveal icon"), "clip preview")
     }
 }

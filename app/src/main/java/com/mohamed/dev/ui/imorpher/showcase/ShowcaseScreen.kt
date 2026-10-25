@@ -32,7 +32,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.mohamed.dev.ui.imorpher.showcase.topics.ChainedIconShowcase
+import com.mohamed.dev.ui.imorpher.showcase.topics.CachesShowcase
+import com.mohamed.dev.ui.imorpher.showcase.topics.ClipRevealShowcase
+import com.mohamed.dev.ui.imorpher.showcase.topics.CodecShowcase
+import com.mohamed.dev.ui.imorpher.showcase.topics.CustomAnimationShowcase
 import com.mohamed.dev.ui.imorpher.showcase.topics.DrawIconPlayground
+import com.mohamed.dev.ui.imorpher.showcase.topics.FillRevealShowcase
+import com.mohamed.dev.ui.imorpher.showcase.topics.FollowFillShowcase
+import com.mohamed.dev.ui.imorpher.showcase.topics.GradientTimelineShowcase
 import com.mohamed.dev.ui.imorpher.showcase.topics.KeyframeTimelineShowcase
 import com.mohamed.dev.ui.imorpher.showcase.topics.ManualScrubShowcase
 import com.mohamed.dev.ui.imorpher.showcase.topics.MissingPathShowcase
@@ -40,10 +48,13 @@ import com.mohamed.dev.ui.imorpher.showcase.topics.MorphIconPlayground
 import com.mohamed.dev.ui.imorpher.showcase.topics.MorphVectorPlayground
 import com.mohamed.dev.ui.imorpher.showcase.topics.MotionPreferenceShowcase
 import com.mohamed.dev.ui.imorpher.showcase.topics.PenRevealShowcase
+import com.mohamed.dev.ui.imorpher.showcase.topics.PlanReportShowcase
 import com.mohamed.dev.ui.imorpher.showcase.topics.StaggerShowcase
+import com.mohamed.dev.ui.imorpher.showcase.topics.StrokeFillShowcase
 import com.mohamed.dev.ui.imorpher.showcase.topics.StateMorphShowcase
 import com.mohamed.dev.ui.imorpher.showcase.topics.TintTransitionShowcase
 import com.mohamed.dev.ui.imorpher.showcase.topics.VectorAnimatorPlayground
+import com.mohamed.dev.ui.imorpher.showcase.topics.ViewportNormalizationShowcase
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -223,25 +234,39 @@ private fun ShowcaseDetailScreen(
 internal fun ShowcaseContent(topicId: TopicId, itemId: String, state: ShowcaseState) {
     check(ShowcaseContentDispatched(itemId)) { "Unknown showcase item id: $itemId" }
     when (itemId) {
+        "diagnostics-plan-report" -> PlanReportShowcase()
+        "diagnostics-caches" -> CachesShowcase()
+        "diagnostics-codec" -> CodecShowcase()
+        "diagnostics-custom" -> CustomAnimationShowcase()
         "morph-icon-state" -> StateMorphShowcase()
         "morph-icon-tint" -> TintTransitionShowcase()
+        "morph-icon-fill" -> StrokeFillShowcase()
+        "morph-icon-chain" -> ChainedIconShowcase()
         "morph-icon-motion" -> MotionPreferenceShowcase()
         "morph-icon-playground" -> MorphIconPlayground(state)
         "morph-vector-scrub" -> ManualScrubShowcase()
         "morph-vector-missing" -> MissingPathShowcase()
+        "morph-vector-viewport" -> ViewportNormalizationShowcase()
         "morph-vector-playground" -> MorphVectorPlayground(state)
         "vector-animator-keyframes" -> KeyframeTimelineShowcase()
         "vector-animator-stagger" -> StaggerShowcase()
+        "vector-animator-fill" -> FillRevealShowcase()
+        "vector-animator-gradient" -> GradientTimelineShowcase()
         "vector-animator-playground" -> VectorAnimatorPlayground(state)
         "draw-icon-pen" -> PenRevealShowcase()
+        "draw-icon-follow-fill" -> FollowFillShowcase()
+        "draw-icon-clip" -> ClipRevealShowcase()
         "draw-icon-playground" -> DrawIconPlayground(state)
     }
 }
 
 /** Exhaustive id check so registry and dispatcher cannot drift apart silently. */
 private fun ShowcaseContentDispatched(itemId: String): Boolean = itemId in setOf(
-    "morph-icon-state", "morph-icon-tint", "morph-icon-motion", "morph-icon-playground",
-    "morph-vector-scrub", "morph-vector-missing", "morph-vector-playground",
-    "vector-animator-keyframes", "vector-animator-stagger", "vector-animator-playground",
-    "draw-icon-pen", "draw-icon-playground",
+    "diagnostics-plan-report", "diagnostics-caches", "diagnostics-codec", "diagnostics-custom",
+    "morph-icon-state", "morph-icon-tint", "morph-icon-fill", "morph-icon-chain",
+    "morph-icon-motion", "morph-icon-playground",
+    "morph-vector-scrub", "morph-vector-missing", "morph-vector-viewport", "morph-vector-playground",
+    "vector-animator-keyframes", "vector-animator-stagger", "vector-animator-fill",
+    "vector-animator-gradient", "vector-animator-playground",
+    "draw-icon-pen", "draw-icon-follow-fill", "draw-icon-clip", "draw-icon-playground",
 )
