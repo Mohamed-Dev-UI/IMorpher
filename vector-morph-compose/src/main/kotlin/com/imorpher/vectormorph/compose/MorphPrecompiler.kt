@@ -2,6 +2,7 @@ package com.imorpher.vectormorph.compose
 
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.imorpher.vectormorph.core.model.MorphConfiguration
+import com.imorpher.vectormorph.core.model.planningKey
 import com.imorpher.vectormorph.core.plan.MorphPlan
 import com.imorpher.vectormorph.core.plan.MorphPlanner
 import kotlinx.coroutines.Dispatchers
@@ -30,7 +31,7 @@ object MorphPrecompiler {
             val planningConfiguration = config.copy(animation = null)
             val preparedFrom = prepared(from)
             val preparedTo = prepared(to)
-            planCache.getOrPut(preparedFrom, preparedTo, planningConfiguration) {
+            planCache.getOrPut(preparedFrom, preparedTo, planningConfiguration.planningKey()) {
                 MorphPlanner.plan(preparedFrom, preparedTo, planningConfiguration)
             }
         }
@@ -60,6 +61,6 @@ object MorphPrecompiler {
         config: MorphConfiguration = MorphConfiguration.Default,
     ): MorphPlan? {
         val planningConfiguration = config.copy(animation = null)
-        return planCache.get(prepared(from), prepared(to), planningConfiguration)
+        return planCache.get(prepared(from), prepared(to), planningConfiguration.planningKey())
     }
 }

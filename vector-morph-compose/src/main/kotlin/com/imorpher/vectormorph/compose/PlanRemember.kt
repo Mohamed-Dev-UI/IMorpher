@@ -16,6 +16,7 @@ import com.imorpher.vectormorph.core.animation.TimelineEvaluator
 import com.imorpher.vectormorph.core.animation.VectorAnimation as VectorAnimationSpec
 import com.imorpher.vectormorph.core.compiler.VectorCompiler
 import com.imorpher.vectormorph.core.model.MorphConfiguration
+import com.imorpher.vectormorph.core.model.planningKey
 import com.imorpher.vectormorph.core.model.PreparedVector
 import com.imorpher.vectormorph.core.plan.MorphPlan
 import com.imorpher.vectormorph.core.plan.MorphPlanCache
@@ -87,10 +88,11 @@ internal fun rememberPlan(
     configuration: MorphConfiguration,
 ): MorphPlan {
     val planningConfiguration = configuration.copy(animation = null)
-    return remember(from, to, planningConfiguration) {
+    val key = planningConfiguration.planningKey()
+    return remember(from, to, key) {
         val preparedFrom = prepared(from)
         val preparedTo = prepared(to)
-        planCache.getOrPut(preparedFrom, preparedTo, planningConfiguration) {
+        planCache.getOrPut(preparedFrom, preparedTo, key) {
             MorphPlanner.plan(preparedFrom, preparedTo, planningConfiguration)
         }
     }

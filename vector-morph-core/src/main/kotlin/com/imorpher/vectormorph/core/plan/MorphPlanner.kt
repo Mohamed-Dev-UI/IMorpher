@@ -1,6 +1,8 @@
 package com.imorpher.vectormorph.core.plan
 
 import com.imorpher.vectormorph.core.compiler.VectorCompiler
+import com.imorpher.vectormorph.core.model.PlanningKey
+import com.imorpher.vectormorph.core.model.planningKey
 import com.imorpher.vectormorph.core.geometry.ContourData
 import com.imorpher.vectormorph.core.geometry.bounds
 import com.imorpher.vectormorph.core.geometry.centroid
@@ -693,7 +695,7 @@ class MorphPlanCache(
     private data class Key(
         val fromKey: String,
         val toKey: String,
-        val config: MorphConfiguration,
+        val key: PlanningKey,
     )
 
     /** Access-ordered LRU; plans are immutable so eviction only costs re-planning. */
@@ -703,16 +705,25 @@ class MorphPlanCache(
 
     /**
      * Returns the cached plan for (from, to, config), building and inserting it via [build]
+     * on a miss. The full configuration is narrowed to its [planningKey] first — render-only
+     * configuration fields never invalidate a cached plan.
+     */
+    @Synchronized
+    fun getOrPut(from: PreparedVector, to: PreparedVector, config: MorphConfiguration, build: () -> MorphPlan): MorphPlan =
+        getOrPut(from, to, config.planningKey(), build)
+
+    /**
+     * Returns the cached plan for (from, to, [key]), building and inserting it via [build]
      * on a miss. Access-order based, so repeated lookups keep hot entries alive.
      */
     @Synchronized
-    fun getOrPut(from: PreparedVector, to: PreparedVector, config: MorphConfiguration, build: () -> MorphPlan): MorphPlan {
-        val key = Key(from.contentKey, to.contentKey, config)
-        cache[key]?.let { return it }
+    fun getOrPut(from: PreparedVector, to: PreparedVector, key: PlanningKey, build: () -> MorphPlan): MorphPlan {
+        val cacheKey = Key(from.contentKey, to.contentKey, key)
+        cache[cacheKey]?.let { return it }
         val plan = build()
-        cache[key] = plan
+        cache[cacheKey] = plan
         val bytes = estimateBytes(plan)
-        bytesByKey[key] = bytes
+        bytesByKey[cacheKey] = bytes
         currentBytes += bytes
         evictToFit()
         return plan
@@ -721,7 +732,12 @@ class MorphPlanCache(
     /** Returns the cached plan for the pair without building one, or null on a miss. */
     @Synchronized
     fun get(from: PreparedVector, to: PreparedVector, config: MorphConfiguration): MorphPlan? =
-        cache[Key(from.contentKey, to.contentKey, config)]
+        get(from, to, config.planningKey())
+
+    /** Returns the cached plan for the pair under [key] without building one, or null on a miss. */
+    @Synchronized
+    fun get(from: PreparedVector, to: PreparedVector, key: PlanningKey): MorphPlan? =
+        cache[Key(from.contentKey, to.contentKey, key)]
 
     /**
      * Evicts least-recently-used plans until the cache holds at most [bytes] estimated bytes.

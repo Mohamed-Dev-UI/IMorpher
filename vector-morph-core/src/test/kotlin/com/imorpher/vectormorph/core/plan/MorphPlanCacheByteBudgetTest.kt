@@ -6,8 +6,15 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathNode
 import androidx.compose.ui.unit.dp
 import com.imorpher.vectormorph.core.compiler.VectorCompiler
+import com.imorpher.vectormorph.core.model.ColorInterpolationSpace
+import com.imorpher.vectormorph.core.model.FillMode
 import com.imorpher.vectormorph.core.model.MorphConfiguration
+import com.imorpher.vectormorph.core.model.MorphDebugOptions
+import com.imorpher.vectormorph.core.model.StartPointStrategy
+import com.imorpher.vectormorph.core.model.TimingMode
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotSame
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -85,6 +92,48 @@ class MorphPlanCacheByteBudgetTest {
     fun defaultBudgetConstantsAreSane() {
         assertEquals(32, MorphPlanCache.DEFAULT_MAX_ENTRIES)
         assertEquals(16L * 1024 * 1024, MorphPlanCache.DEFAULT_MAX_BYTES)
+    }
+
+    /** Render-only config fields must not fragment the cache (plan key < full config). */
+    @Test
+    fun planCacheIgnoresRenderOnlyFields() {
+        val cache = MorphPlanCache()
+        val plan = planFor(triangleVector("a"), triangleVector("b"))
+
+        val first = cache.getOrPut(plan.from, plan.to, MorphConfiguration.Default) { plan }
+        val second = cache.getOrPut(
+            plan.from, plan.to,
+            MorphConfiguration.Default.copy(
+                debug = MorphDebugOptions(showCentroids = true),
+                colorSpace = ColorInterpolationSpace.OKLAB,
+                defaultFillMode = FillMode.RADIAL,
+                keepRenderOrder = false,
+                timing = TimingMode.BY_COMMAND,
+            ),
+        ) { error("render-only config changes must not re-plan") }
+
+        assertEquals(
+            "one plan entry across render-only config differences",
+            1,
+            cache.size,
+        )
+        assertSame("the plan instance must be reused", first, second)
+    }
+
+    /** Planning-relevant fields must still key distinct plans (guard against over-trimming). */
+    @Test
+    fun planCacheKeysPlanningFields() {
+        val cache = MorphPlanCache()
+        val plan = planFor(triangleVector("a"), triangleVector("b"))
+
+        cache.getOrPut(plan.from, plan.to, MorphConfiguration.Default) { plan }
+        val retarget = cache.getOrPut(
+            plan.from, plan.to,
+            MorphConfiguration.Default.copy(startPoint = StartPointStrategy.MATCH_SOURCE),
+        ) { MorphPlanner.plan(plan.from, plan.to, MorphConfiguration.Default.copy(startPoint = StartPointStrategy.MATCH_SOURCE)) }
+
+        assertEquals(2, cache.size)
+        assertNotSame(plan, retarget)
     }
 
     private fun planFor(from: ImageVector, to: ImageVector): MorphPlan =
