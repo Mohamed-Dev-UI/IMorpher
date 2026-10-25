@@ -92,8 +92,10 @@ object DrawOrder {
     }
 
     /**
-     * Stagger delays per pair: `pairDelay = orderRank * staggerDelay`, optionally squeezed so
-     * the last path still starts within the timeline (`orderRank * delay ≤ 1 - minDuration`).
+     * Stagger delays per pair: `pairDelay = orderRank * staggerDelay`, squeezed proportionally
+     * so the last path still starts within the timeline (`max offset ≤ 0.95`): when the raw
+     * schedule overruns, every offset scales by `0.95 / maxOffset`, preserving the relative
+     * rank spacing instead of clamping collinear starts onto one instant.
      */
     fun staggerOffsets(
         plan: MorphPlan,
@@ -104,8 +106,14 @@ object DrawOrder {
         if (staggerDelay <= 0f) return offsets
         val rankOf = IntArray(plan.pairs.size)
         order.forEachIndexed { rank, pairIndex -> rankOf[pairIndex] = rank }
+        var maxOffset = 0f
         for (i in offsets.indices) {
             offsets[i] = staggerDelay * rankOf[i]
+            if (offsets[i] > maxOffset) maxOffset = offsets[i]
+        }
+        if (maxOffset > 0.95f) {
+            val scale = 0.95f / maxOffset
+            for (i in offsets.indices) offsets[i] *= scale
         }
         return offsets
     }

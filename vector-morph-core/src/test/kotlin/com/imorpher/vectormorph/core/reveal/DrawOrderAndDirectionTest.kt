@@ -124,6 +124,36 @@ class DrawOrderAndDirectionTest {
         assertTrue(offsets.all { it == 0f })
     }
 
+    /** Six left-to-right squares; used to drive offsets past the timeline end. */
+    private fun sixPairPlan(): com.imorpher.vectormorph.core.plan.MorphPlan {
+        val v = vector(
+            "p0" to squareAt(0f, 10f),
+            "p1" to squareAt(4f, 10f),
+            "p2" to squareAt(8f, 10f),
+            "p3" to squareAt(12f, 10f),
+            "p4" to squareAt(16f, 10f),
+            "p5" to squareAt(20f, 10f),
+        )
+        val compiled = VectorCompiler.compile(v)
+        return MorphPlanner.plan(compiled, compiled)
+    }
+
+    @Test
+    fun staggerOffsetsSqueezeToKeepTheLastPathOnTimeline() {
+        // delay 0.4 × ranks 0..5 sums past progress 1; the flat clamps would pile paths
+        // 3..5 onto the same instant — the squeeze keeps every rank distinct and in frame.
+        val offsets = DrawOrder.staggerOffsets(sixPairPlan(), intArrayOf(0, 1, 2, 3, 4, 5), staggerDelay = 0.4f)
+        assertTrue("last offset must fit the timeline", offsets.max() <= 0.95f)
+        assertTrue("late paths keep distinct starts", offsets[4] > offsets[3])
+        assertEquals(0f, offsets[0], 0f)
+        assertEquals(0.19f, offsets[1], 1e-5f)
+        assertEquals(0.95f, offsets[5], 1e-5f)
+
+        // A schedule that already fits is untouched (scaling only when it must).
+        val mild = DrawOrder.staggerOffsets(sixPairPlan(), intArrayOf(0, 1, 2, 3, 4, 5), staggerDelay = 0.05f)
+        assertEquals(listOf(0f, 0.05f, 0.1f, 0.15f, 0.2f, 0.25f), mild.toList())
+    }
+
     // ------------------------------------------------------------------ DirectionMath
 
     @Test

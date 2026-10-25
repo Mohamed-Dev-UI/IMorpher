@@ -179,7 +179,8 @@ class TimelineEvaluator(
         if (staggerDelay > 0f && plan.pairs.isNotEmpty()) {
             val offsets = DrawOrder.staggerOffsets(plan, order, staggerDelay)
             for (i in offsets.indices) {
-                staggerOffsets[i] = offsets[i].coerceAtMost(0.95f)
+                // staggerOffsets squeezes its own schedule; this clamp is purely defensive.
+                staggerOffsets[i] = offsets[i].coerceIn(0f, 1f)
                 maxStaggerOffset = maxOf(maxStaggerOffset, staggerOffsets[i])
             }
         }
