@@ -211,8 +211,9 @@ object ShowcaseStatePersistence {
         }.getOrDefault(fallback)
     }
 
+    /** Numbers must be finite: NaN and +/-Infinity (e.g. a 1e308 double narrowed to Float) fall back. */
     private fun parseNumber(json: JSONObject, key: String, fallback: Float): Float =
-        json.optDouble(key, fallback.toDouble()).toFloat().let { if (it.isNaN()) fallback else it }
+        json.optDouble(key, fallback.toDouble()).toFloat().let { if (it.isNaN() || it.isInfinite()) fallback else it }
 
     private inline fun <reified E : Enum<E>> parseEnum(
         raw: String,

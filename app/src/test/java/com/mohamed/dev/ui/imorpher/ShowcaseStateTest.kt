@@ -35,6 +35,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -320,6 +321,72 @@ class ShowcaseStateTest {
         assertTrue(ShowcaseStatePersistence.applyJsonForTest(json, state))
         assertEquals("unknown icon must keep the current/default name", "SomethingNew", state.fromIconName)
         assertEquals(TimingMode.BY_PATH_LENGTH, state.timing)
+    }
+
+    @Test
+    fun infiniteJsonNumbersKeepCurrentValues() {
+        // 1e308 is a finite double that overflows to +/-Infinity when narrowed to Float —
+        // exactly the gap the NaN-only guard misses.
+        val state = ShowcaseState().apply {
+            durationMillis = 700f
+            staggerDelay = 0.3f
+            startRotation = -45f
+        }
+        val corrupt = "{\"durationMillis\":1e308,\"staggerDelay\":-1e308,\"startRotation\":1e308}"
+        assertTrue(ShowcaseStatePersistence.applyJsonForTest(corrupt, state))
+        assertEquals("infinite numbers must keep the current values", 700f, state.durationMillis)
+        assertEquals("infinite numbers must keep the current values", 0.3f, state.staggerDelay)
+        assertEquals("infinite numbers must keep the current values", -45f, state.startRotation)
+    }
+
+    @Test
+    fun unknownIconNameDegradesToAValidCatalogVector() {
+        // icon() is a backstop for a programming error (names entering state are validated
+        // by hasIcon), so instead of crashing a session it degrades to a catalog member.
+        val degraded = IconCatalog.icon("DoesNotExist")
+        assertSame(IconCatalog.icon("AddCircleOutline"), degraded)
+        assertSame(IconCatalog.icon("ArrowUp1"), IconCatalog.icon("ArrowUp1"))
+    }
+
+    @Test
+    fun pathNamesResolveOffTheMainThreadIntoRealNames() {
+        // SealOutline/SealSolid plan with the named paths ring/cross/dot. First call may
+        // return the placeholder while the lookup warms; the result must surface through
+        // recomposition without ever planning on the caller's thread.
+        val deadline = System.currentTimeMillis() + 5_000
+        var names = PairSuggestions.pathNamesFor("SealOutline", "SealSolid")
+        while (System.currentTimeMillis() < deadline) {
+            if (names.containsAll(listOf("ring", "cross", "dot"))) break
+            Thread.sleep(25)
+            names = PairSuggestions.pathNamesFor("SealOutline", "SealSolid")
+        }
+        assertTrue(
+            "path names must resolve to the plan's real names ($names)",
+            names.containsAll(listOf("ring", "cross", "dot")),
+        )
+    }
+
+    @Test
+    fun pathNamesCacheStaysBounded() {
+        val fromNames = IconCatalog.entries.map { it.name }
+        var requested = 0
+        outer@ for (from in fromNames) {
+            for (to in fromNames) {
+                if (requested >= 120) break@outer
+                PairSuggestions.pathNamesFor(from, to)
+                requested++
+            }
+        }
+        val deadline = System.currentTimeMillis() + 5_000
+        while (System.currentTimeMillis() < deadline) {
+            if (PairSuggestions.cachedPathNamesCountForTest() > 64) break
+            Thread.sleep(25)
+        }
+        assertTrue("bounded cache must exceed a few entries", PairSuggestions.cachedPathNamesCountForTest() >= 16)
+        assertTrue(
+            "cache exceeded its cap (${PairSuggestions.cachedPathNamesCountForTest()})",
+            PairSuggestions.cachedPathNamesCountForTest() <= 64,
+        )
     }
 
     // ------------------------------------------------------------------ snippets

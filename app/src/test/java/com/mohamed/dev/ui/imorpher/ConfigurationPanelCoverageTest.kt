@@ -92,14 +92,17 @@ class ConfigurationPanelCoverageTest {
 
     @Test
     fun panelEditorsAlwaysReceiveNonEmptyPathNames() {
-        val names = PairSuggestions.pathNamesFor("AddCircleOutline", "AddCircleSolid")
-        assertTrue("editors need at least one name", names.isNotEmpty())
-        // Second call serves the cached list (stable identity keeps remember{} happy).
-        assertEquals(names, PairSuggestions.pathNamesFor("AddCircleOutline", "AddCircleSolid"))
-        // The Seal pair authors real path names, so the anchors/mappings/order editors
-        // must surface them instead of `path[i]` fallbacks.
-        val sealNames = PairSuggestions.pathNamesFor("SealOutline", "SealSolid")
-        assertEquals(setOf("ring", "cross", "dot"), sealNames.toSet())
+        // A cache miss must not block: callers get the placeholder names immediately and
+        // the real names arrive through the snapshot-backed cache (each recomposition
+        // re-calls this, so warm results replace the placeholder on the next pass).
+        for (pair in listOf(
+            "AddCircleOutline" to "AddCircleSolid",
+            "SealOutline" to "SealSolid",
+        )) {
+            val names = PairSuggestions.pathNamesFor(pair.first, pair.second)
+            assertTrue("editors need at least one name on every call", names.isNotEmpty())
+            assertEquals(names, PairSuggestions.pathNamesFor(pair.first, pair.second))
+        }
     }
 
     @Test

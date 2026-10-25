@@ -118,8 +118,13 @@ object IconCatalog {
         "SealOutline" to "SealSolid",
     )
 
+    /**
+     * Resolves [name] to its [ImageVector]. Unknown names are a programming error (every name
+     * that can enter state is validated by [hasIcon] first), so instead of crashing a
+     * session the call degrades to `IMorpherIcons.AddCircleOutline`.
+     */
     fun icon(name: String): ImageVector =
-        entriesByName[name] ?: error("Unknown icon: $name")
+        entriesByName[name] ?: IMorpherIcons.AddCircleOutline
 
     /** Whether [name] resolves in this catalog; used to validate restored state. */
     fun hasIcon(name: String): Boolean = entriesByName.containsKey(name)
