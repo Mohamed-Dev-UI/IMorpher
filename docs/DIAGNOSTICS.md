@@ -36,7 +36,7 @@ MorphConfiguration(
         showDirection = true,        // resolved travel arrow (magenta)
         showStartPoints = true,      // resolved anchor dot (yellow)
         showPathMatching = true,     // cyan centroid↔centroid match lines
-        markerArcFraction = 0.5f,
+        markerArcFraction = 0.5f,    // reserved in 0.2.0: accepted but not rendered yet
     ),
 )
 ```

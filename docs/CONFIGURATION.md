@@ -85,7 +85,7 @@ any toggle enabled, not only the ones below.
 | `showDirection` | `false` | The resolved travel arrow (magenta) per revealed contour. |
 | `showStartPoints` | `false` | The resolved anchor dot (yellow) per revealed contour. |
 | `showPathMatching` | `false` | Cyan centroid→centroid matching lines. |
-| `markerArcFraction` | `0f` | 0–1 position along each contour where "current point" markers are drawn. |
+| `markerArcFraction` | `0f` | **Reserved in 0.2.0.** Accepted, validated and persisted on `MorphDebugOptions`, but no renderer consumes it yet — setting it has no visual effect. |
 
 ---
 

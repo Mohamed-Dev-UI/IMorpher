@@ -254,6 +254,11 @@ private fun buildSections(
                     valueRange = 0f..1f,
                     format = { "%.2f".format(it) },
                 )
+                Text(
+                    "Reserved in 0.2.0: stored on MorphDebugOptions, not rendered yet",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         },
     )

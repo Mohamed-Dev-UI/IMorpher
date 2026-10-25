@@ -100,7 +100,7 @@ render's behavior, not a wall of knobs.
 | Geometry budget | `segmentBudget` switch + slider (4–48 cubic segments) and `simplificationTolerance` (0.1–1.0 viewport units) — the trade-off between silhouette detail and per-frame cost. |
 | Viewport | `viewportNormalization`: `STRETCH` (per-axis scaling) vs `FIT` (letterbox). |
 | Size & placement | Optional explicit dp size override (20–96 dp) and out-of-center placements (Center start/end, Top/Bottom center). |
-| Debug overlays | Master switch, then the seven engine overlays — path points, path numbers, bounding boxes, centroids, direction arrows, start anchors, raw path matching — plus the debug marker's arc fraction. |
+| Debug overlays | Master switch, then the seven engine overlays — path points, path numbers, bounding boxes, centroids, direction arrows, start anchors, raw path matching — plus the debug marker's arc fraction (reserved in 0.2.0: the panel asks for a value but the engine does not render it yet). |
 
 Every dropdown is fed straight from the engine enum (`EnumClass.entries`), so the
 app cannot drift from the library: a new enum value appears in the UI automatically.
