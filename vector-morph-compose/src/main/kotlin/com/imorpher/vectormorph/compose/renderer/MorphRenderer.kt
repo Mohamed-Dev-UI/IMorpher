@@ -958,6 +958,11 @@ class MorphRenderer {
             )
 
             // ---- stroke pass (with reveal / pen effect)
+            val strokeWidthScale = if (pair.strokeFillMorph && f.fill != null && t.fill != null && f.stroke != null && t.stroke != null) {
+                (1f - morphT).coerceAtLeast(0f)
+            } else {
+                null
+            }
             strokes.drawMorph(
                 drawScope = this,
                 pair = pair,
@@ -967,6 +972,7 @@ class MorphRenderer {
                 result = strokeResult,
                 alpha = strokeAlpha,
                 strokeWidth = strokeWidth,
+                strokeWidthScale = strokeWidthScale,
                 props = props,
                 drawCfg = drawCfg,
                 clipContours = clipContours,

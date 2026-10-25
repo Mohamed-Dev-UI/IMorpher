@@ -225,6 +225,36 @@ class MorphPlannerFallbackTest {
         assertTrue(drawn.pairs.single().strokeFillDraw)
     }
 
+    /** A path carrying BOTH fill and stroke — the pair shape the shrink choreography needs. */
+    private fun paintedBothSides(name: String, data: List<PathNode>): ImageVector {
+        val builder = ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f)
+        builder.addPath(
+            pathData = data,
+            fill = SolidColor(Color.Black),
+            stroke = SolidColor(Color.Black),
+            strokeLineWidth = 2f,
+            name = "a",
+        )
+        return builder.build()
+    }
+
+    @Test
+    fun morphStrokeFillPlansAStrokeShrinkPair() {
+        val a = paintedBothSides("first", triangle())
+        val b = paintedBothSides("second", triangle(1f))
+
+        val morph = plan(a, b, MorphConfiguration(strokeFill = StrokeFillStrategy.MORPH))
+        assertTrue("explicit MORPH plans the stroke-shrink pair", morph.pairs.single().strokeFillMorph)
+        assertFalse("the shrink replaces draw choreography", morph.pairs.single().strokeFillDraw)
+
+        val crossfade = plan(a, b, MorphConfiguration(strokeFill = StrokeFillStrategy.CROSSFADE))
+        assertFalse("CROSSFADE is not the morph shrink", crossfade.pairs.single().strokeFillMorph)
+
+        // AUTO keeps today's resolved behavior (pre-flight ruling): no morph shrink.
+        val auto = plan(a, b, MorphConfiguration.Default)
+        assertFalse("AUTO must never emit the morph shrink", auto.pairs.single().strokeFillMorph)
+    }
+
     // ------------------------------------------------------------------ viewport + reports
 
     @Test

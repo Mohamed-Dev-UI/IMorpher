@@ -55,6 +55,14 @@ class ContourPairPlan(
     val startAlignmentOffset: Float,
 )
 
+/** The stroke→fill choreography the planner resolves for one pair. */
+data class StrokeFillDecision(
+    /** Draw-first: the pen completes the outline before the fill sweeps in behind it. */
+    val draw: Boolean,
+    /** Stroke-shrink: the stroke scales down while the fill grows with the morph. */
+    val morph: Boolean,
+)
+
 /**
  * One source-path ↔ target-path correspondence.
  *
@@ -82,6 +90,12 @@ class PathPairPlan(
     val toOnlyContours: List<ContourData>,
     /** Whether the stroke→fill transition uses a draw-first choreography. */
     val strokeFillDraw: Boolean = false,
+    /**
+     * Whether the stroke→fill transition shrinks the stroke as the fill grows with the morph
+     * ([StrokeFillStrategy.MORPH]). The renderer applies the shrink only when the pair
+     * carries both fill and stroke paint.
+     */
+    val strokeFillMorph: Boolean = false,
     /** 0..1 geometric compatibility score for this pair (MORPH pairs). */
     val score: Float = 1f,
     /** Human-readable warnings attached to this pair. */

@@ -408,7 +408,7 @@ object MorphPlanner {
         for (index in f.contours.indices) if (!matchedFrom[index]) fromOnly.add(f.contours[index])
         for (index in t.contours.indices) if (!matchedTo[index]) toOnly.add(t.contours[index])
 
-        val strokeFillDraw = decideStrokeFill(f, t, config)
+        val strokeFillDecision = decideStrokeFill(f, t, config)
 
         return PathPairPlan(
             index = index,
@@ -418,10 +418,11 @@ object MorphPlanner {
             contourPairs = contourPairs,
             fromOnlyContours = fromOnly,
             toOnlyContours = toOnly,
-            strokeFillDraw = strokeFillDraw,
+            strokeFillDraw = strokeFillDecision.draw,
+            strokeFillMorph = strokeFillDecision.morph,
             score = PathMatcher.scorePair(f, t),
             warnings = pairWarnings,
-            clipPairs = alignClipContours(f.clipContours, t.clipContours, config),
+        clipPairs = alignClipContours(f.clipContours, t.clipContours, config),
         )
     }
 
@@ -607,23 +608,24 @@ object MorphPlanner {
         }
 
     /**
-     * Whether the stroke→fill transition should draw the stroke first and sweep the fill in
-     * behind it. AUTO picks the draw choreography for outline→filled transitions only.
+     * Which stroke→fill choreography this pair plans. AUTO picks the draw choreography for
+     * outline→filled transitions and never emits the morph shrink, so default-rendered
+     * pairs stay pixel-stable; only an explicit [StrokeFillStrategy.MORPH] asks for it.
      */
     private fun decideStrokeFill(
         f: com.imorpher.vectormorph.core.model.PreparedPath,
         t: com.imorpher.vectormorph.core.model.PreparedPath,
         config: MorphConfiguration,
-    ): Boolean {
-        return when (config.strokeFill) {
-            StrokeFillStrategy.DRAW -> true
-            StrokeFillStrategy.MORPH, StrokeFillStrategy.CROSSFADE -> false
-            StrokeFillStrategy.AUTO -> {
-                // outline → filled: draw the stroke first, then sweep the fill in
-                val fromStroked = f.stroke != null && f.fill == null
-                val toFilled = t.fill != null
-                fromStroked && toFilled
-            }
+    ): StrokeFillDecision = when (config.strokeFill) {
+        StrokeFillStrategy.DRAW -> StrokeFillDecision(draw = true, morph = false)
+        StrokeFillStrategy.MORPH -> StrokeFillDecision(draw = false, morph = true)
+        StrokeFillStrategy.CROSSFADE -> StrokeFillDecision(draw = false, morph = false)
+        StrokeFillStrategy.AUTO -> {
+            // outline → filled: draw the stroke first, then sweep the fill in
+            StrokeFillDecision(
+                draw = f.stroke != null && f.fill == null && t.fill != null,
+                morph = false,
+            )
         }
     }
 

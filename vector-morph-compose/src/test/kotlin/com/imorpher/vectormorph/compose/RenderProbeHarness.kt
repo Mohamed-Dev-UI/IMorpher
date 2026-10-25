@@ -130,6 +130,25 @@ internal class RenderProbeHarness(
     /** Horizontal line, authored left→right (arc 0 sits at x=3). */
     fun line() = listOf(PathNode.MoveTo(3f, 12f), PathNode.LineTo(21f, 12f))
 
+    /** Filled + stroked contours in probe blue: the stroke→fill transition shape. */
+    fun filledAndStroked(
+        name: String,
+        vararg contours: List<PathNode>,
+        strokeWidth: Float = 4f,
+    ): ImageVector {
+        val builder = ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f)
+        contours.forEachIndexed { index, data ->
+            builder.addPath(
+                pathData = data,
+                fill = SolidColor(Color(0xFF12A4D9)),
+                stroke = SolidColor(Color(0xFF12A4D9)),
+                strokeLineWidth = strokeWidth,
+                name = "path-$index",
+            )
+        }
+        return builder.build()
+    }
+
     /**
      * Opens a persistent [MorphVector] composition whose configuration can be flipped
      * in place — the only way to observe a stale `remember` scope, which skip-changes

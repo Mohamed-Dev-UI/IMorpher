@@ -54,6 +54,35 @@ class MorphParameterApplicationTest {
     private fun paintedCount(bitmap: Bitmap): Int = BitmapAsserts.paintedCount(bitmap)
     private fun difference(a: Bitmap, b: Bitmap): Float = BitmapAsserts.meanAbsDifference(a, b)
 
+    // ------------------------------------------------------------------ stroke ↔ fill
+
+    @Test
+    fun strokeFillMorphShrinksTheStrokeMidMorph() {
+        // Same geometry both sides so the whole delta is paint choreography: explicit
+        // MORPH shrinks the 6u stroke with the morph and sweeps the fill behind it;
+        // CROSSFADE holds the full stroke and crossfades the legs. Today MORPH silently
+        // behaves like CROSSFADE, so the frames measure exactly 0 difference.
+        val square = listOf(
+            PathNode.MoveTo(4f, 4f), PathNode.LineTo(20f, 4f),
+            PathNode.LineTo(20f, 20f), PathNode.LineTo(4f, 20f), PathNode.Close,
+        )
+        val from = harness.filledAndStroked("from", square, strokeWidth = 6f)
+        val to = harness.filledAndStroked("to", square, strokeWidth = 6f)
+        val shrink = harness.renderMorph(
+            from, to, 0.5f,
+            configuration = MorphConfiguration(strokeFill = com.imorpher.vectormorph.core.model.StrokeFillStrategy.MORPH),
+        )
+        val crossfade = harness.renderMorph(
+            from, to, 0.5f,
+            configuration = MorphConfiguration(strokeFill = com.imorpher.vectormorph.core.model.StrokeFillStrategy.CROSSFADE),
+        )
+        val delta = difference(shrink, crossfade)
+        assertTrue(
+            "explicit MORPH must shrink the stroke while the fill grows (stale would be exactly 0; delta=$delta)",
+            delta > 0.01f,
+        )
+    }
+
     // ------------------------------------------------------------------ reveal parameters
 
     @Test

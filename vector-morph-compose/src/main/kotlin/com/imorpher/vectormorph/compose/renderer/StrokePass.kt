@@ -71,6 +71,7 @@ internal class StrokePass(
         result: GradientInterpolator.Result,
         alpha: Float,
         strokeWidth: Float,
+        strokeWidthScale: Float? = null,
         props: PathFrameValues,
         drawCfg: VectorAnimation.DrawConfig?,
         clipContours: List<ContourData>,
@@ -84,9 +85,12 @@ internal class StrokePass(
         anchorCollector: ((anchorX: Float, anchorY: Float, travelLength: Float) -> Unit)?,
         warnings: (List<DrawResolutionWarning>) -> Unit,
     ) {
-        if (result is GradientInterpolator.Result.None || alpha <= 0.003f || strokeWidth <= 0f) return
+        // StrokeFillStrategy.MORPH: the pair's stroke shrinks as the fill grows with the
+        // morph. The scale arrives null for every pair without the choreography.
+        val effectiveWidth = strokeWidth * (strokeWidthScale ?: 1f)
+        if (result is GradientInterpolator.Result.None || alpha <= 0.003f || effectiveWidth <= 0f) return
         val style = Stroke(
-            width = strokeWidth,
+            width = effectiveWidth,
             cap = t.strokeLineCap,
             join = t.strokeLineJoin,
             miter = t.strokeLineMiter,

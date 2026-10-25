@@ -141,6 +141,9 @@ internal class FillPass(
         // shape that should still be invisible.
         val effectiveFill = fillProgress
             ?: when {
+                // StrokeFillStrategy.MORPH: the fill grows with the morph while the stroke
+                // shrinks, sweeping the shape in behind the vanishing outline.
+                pair.strokeFillMorph -> morphT.coerceIn(0f, 1f)
                 pair.strokeFillDraw -> ((morphT - 0.45f) / 0.55f).coerceIn(0f, 1f)
                 drawProgress != null -> drawProgress
                 else -> 1f
