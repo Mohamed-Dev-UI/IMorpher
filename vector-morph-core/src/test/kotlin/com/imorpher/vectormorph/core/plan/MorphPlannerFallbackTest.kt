@@ -66,6 +66,26 @@ class MorphPlannerFallbackTest {
         assertTrue(plan.pairs.all { it.contourPairs.isEmpty() })
     }
 
+    /**
+     * A crossfade fallback plans every missing-path pair as FADE, silently discarding a
+     * meaningful `missingPath` (e.g. DRAW): the plan must record that conflict on the
+     * affected pairs so `validatePlan` escalates it into the report's issues.
+     */
+    @Test
+    fun crossfadeFallbackRecordsIgnoredMissingPath() {
+        val empty = ImageVector.Builder("empty", 24.dp, 24.dp, 24f, 24f).build()
+        val plan = plan(
+            empty,
+            vector("to", "b" to triangle()),
+            MorphConfiguration(fallback = FallbackStrategy.CROSSFADE, missingPath = MissingPathBehavior.DRAW),
+        )
+        assertTrue(plan.usedFallback)
+        assertTrue(
+            "crossfade discarding missingPath must surface in the report (issues=${plan.report.issues.map { it.message }})",
+            plan.report.issues.any { it.message.contains("missingPath") },
+        )
+    }
+
     @Test
     fun scaleCrossfadeFallbackAlsoCrossfadesAllPairs() {
         val plan = plan(

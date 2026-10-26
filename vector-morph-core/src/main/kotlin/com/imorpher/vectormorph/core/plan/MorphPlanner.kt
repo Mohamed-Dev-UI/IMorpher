@@ -85,6 +85,15 @@ object MorphPlanner {
         val pairs = ArrayList<PathPairPlan>(matches.size)
 
         val missingBehavior = if (fallbackDecision.crossfadeAll) MissingPathBehavior.FADE else config.missingPath
+        // A crossfade fallback silently discards a meaningful `missingPath` (it plans every
+        // missing pair as FADE): record that conflict on the affected pairs so the report
+        // escalates it (same channel `validatePlan` uses for missing-path pairs).
+        val discardedMissingPath = if (
+            fallbackDecision.crossfadeAll && config.missingPath != MissingPathBehavior.FADE
+        ) {
+            "FallbackStrategy ${fallbackDecision.strategy} crossfades every pair; " +
+                "missingPath ${config.missingPath} is ignored"
+        } else null
 
         for ((index, match) in matches.withIndex()) {
             val f = match.from
@@ -109,8 +118,12 @@ object MorphPlanner {
                         pairs.add(planMorphPair(index, f, t, config))
                     }
                 }
-                t != null -> pairs.add(planAppearingPair(index, t, missingBehavior))
-                else -> pairs.add(planDisappearingPair(index, f!!, missingBehavior))
+                t != null -> pairs.add(
+                    planAppearingPair(index, t, missingBehavior, fallbackWarning = discardedMissingPath)
+                )
+                else -> pairs.add(
+                    planDisappearingPair(index, f!!, missingBehavior, fallbackWarning = discardedMissingPath)
+                )
             }
         }
 
@@ -636,11 +649,15 @@ object MorphPlanner {
         index: Int,
         t: com.imorpher.vectormorph.core.model.PreparedPath,
         behavior: MissingPathBehavior,
+        fallbackWarning: String? = null,
     ): PathPairPlan {
-        val warnings = when (behavior) {
-            MissingPathBehavior.MORPH_FROM_NEAREST -> listOf("no unmatched source path is available; '${t.name}' fades in")
-            MissingPathBehavior.CUSTOM -> listOf("'${t.name}' requires CustomVectorAnimation to provide geometry at render time")
-            else -> emptyList()
+        val warnings = buildList {
+            if (fallbackWarning != null) add(fallbackWarning)
+            when (behavior) {
+                MissingPathBehavior.MORPH_FROM_NEAREST -> add("no unmatched source path is available; '${t.name}' fades in")
+                MissingPathBehavior.CUSTOM -> add("'${t.name}' requires CustomVectorAnimation to provide geometry at render time")
+                else -> Unit
+            }
         }
         return PathPairPlan(
             index = index,
@@ -660,10 +677,15 @@ object MorphPlanner {
         index: Int,
         f: com.imorpher.vectormorph.core.model.PreparedPath,
         behavior: MissingPathBehavior,
+        fallbackWarning: String? = null,
     ): PathPairPlan {
-        val warnings = when (behavior) {
-            MissingPathBehavior.CUSTOM -> listOf("'${f.name}' requires CustomVectorAnimation to provide geometry at render time")
-            else -> emptyList()
+        val warnings = buildList {
+            if (fallbackWarning != null) add(fallbackWarning)
+            when (behavior) {
+                MissingPathBehavior.CUSTOM ->
+                    add("'${f.name}' requires CustomVectorAnimation to provide geometry at render time")
+                else -> Unit
+            }
         }
         return PathPairPlan(
             index = index,
