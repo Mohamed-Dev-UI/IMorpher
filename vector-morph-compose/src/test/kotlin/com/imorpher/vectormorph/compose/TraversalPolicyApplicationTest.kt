@@ -7,7 +7,12 @@ import com.imorpher.vectormorph.core.animation.VectorAnimation as VectorAnimatio
 import com.imorpher.vectormorph.core.model.DirectionTraversal
 import com.imorpher.vectormorph.core.model.DrawDirection
 import com.imorpher.vectormorph.core.model.DrawMode
+import com.imorpher.vectormorph.core.model.FallbackStrategy
+import com.imorpher.vectormorph.core.model.FillMode
+import com.imorpher.vectormorph.core.model.MissingPathBehavior
 import com.imorpher.vectormorph.core.model.MorphConfiguration
+import com.imorpher.vectormorph.core.model.PathStart
+import com.imorpher.vectormorph.core.model.TimingMode
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -157,6 +162,138 @@ class TraversalPolicyApplicationTest {
         assertTrue(
             "closed contour + LEFT_TO_RIGHT must render identically under both policies",
             legacy.sameAs(honored),
+        )
+    }
+
+    // ------------------------------------------------------------------ task 9: ignored render sites
+
+    /**
+     * Rule 4 at the missing-path DRAW site: the open hook matches nothing in the from
+     * vector and arrives via `missingPath=DRAW` — its pen reveal runs through
+     * `StrokePass.drawMissingSide`, which must honor the traversal policy exactly like
+     * the morph stroke pass does. Today the site hard-codes LEGACY behavior, so the two
+     * frames measure exactly 0 difference (the matched closed square renders identically
+     * under both policies; only the hook's site can contribute).
+     */
+    @Test
+    fun drawMissingPathHonorsTraversalPolicy() {
+        val from = harness.strokedPaths("fixture", harness.squareAt(3f, 3f), pathNames = listOf("match"))
+        val to = harness.strokedPaths(
+            "fixture",
+            harness.squareAt(3f, 3f),
+            listOf(
+                PathNode.MoveTo(21f, 2f), PathNode.LineTo(6f, 6f),
+                PathNode.LineTo(2f, 20f), PathNode.LineTo(21f, 21f),
+            ),
+            pathNames = listOf("match", "odd"),
+        )
+        val legacy = harness.renderMorph(
+            from, to, 0.3f,
+            configuration = MorphConfiguration(
+                missingPath = MissingPathBehavior.DRAW,
+                directionTraversal = DirectionTraversal.LEGACY,
+            ),
+            animation = revealAnimation(DrawDirection.LEFT_TO_RIGHT),
+        )
+        val honored = harness.renderMorph(
+            from, to, 0.3f,
+            configuration = MorphConfiguration(missingPath = MissingPathBehavior.DRAW),
+            animation = revealAnimation(DrawDirection.LEFT_TO_RIGHT),
+        )
+        val delta = BitmapAsserts.meanAbsDifference(legacy, honored)
+        assertTrue(
+            "missing-path DRAW must honor the traversal policy (stale would be exactly 0; delta=$delta)",
+            delta > 0.01f,
+        )
+    }
+
+    /**
+     * The FillPass PATH_TRAVERSAL arm must honor the configuration's timing: with a
+     * two-contour missing path under BY_PATH each contour owns an equal-time slice
+     * (long zigzag finishes; the tiny tail starts), while UNIFORM reveals the combined
+     * arc uniformly. An empty from vector keeps a SINGLE pair so the evaluator's own
+     * per-pair timing cannot brighten either frame — the render site is the only
+     * contributor — and today the arm always maps UNIFORM, so the frames measure
+     * exactly 0 difference.
+     */
+    @Test
+    fun pathTraversalFillHonorsTimingMode() {
+        val longContour = listOf(
+            PathNode.MoveTo(2f, 2f), PathNode.LineTo(10f, 8f),
+            PathNode.LineTo(2f, 14f), PathNode.LineTo(10f, 20f),
+        )
+        val shortContour = listOf(PathNode.MoveTo(16f, 3f), PathNode.LineTo(17.5f, 4.5f))
+        val from = harness.filled("from")
+        // BOTH contours concatenated into ONE path (one addPath = one path element; the
+        // compiler splits subpaths into contours): the render site's per-contour spread
+        // is the unit under test — separate path elements would plan two single-contour
+        // pairs and bypass it.
+        val to = harness.filled("to", longContour + shortContour)
+        val common = MorphConfiguration(
+            fallback = FallbackStrategy.BEST_EFFORT,
+            missingPath = MissingPathBehavior.DRAW,
+            defaultFillMode = FillMode.PATH_TRAVERSAL,
+        )
+        val uniform = harness.renderMorph(
+            from, to, 0.6f, configuration = common.copy(timing = TimingMode.UNIFORM),
+        )
+        val byPath = harness.renderMorph(
+            from, to, 0.6f, configuration = common.copy(timing = TimingMode.BY_PATH),
+        )
+        val delta = BitmapAsserts.meanAbsDifference(uniform, byPath)
+        assertTrue(
+            "PATH_TRAVERSAL fill must honor the timing mode (stale would be exactly 0; delta=$delta)",
+            delta > 0.01f,
+        )
+    }
+
+    /**
+     * The FillPass PATH_TRAVERSAL arm must resolve the custom draw anchor: a timeline
+     * `draw(start = PathStart.CUSTOM)` steers the traversal choreography, so
+     * `customDrawAnchors["stroke"]=0.5` starts the fill's reveal arc at the half-length
+     * point instead of arc 0. Today the arm drops the anchor, so the frames measure
+     * exactly 0 difference.
+     */
+    @Test
+    fun pathTraversalFillHonorsCustomDrawAnchors() {
+        val anchorHook = listOf(
+            PathNode.MoveTo(21f, 2f), PathNode.LineTo(6f, 6f),
+            PathNode.LineTo(2f, 20f), PathNode.LineTo(21f, 21f),
+        )
+        val from = harness.filled("from")
+        val to = harness.filled("to", anchorHook, pathNames = listOf("stroke"))
+        val animation = VectorAnimationSpec {
+            defaultEasing(LinearEasing)
+            allPaths {
+                drawProgress(
+                    from = 0f, to = 1f, interval = 0f..1f,
+                    mode = DrawMode.FORWARD, start = PathStart.CUSTOM,
+                )
+            }
+        }
+        val anchored = harness.renderMorph(
+            from, to, 0.5f,
+            configuration = MorphConfiguration(
+                fallback = FallbackStrategy.BEST_EFFORT,
+                missingPath = MissingPathBehavior.DRAW,
+                defaultFillMode = FillMode.PATH_TRAVERSAL,
+                customDrawAnchors = mapOf("stroke" to 0.5f),
+            ),
+            animation = animation,
+        )
+        val atZero = harness.renderMorph(
+            from, to, 0.5f,
+            configuration = MorphConfiguration(
+                fallback = FallbackStrategy.BEST_EFFORT,
+                missingPath = MissingPathBehavior.DRAW,
+                defaultFillMode = FillMode.PATH_TRAVERSAL,
+            ),
+            animation = animation,
+        )
+        val delta = BitmapAsserts.meanAbsDifference(anchored, atZero)
+        assertTrue(
+            "PATH_TRAVERSAL fill must honor the custom draw anchor (stale would be exactly 0; delta=$delta)",
+            delta > 0.01f,
         )
     }
 

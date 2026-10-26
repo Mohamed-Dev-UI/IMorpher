@@ -15,6 +15,7 @@ import com.imorpher.vectormorph.core.model.DrawMode
 import com.imorpher.vectormorph.core.model.FillMode
 import com.imorpher.vectormorph.core.model.PathStart
 import com.imorpher.vectormorph.core.model.PreparedPath
+import com.imorpher.vectormorph.core.model.TimingMode
 import com.imorpher.vectormorph.core.plan.ContourPairPlan
 import com.imorpher.vectormorph.core.plan.PathPairPlan
 import com.imorpher.vectormorph.core.reveal.DirectionMath
@@ -124,6 +125,9 @@ internal class FillPass(
         props: PathFrameValues,
         fillMode: FillMode,
         fillDir: DrawDirection,
+        timing: TimingMode = TimingMode.UNIFORM,
+        customStart: Float = 0f,
+        honorDirection: Boolean = false,
         drawProgress: Float?,
         fillProgress: Float?,
         clipContours: List<ContourData>,
@@ -161,6 +165,9 @@ internal class FillPass(
                     combined, result, alpha, effectiveFill, fillMode, fillDir,
                     customBox[0], customBox[1], customBox[2], customBox[3], strokeWidth,
                     t, props,
+                    timing = timing,
+                    customStart = customStart,
+                    honorDirection = honorDirection,
                     warnings = warnings,
                 )
             }
@@ -248,6 +255,9 @@ internal class FillPass(
         clipProgress: Float,
         clipDirection: DrawDirection,
         props: PathFrameValues,
+        timing: TimingMode = TimingMode.UNIFORM,
+        customStart: Float = 0f,
+        honorDirection: Boolean = false,
         warnings: (List<DrawResolutionWarning>) -> Unit,
     ) {
         if (result is GradientInterpolator.Result.None || side.fillAlpha <= 0f) return
@@ -266,6 +276,9 @@ internal class FillPass(
                 side.strokeWidth,
                 side,
                 props,
+                timing = timing,
+                customStart = customStart,
+                honorDirection = honorDirection,
                 warnings = warnings,
             )
         }
@@ -291,6 +304,9 @@ internal class FillPass(
         fillProgress: Float,
         fillMode: FillMode,
         fillDir: DrawDirection,
+        timing: TimingMode = TimingMode.UNIFORM,
+        customStart: Float = 0f,
+        honorDirection: Boolean = false,
         warnings: (List<DrawResolutionWarning>) -> Unit,
     ) {
         val box = clips.boundsOf(contours)
@@ -303,6 +319,9 @@ internal class FillPass(
             drawScope,
             combined, result, alpha, fillProgress, fillMode, fillDir,
             box[0], box[1], box[2], box[3], strokeWidth, side, props,
+            timing = timing,
+            customStart = customStart,
+            honorDirection = honorDirection,
             warnings = warnings,
         )
     }
@@ -323,6 +342,9 @@ internal class FillPass(
         strokeWidth: Float,
         t: PreparedPath,
         props: PathFrameValues,
+        timing: TimingMode = TimingMode.UNIFORM,
+        customStart: Float = 0f,
+        honorDirection: Boolean = false,
         warnings: (List<DrawResolutionWarning>) -> Unit,
     ) {
         val prog = fillProgress.coerceIn(0f, 1f)
@@ -431,19 +453,50 @@ internal class FillPass(
                             ?: error("Custom path-traversal fill requires custom fillContours or strokeRevealContours")
                         customContours.forEach { paintTraversal(pathOf(it)) }
                     }
-                    else -> paintTraversal(
-                        // Fill-sweep reuse of the reveal machinery, not a pen anchor: no
-                        // debug anchor collector here (rule 7 covers stroke reveals), but
-                        // the warnings still land in the frame collector.
-                        strokes.buildRevealedStrokePath(
-                            path, prog, drawMode,
-                            strokeDraw?.start ?: PathStart.AUTO,
-                            drawDirection,
-                            null,
-                            closed = t.contours.all { it.closed },
-                            warnings = warnings,
-                        )
-                    )
+                    else -> {
+                        val staticArc = t.arcLengths.firstOrNull()
+                        if (timing == TimingMode.BY_PATH && t.contours.size > 1 && staticArc != null) {
+                            // Config timing spreads equal time slices across the path's contours
+                            // (the mapDrawProgress BY_PATH contract): each contour fully
+                            // traverses during its own slice, in draw order.
+                            val slice = 1f / t.contours.size
+                            t.contours.forEachIndexed { index, contour ->
+                                val local = ((prog - index * slice) / slice).coerceIn(0f, 1f)
+                                if (local <= 0.003f) return@forEachIndexed
+                                paintTraversal(
+                                    strokes.buildRevealedStrokePath(
+                                        contoursFillPath(listOf(contour), t.pathFillType),
+                                        local, drawMode,
+                                        strokeDraw?.start ?: PathStart.AUTO,
+                                        drawDirection, null,
+                                        customStartFraction = customStart,
+                                        closed = contour.closed,
+                                        honorDirection = honorDirection,
+                                        warnings = warnings,
+                                    )
+                                )
+                            }
+                        } else {
+                            // Fill-sweep reuse of the reveal machinery, not a pen anchor: no
+                            // debug anchor collector here (rule 7 covers stroke reveals), but
+                            // the warnings still land in the frame collector.
+                            paintTraversal(
+                                strokes.buildRevealedStrokePath(
+                                    path, prog, drawMode,
+                                    strokeDraw?.start ?: PathStart.AUTO,
+                                    drawDirection,
+                                    null,
+                                    customStartFraction = customStart,
+                                    timingMode = timing,
+                                    totalPathLength = t.totalLength,
+                                    staticArc = staticArc,
+                                    closed = t.contours.all { it.closed },
+                                    honorDirection = honorDirection,
+                                    warnings = warnings,
+                                )
+                            )
+                        }
+                    }
                 }
             }
         }

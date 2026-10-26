@@ -831,6 +831,9 @@ class MorphRenderer {
                     fillProgress = fillP,
                     fillMode = fillCfg?.fillMode ?: config.defaultFillMode,
                     fillDir = fillCfg?.fillDirection ?: config.defaultFillDirection,
+                    timing = config.timing,
+                    customStart = drawAnchorFor(config, side.name, side.name),
+                    honorDirection = config.directionTraversal == DirectionTraversal.HONOR_DIRECTION,
                     warnings = { drawWarnings.addAll(it) },
                 )
                 strokes.drawCustomContours(
@@ -845,6 +848,7 @@ class MorphRenderer {
                     drawProgress = drawP,
                     customStart = drawAnchorFor(config, side.name, side.name),
                     timing = config.timing,
+                    honorDirection = config.directionTraversal == DirectionTraversal.HONOR_DIRECTION,
                     anchorCollector = if (collectDrawAnchors)
                         debugAnchorSink(transform, drawCfg?.direction ?: DrawDirection.AUTO) else null,
                     warnings = { drawWarnings.addAll(it) },
@@ -954,6 +958,9 @@ class MorphRenderer {
                 bMinX = bMinX, bMinY = bMinY, bMaxX = bMaxX, bMaxY = bMaxY,
                 fromExtras = fromExtras.getOrNull(pair.index).orEmpty(),
                 toExtras = toExtras.getOrNull(pair.index).orEmpty(),
+                timing = config.timing,
+                customStart = drawAnchorFor(config, f.name, t.name),
+                honorDirection = config.directionTraversal == DirectionTraversal.HONOR_DIRECTION,
                 warnings = { drawWarnings.addAll(it) },
             )
 
@@ -1174,6 +1181,9 @@ class MorphRenderer {
                 clipProgress = clipProgress,
                 clipDirection = clipDirection,
                 props = props,
+                timing = config.timing,
+                customStart = drawAnchorFor(config, side.name, side.name),
+                honorDirection = config.directionTraversal == DirectionTraversal.HONOR_DIRECTION,
                 warnings = { drawWarnings.addAll(it) },
             )
             // ---- stroke pass (with reveal / pen effect)
@@ -1188,6 +1198,7 @@ class MorphRenderer {
                 clipDirection = clipDirection,
                 customStart = drawAnchorFor(config, side.name, side.name),
                 timing = config.timing,
+                honorDirection = config.directionTraversal == DirectionTraversal.HONOR_DIRECTION,
                 anchorCollector = if (collectDrawAnchors)
                     debugAnchorSink(transform, drawConfig?.direction ?: DrawDirection.AUTO) else null,
                 warnings = { drawWarnings.addAll(it) },

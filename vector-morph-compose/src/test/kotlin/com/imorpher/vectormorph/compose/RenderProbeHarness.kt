@@ -121,6 +121,25 @@ internal class RenderProbeHarness(
         return builder.build()
     }
 
+    /** Stroked contours as separate paths; per-path names expose anchor-map keys. */
+    fun strokedPaths(
+        name: String,
+        vararg contours: List<PathNode>,
+        strokeWidth: Float = 2f,
+        pathNames: List<String>? = null,
+    ): ImageVector {
+        val builder = ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f)
+        contours.forEachIndexed { index, data ->
+            builder.addPath(
+                pathData = data,
+                stroke = SolidColor(Color(0xFF12A4D9)),
+                strokeLineWidth = strokeWidth,
+                name = pathNames?.getOrNull(index) ?: "stroke-$index",
+            )
+        }
+        return builder.build()
+    }
+
     /** The closed square the fill probes morph between. */
     fun squareAt(x: Float, y: Float, size: Float = 8f) = listOf(
         PathNode.MoveTo(x, y), PathNode.LineTo(x + size, y),

@@ -191,6 +191,7 @@ internal class StrokePass(
         clipDirection: DrawDirection,
         customStart: Float,
         timing: TimingMode,
+        honorDirection: Boolean = false,
         anchorCollector: ((anchorX: Float, anchorY: Float, travelLength: Float) -> Unit)?,
         warnings: (List<DrawResolutionWarning>) -> Unit,
     ) {
@@ -231,6 +232,7 @@ internal class StrokePass(
                     side.arcLengths.getOrNull(contourIndex),
                     closed = contour.closed,
                     warnings = warnings,
+                    honorDirection = honorDirection,
                     anchorCollector = anchorCollector,
                 )
                 clips.withClipReveal(drawScope, side.clipContours, clipProgress, clipDirection) {
@@ -526,6 +528,7 @@ internal class StrokePass(
         drawProgress: Float,
         customStart: Float,
         timing: TimingMode,
+        honorDirection: Boolean = false,
         anchorCollector: ((anchorX: Float, anchorY: Float, travelLength: Float) -> Unit)?,
         warnings: (List<DrawResolutionWarning>) -> Unit,
     ) {
@@ -542,6 +545,7 @@ internal class StrokePass(
                 path, drawProgress, drawCfg?.mode ?: DrawMode.FORWARD, drawCfg?.start ?: PathStart.AUTO,
                 direction, null, customStart, timing,
                 warnings = warnings,
+                honorDirection = honorDirection,
                 anchorCollector = anchorCollector,
             )
             if (shown.isEmpty || strokeWidth <= 0f) continue
