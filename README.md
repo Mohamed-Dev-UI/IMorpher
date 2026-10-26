@@ -132,7 +132,7 @@ plans and renders a sane geometry morph. Every field has a full entry in
 | `pathMatching` | `AUTO` | How source paths pair with target paths (index, name, id, geometry, area, centroid, custom). |
 | `startPoint` | `AUTO` | How closed contours align start points before morphing. |
 | `pathDirection` | `AUTO` | Contour winding normalization. |
-| `drawOrder` | `BY_INDEX` | Reveal ordering; drives stagger timing (and z-order when `keepRenderOrder = false`). |
+| `drawOrder` | `BY_INDEX` | Render z-order only when `keepRenderOrder = false`; stagger timing comes from `staggerOrder`. |
 | `customDrawOrder` | — | Explicit path order for `DrawOrderStrategy.CUSTOM`. |
 | `missingPath` | `FADE` | Behavior for single-sided paths (fade/draw/scale/collapse/nearest/keep/custom). |
 | `fallback` | `AUTO` | Strategy when a clean morph is impossible (crossfade variants, draw reveal, best effort, throw). |
@@ -149,7 +149,7 @@ plans and renders a sane geometry morph. Every field has a full entry in
 | `segmentBudget` / `simplificationTolerance` | `null` / `0.25f` | Cap cubic segments per contour pair; tolerance bounds detail loss. |
 | `viewportNormalization` | `STRETCH` | `STRETCH` scales target axes independently; `FIT` letterboxes uniformly. |
 | `debug` | `null` | `MorphDebugOptions` overlay set for development (see [diagnostics](docs/DIAGNOSTICS.md)). |
-| `customStartOffsets` | `{}` | **Deprecated** — legacy alignment map; superseded by `customDrawAnchors` + CUSTOM correspondences. |
+| `customStartOffsets` | `{}` | **Deprecated** — today's `StartPointStrategy.CUSTOM` alignment reads only this map (`customDrawAnchors` never moves geometry); interim until the 0.3 alignment home lands. |
 
 ## Performance
 
@@ -196,12 +196,18 @@ of the screens is in [docs/SHOWCASE-APP.md](docs/SHOWCASE-APP.md).
 | Document | Purpose |
 | --- | --- |
 | [docs/README.md](docs/README.md) | Index of all guides. |
-| [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Every parameter and enum; the start/direction precedence contract. |
+| [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Every parameter and enum; the start/direction precedence contract, the fill-mode rendering map, the `directionTraversal` site list, and parameter quick-links (each row links the dead-wire warning it can trip). |
 | [docs/TIMELINE-DSL.md](docs/TIMELINE-DSL.md) | Building timelines, reveals, gradients, springs, codec. |
-| [docs/DIAGNOSTICS.md](docs/DIAGNOSTICS.md) | Validation, reports, debug overlays, cache and precompiler. |
+| [docs/DIAGNOSTICS.md](docs/DIAGNOSTICS.md) | Validation (`validate` + `validateConfiguration` categories), reports, debug overlays, cache and precompiler. |
 | [docs/CUSTOM-GEOMETRY.md](docs/CUSTOM-GEOMETRY.md) | Override callbacks, custom contours, clips and boolean operations. |
-| [docs/MIGRATION.md](docs/MIGRATION.md) | 0.1 → 0.2 changes. |
+| [docs/MIGRATION.md](docs/MIGRATION.md) | 0.1 → 0.2 changes plus the 0.3 deprecation sweep (`BY_POSITION`, `MorphIcon.animation`, `rememberVectorAnimation(definition)`). |
 | [docs/SHOWCASE-APP.md](docs/SHOWCASE-APP.md) | Tour of the demo application. |
+
+Parameter quick-links: `customDrawAnchors` needs a `PathStart.CUSTOM` draw track,
+`customDrawOrder` needs `drawOrder = CUSTOM`, `customMappings` apply under
+`AUTO`/`CUSTOM` matching, and `missingPath` is ignored under crossfade fallbacks —
+`MorphValidator.validateConfiguration(config)` warns about each combo before any icon
+renders (see [docs/DIAGNOSTICS.md](docs/DIAGNOSTICS.md)).
 
 API reference HTML is generated with Dokka (`./gradlew dokkaGenerate` → `build/dokka`)
 and attached to release uploads by the publish workflow.

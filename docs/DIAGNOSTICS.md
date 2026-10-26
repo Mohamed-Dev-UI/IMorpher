@@ -19,7 +19,29 @@ val report = plan.report
 | `fallbackUsed`, `fallbackStrategy`, `fallbackReason` | Whether/why a fallback ran. |
 
 Static pre-flight without planning: `MorphValidator.validate(from, to, config)` returns
-the same issue list. The showcase app surfaces this in the plan-report card.
+the same issue list. `MorphValidator.validateConfiguration(config)` audits **parameter
+conflicts** without any geometry: knobs that silently do nothing, contradict each other,
+or carry narrow semantics — usable on any configuration at any time (pure, never
+throws). Categories:
+
+| Category | Severity | When |
+| --- | --- | --- |
+| `custom-anchors-unused` | WARNING | `customDrawAnchors` non-empty but no draw track requests `PathStart.CUSTOM` (the `customStartOffsets` fallback is equally idle without one). |
+| `custom-order-unused` | WARNING | `customDrawOrder` non-empty while `drawOrder != CUSTOM` (only `CUSTOM` consults the list). |
+| `missing-path-under-crossfade` | WARNING | `missingPath != FADE` under `fallback = CROSSFADE`/`SCALE_CROSSFADE` — crossfades discard the behavior. |
+| `fill-direction-ignored` | WARNING | A `FADE`/`RADIAL` fill reveal declares a travel direction its mode ignores. |
+| `fallback-throw-scope` | INFO | `fallback = THROW` throws only when one side has no paths at all; other artifacts degrade silently — check the plan report. |
+| `draw-order-not-rendered` | INFO | A non-default `drawOrder` shapes reveal timing while `keepRenderOrder = true` keeps declaration paint (z-)order. |
+| `stagger-order-without-delay` | INFO | `staggerOrder` set while `staggerDelay == 0f` — the order needs a delay to do anything. |
+| `sweep-direction-on-stroke` | INFO | `CENTER_OUT`/`OUTSIDE_IN` on a stroke reveal (fill-sweep start-angle selectors only). |
+| `custom-mappings-unused` | INFO | `customMappings` under a matching strategy other than `AUTO`/`CUSTOM`. |
+
+Plan-level warnings escape through `MorphPlan.report.issues` instead — e.g. a crossfade
+fallback that discards `missingPath` surfaces on the affected FADE pairs as a WARNING in
+the `missing` category, message `"FallbackStrategy <strategy> crossfades every pair;
+missingPath <behavior> is ignored"`.
+
+The showcase app surfaces both lists in the plan-report card.
 
 ## Debug overlays
 
@@ -36,7 +58,7 @@ MorphConfiguration(
         showDirection = true,        // resolved travel arrow (magenta)
         showStartPoints = true,      // resolved anchor dot (yellow)
         showPathMatching = true,     // cyan centroid↔centroid match lines
-        markerArcFraction = 0.5f,    // reserved in 0.2.0: accepted but not rendered yet
+        markerArcFraction = 0.5f,    // magenta ring at the half-arc position of each contour
     ),
 )
 ```
@@ -68,8 +90,9 @@ Wire `trim` to `ComponentCallbacks2.onTrimMemory`; plans rebuild lazily on the n
 composition. Rough byte accounting is per-plan (the showcase prints both numbers).
 The shared cache keeps up to 64 entries (a `MorphPlanCache(maxEntries = 64)`, 16 MiB
 byte budget by default for standalone caches), keyed by
-`PreparedVector.contentKey` + configuration — equal-but-distinct `ImageVector`
-instances share one plan.
+`PreparedVector.contentKey` + `MorphConfiguration.planningKey()` — equal-but-distinct
+`ImageVector` instances share one plan, and render-only configuration changes reuse the
+cached plan instead of re-planning.
 
 ## Precompilation
 
@@ -81,12 +104,16 @@ LaunchedEffect(expectingSoon) {
     MorphPrecompiler.warm(from, to)                 // or warm(config, pair1, pair2, ...)
 }
 
-if (MorphPrecompiler.isPrepared(from, to)) { /* will not cost plan time on display */ }
+// Probe the same key `warm` used: planning fields only — render-only config changes
+// never invalidate a cached plan. Historical 2-argument calls keep working (Default).
+if (MorphPrecompiler.isPrepared(from, to, warmConfig)) { /* will not cost plan time */ }
 ```
 
-`warm` runs on `Dispatchers.Default`, strips the animation definition out of the
-planning config (timelines never influence the plan), and is idempotent for cached
-pairs (`isPrepared` turns false again after eviction/trim).
+`warm` runs on `Dispatchers.Default`, keys the cache on `config.planningKey()` (the
+planning-field subset; `debug`, stagger, timing, color space etc. never fragment it),
+strips the animation definition out of the planning config (timelines never influence
+the plan), and is idempotent for cached pairs (`isPrepared` turns false again after
+eviction/trim).
 
 ## Custom callback health
 

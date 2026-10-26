@@ -17,6 +17,8 @@ import kotlin.math.atan2
 object DrawOrder {
 
     /** Returns pair indices in reveal order. */
+    // BY_POSITION (now deprecated) stays implemented as its historical alias arm.
+    @Suppress("DEPRECATION")
     fun orderIndices(plan: MorphPlan, strategy: DrawOrderStrategy, customOrder: List<String>): IntArray {
         val pairs = plan.pairs
         val idx = IntArray(pairs.size) { it }

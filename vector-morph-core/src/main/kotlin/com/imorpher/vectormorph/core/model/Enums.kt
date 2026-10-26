@@ -249,17 +249,35 @@ enum class FallbackStrategy {
 
 /** Ordering of path drawing/reveals. */
 enum class DrawOrderStrategy {
+    /** Declaration order. */
     BY_INDEX,
+    /** Sorted by path name; `customDrawOrder` is ignored (reserved for `CUSTOM`). */
     BY_NAME,
+    /**
+     * Alias of `TOP_LEFT_TO_BOTTOM_RIGHT` (top-left corner sort).
+     *
+     * Deprecated in 0.3.0: the canonical spelling is [TOP_LEFT_TO_BOTTOM_RIGHT], and the
+     * stagger-only stance is [AUTO]. Removal in 0.4.
+     */
+    @Deprecated(
+        "Alias of TOP_LEFT_TO_BOTTOM_RIGHT; use AUTO/TOP_LEFT_TO_BOTTOM_RIGHT. Removal in 0.4",
+    )
     BY_POSITION,
+    /** Diagonal sweep from the top-left corner. */
     TOP_LEFT_TO_BOTTOM_RIGHT,
+    /** Diagonal sweep from the top-right corner. */
     TOP_RIGHT_TO_BOTTOM_LEFT,
+    /** Diagonal sweep from the bottom-left corner. */
     BOTTOM_LEFT_TO_TOP_RIGHT,
+    /** Diagonal sweep from the bottom-right corner. */
     BOTTOM_RIGHT_TO_TOP_LEFT,
+    /** Polar angle around the viewport center. */
     CLOCKWISE,
+    /** Reverse polar angle around the viewport center. */
     COUNTER_CLOCKWISE,
     /** Geometry-based top-left to bottom-right order for stagger timing. */
     AUTO,
+    /** Uses the explicit `customDrawOrder` list. */
     CUSTOM,
 }
 

@@ -1,15 +1,15 @@
 # Documentation Index
 
-Guides for **ImageVector Morph 0.2.0**. The top-level [README](../README.md) is the
-entry point; this directory holds the deep dives.
+Guides for **ImageVector Morph 0.3.0 (unreleased)**. The top-level
+[README](../README.md) is the entry point; this directory holds the deep dives.
 
 | Document | Purpose |
 | --- | --- |
-| [CONFIGURATION.md](CONFIGURATION.md) | Every `MorphConfiguration` parameter and enum; the start/direction precedence contract; fill direction inheritance; viewport and layout rules. |
+| [CONFIGURATION.md](CONFIGURATION.md) | Every `MorphConfiguration` parameter and enum; the start/direction precedence contract; the fill-mode rendering map and `directionTraversal` site list; fill direction inheritance; viewport and layout rules. |
 | [TIMELINE-DSL.md](TIMELINE-DSL.md) | Building and wiring animation timelines: targets, tracks, keyframes, easings, stagger, gradient specs, serialization. |
-| [DIAGNOSTICS.md](DIAGNOSTICS.md) | Plan reports, validation, debug overlays, resolution warnings, cache control, precompilation, custom-callback health. |
+| [DIAGNOSTICS.md](DIAGNOSTICS.md) | Plan reports, validation (`validate` + `validateConfiguration` issue categories), debug overlays, resolution warnings, cache control (`planningKey` keying), precompilation, custom-callback health. |
 | [CUSTOM-GEOMETRY.md](CUSTOM-GEOMETRY.md) | The per-frame override callback, custom draw/fill contours, clip reveals and morphing masks, boolean path operations. |
-| [MIGRATION.md](MIGRATION.md) | 0.1.x → 0.2.0 changes with restore recipes. |
+| [MIGRATION.md](MIGRATION.md) | 0.1.x → 0.2.0 changes with restore recipes, plus the 0.3.0 deprecation sweep. |
 | [SHOWCASE-APP.md](SHOWCASE-APP.md) | Tour of the demo application and its parameter coverage. |
 | [CHANGELOG](../CHANGELOG.md) | Release history. |
 

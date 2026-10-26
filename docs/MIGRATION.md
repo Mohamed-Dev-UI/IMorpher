@@ -112,3 +112,62 @@ and cache APIs are unchanged from 0.1.x. New capability in this release:
 keep 0.1.x full detail) and aligned group-clip-mask morphing (previously clip masks
 switched; they now morph when both sides declare the same clip count, which is
 strictly more faithful).
+
+## 8. 0.3.0 (unreleased) deprecation sweep
+
+Behavioral fixes land in the same release; the new/renamed pieces of this release are
+documented here, the behavior list in [CHANGELOG.md](../CHANGELOG.md).
+
+### 8.1 `DrawOrderStrategy.BY_POSITION` (enum entry)
+
+**Deprecated** with a source warning: alias of `TOP_LEFT_TO_BOTTOM_RIGHT` (same
+top-left corner sort since forever, including under `AUTO`). Prefer `AUTO` when the
+intent is timing-only ordering, `TOP_LEFT_TO_BOTTOM_RIGHT` when the diagonal sweep is
+meant explicitly. **Removal in 0.4.**
+
+```kotlin
+// before
+MorphConfiguration(drawOrder = DrawOrderStrategy.BY_POSITION)
+// after — timing only:
+MorphConfiguration(drawOrder = DrawOrderStrategy.AUTO)
+// after — explicit diagonal:
+MorphConfiguration(drawOrder = DrawOrderStrategy.TOP_LEFT_TO_BOTTOM_RIGHT)
+```
+
+### 8.2 `MorphIcon.animation: VectorAnimationSpec?` (all overloads)
+
+**Deprecated** parameter: it shadowed `configuration.animation`, creating two homes for
+one timeline. Set the configuration field instead — the parameter keeps working
+(annotation-only, binary compatible). The no-arg/default behavior is unchanged.
+
+```kotlin
+// before
+MorphIcon(from, to, selected, animation = timeline)
+// after
+MorphIcon(from, to, selected, configuration = MorphConfiguration(animation = timeline))
+```
+
+### 8.3 `rememberVectorAnimation(definition: VectorAnimationDefinition, ...)`
+
+**Deprecated** overload: it never consulted the definition — the call degrades to the
+three-argument entry. Sequenced/defined animations belong to a definition player
+(`VectorAnimator`-style); hand the definition there.
+
+### 8.4 New: `MorphPrecompiler.isPrepared(from, to, configuration)`
+
+The prepended probe accepts the caller's `MorphConfiguration` (default keeps the old
+2-argument call source/binary compatible). It probes the same `planningKey()` `warm`
+used, so a config warmed with `warmConfig` reports `true` only through the
+config-aware call.
+
+### 8.5 New: `VectorAnimation.stableKey()`
+
+Content key over the whole timeline (targets, properties, segment floats, reveal
+payloads, stagger, brush specs). Recomposing compositions keying `remember`/`LaunchedEffect`
+on a `VectorAnimation` instance restarted inline-DSL one-shots on every pass —
+key on `animation.stableKey()` instead; the compose auto-play entries already do.
+
+### 8.6 `MorphDebugOptions.markerArcFraction` renders
+
+No longer reserved: it draws moving magenta rings at the requested contour arc
+fraction (see [CONFIGURATION.md](CONFIGURATION.md)).

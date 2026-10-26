@@ -8,11 +8,37 @@ import com.imorpher.vectormorph.core.animation.VectorAnimation
  * A data class so `remember`-style caching can key on it safely: two equal configurations
  * always produce equal plans. Diagnostics callbacks are deliberately kept *out* of this class
  * so they never poison cache keys.
+ *
+ * Precedence rules documented here and enforced since 0.3.0 (see docs/CONFIGURATION.md for
+ * the reference table):
+ * - **Ordering split.** [drawOrder] controls render z-order only when [keepRenderOrder] is
+ *   false; stagger *timing* is always assigned from [staggerOrder] (+ [staggerDelay]).
+ *   Strategies reordering reveals never touch paint order while `keepRenderOrder = true`.
+ * - **Stagger override rule.** the config's stagger fields supply the timeline's stagger
+ *   only when [staggerDelay] > 0 **or** [staggerOrder] differs from the default; otherwise
+ *   the [animation] timeline's own stagger stands. A config can override a timeline's
+ *   stagger but cannot cancel it.
+ * - **[missingPath] under crossfade fallbacks.** whenever `fallback = CROSSFADE` /
+ *   `SCALE_CROSSFADE` crossfades every pair, [missingPath] is ignored — the plan records a
+ *   WARNING issue (see `MorphValidator.validateConfiguration` / `MorphPlan.report`).
+ * - **Dead-wire warnings.** fields that only apply under a specific strategy or knob lane
+ *   ([customDrawAnchors] needs a `PathStart.CUSTOM` draw track; [customDrawOrder] needs
+ *   `drawOrder = CUSTOM`; [customMappings] only apply under `AUTO`/`CUSTOM` matching) are
+ *   audited statically by `MorphValidator.validateConfiguration`.
+ *
+ * Planning/rendering split: only the fields `MorphPlanner` consumes participate in
+ * `planningKey()` (`vector-morph-core/.../model/PlanningKey.kt`); render-only fields
+ * (draw order, stagger, timing, color space, fill defaults, debug options, etc.) never
+ * invalidate a cached plan.
  */
 data class MorphConfiguration(
     val pathMatching: PathMatchingStrategy = PathMatchingStrategy.AUTO,
     val startPoint: StartPointStrategy = StartPointStrategy.AUTO,
     val pathDirection: PathDirectionStrategy = PathDirectionStrategy.AUTO,
+    /**
+     * Draw-order *timing* ranking, and render z-order only when `keepRenderOrder = false`.
+     * Stagger timing is always assigned from [staggerOrder] — this field never feeds it.
+     */
     val drawOrder: DrawOrderStrategy = DrawOrderStrategy.BY_INDEX,
     /** Explicit order (path names) used when [drawOrder] == CUSTOM. */
     val customDrawOrder: List<String> = emptyList(),

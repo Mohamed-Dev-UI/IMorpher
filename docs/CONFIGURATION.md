@@ -1,7 +1,7 @@
-# Configuration Reference (0.2.0)
+# Configuration Reference (0.3.0 — unreleased)
 
 This document is the authoritative reference for every public parameter of IMorpher
-0.2.0: the fields of `MorphConfiguration` and `MorphDebugOptions`, every enum, and the
+0.3.0: the fields of `MorphConfiguration` and `MorphDebugOptions`, every enum, and the
 resolution contracts that decide how `start`, `direction`, fills, and clips behave.
 
 The default constructor is `MorphConfiguration.Default` — a plain, well-behaved
@@ -27,10 +27,10 @@ Package: `com.imorpher.vectormorph.core.model`.
 
 | Field | Type | Default | Semantics |
 | --- | --- | --- | --- |
-| `drawOrder` | `DrawOrderStrategy` | `BY_INDEX` | Ordering of path reveals; drives stagger timing, and render z-order only when `keepRenderOrder = false`. |
+| `drawOrder` | `DrawOrderStrategy` | `BY_INDEX` | Controls **render z-order only when `keepRenderOrder = false`**; stagger timing is always assigned from `staggerOrder`. |
 | `customDrawOrder` | `List<String>` | `emptyList()` | Explicit path-name order used when `drawOrder == CUSTOM`. |
 | `staggerDelay` | `Float` | `0f` | Stagger applied to vector-level draw/reveal intervals, in normalized timeline units. |
-| `staggerOrder` | `DrawOrderStrategy` | `TOP_LEFT_TO_BOTTOM_RIGHT` | Order used to assign stagger offsets. |
+| `staggerOrder` | `DrawOrderStrategy` | `TOP_LEFT_TO_BOTTOM_RIGHT` | Order used to assign stagger offsets. Override rule (compose `PlanRemember`): the config supplies the timeline stagger only when `staggerDelay > 0` **or** `staggerOrder` differs from the default; otherwise the timeline's own stagger stands — a config can override a timeline's stagger but never cancel it. |
 | `keepRenderOrder` | `Boolean` | `true` | Render paths strictly in declaration order even when a draw-order strategy reorders reveals (strategies only affect stagger timing while true). |
 | `timing` | `TimingMode` | `BY_PATH_LENGTH` | How draw/reveal time maps onto geometry. |
 | `directionTraversal` | `DirectionTraversal` | `HONOR_DIRECTION` | How directional (`FORWARD`) stroke reveals travel along open contours. |
@@ -48,7 +48,7 @@ Package: `com.imorpher.vectormorph.core.model`.
 
 | Field | Type | Default | Semantics |
 | --- | --- | --- | --- |
-| `missingPath` | `MissingPathBehavior` | `FADE` | What happens to paths that only exist on one side of the morph. |
+| `missingPath` | `MissingPathBehavior` | `FADE` | What happens to paths that only exist on one side of the morph. Ignored (with a plan WARNING) whenever a crossfade fallback (`CROSSFADE`/`SCALE_CROSSFADE`) crossfades every pair. |
 | `fallback` | `FallbackStrategy` | `AUTO` | What to do when a clean geometric morph is impossible. |
 
 ### Geometry budget and viewport
@@ -63,10 +63,10 @@ Package: `com.imorpher.vectormorph.core.model`.
 
 | Field | Type | Default | Semantics |
 | --- | --- | --- | --- |
-| `customDrawAnchors` | `Map<String, Float>` | `emptyMap()` | Normalized arc fraction (0–1) per path name for `PathStart.CUSTOM` draw anchoring — where the stroke pen begins on that path. |
+| `customDrawAnchors` | `Map<String, Float>` | `emptyMap()` | Normalized arc fraction (0–1) per path name for `PathStart.CUSTOM` draw anchoring — where the stroke pen begins on that path. Requires a `PathStart.CUSTOM` on the draw track; otherwise silently unused — `MorphValidator.validateConfiguration` warns (`custom-anchors-unused`). |
 | `animation` | `VectorAnimation?` | `null` | Optional timeline. When null, a plain geometry/color morph drives everything. See the [DSL guide](TIMELINE-DSL.md). |
 | `debug` | `MorphDebugOptions?` | `null` | Debug overlay options; null disables debug rendering. |
-| `customStartOffsets` | `Map<String, Float>` | `emptyMap()` | **Deprecated.** Legacy per-path alignment offsets for `StartPointStrategy.CUSTOM`, retained as the fallback draw-anchor source for `PathStart.CUSTOM` when `customDrawAnchors` has no entry for that path. Use `customDrawAnchors` for pen anchors. |
+| `customStartOffsets` | `Map<String, Float>` | `emptyMap()` | **Deprecated.** Legacy per-path alignment offsets: under `StartPointStrategy.CUSTOM` today's alignment still reads **only this map** — `customDrawAnchors` never moves geometry (it anchors pens only). Retained as the fallback draw-anchor source for `PathStart.CUSTOM` when `customDrawAnchors` has no entry for that path. Migration checklist: give pen anchors to `customDrawAnchors`, keep alignment offsets here until the 0.3 alignment home lands (see [MIGRATION.md](MIGRATION.md) §8 — interim state). |
 
 ---
 
@@ -85,7 +85,7 @@ any toggle enabled, not only the ones below.
 | `showDirection` | `false` | The resolved travel arrow (magenta) per revealed contour. |
 | `showStartPoints` | `false` | The resolved anchor dot (yellow) per revealed contour. |
 | `showPathMatching` | `false` | Cyan centroid→centroid matching lines. |
-| `markerArcFraction` | `0f` | **Reserved in 0.2.0.** Accepted, validated and persisted on `MorphDebugOptions`, but no renderer consumes it yet — setting it has no visual effect. |
+| `markerArcFraction` | `0f` | Draws a small magenta **ring** at each contour position `length × fraction` along the pair's representative contours (PathMeasure); the ring moves with the option value so the pen position is visible. `0` (default) and `1` draw nothing. |
 
 ---
 
@@ -130,8 +130,8 @@ Stagger timing always uses it; render z-order only with `keepRenderOrder = false
 | Entry | Behavior |
 | --- | --- |
 | `BY_INDEX` | Declaration order. |
-| `BY_NAME` | Sorted by path name. |
-| `BY_POSITION` | Top-left corner sort (same as `AUTO`). |
+| `BY_NAME` | Sorted by path name; the `customDrawOrder` list is ignored here (reserved for `CUSTOM`). |
+| `BY_POSITION` | **Deprecated (0.3.0).** Alias of `TOP_LEFT_TO_BOTTOM_RIGHT`; use `AUTO`/`TOP_LEFT_TO_BOTTOM_RIGHT`. Removal in 0.4. |
 | `TOP_LEFT_TO_BOTTOM_RIGHT` | Diagonal sweep from the top-left corner. |
 | `TOP_RIGHT_TO_BOTTOM_LEFT` | Diagonal sweep from the top-right corner. |
 | `BOTTOM_LEFT_TO_TOP_RIGHT` | Diagonal sweep from the bottom-left corner. |
@@ -160,7 +160,7 @@ For paths that exist on only one side:
 | Entry | Behavior |
 | --- | --- |
 | `BY_PATH_LENGTH` | Distance along the path — short paths finish early (constant speed). |
-| `BY_COMMAND` | Linear in command/segment index. |
+| `BY_COMMAND` | Linear in command/segment index. **At the vector/group clock this behaves like `UNIFORM`**; only per-contour stroke tracing applies command-count remapping. |
 | `BY_PATH` | Whole paths complete one after another. |
 | `UNIFORM` | Everything at the same normalized rate. |
 
@@ -303,6 +303,38 @@ A per-path or vector-level `fill()` without an explicit direction inherits the t
 first explicitly-declared non-AUTO stroke draw direction **at build time**.
 `AUTO`-default strokes are not sources, so such fills fall back to
 `MorphConfiguration.defaultFillDirection`. Explicit fill directions are never overridden.
+
+A direction a mode cannot use is *not* an error — it is silently ignored, and
+`MorphValidator.validateConfiguration` reports the combo statically
+(`fill-direction-ignored` for `FADE`/`RADIAL`, `sweep-direction-on-stroke` for
+`CENTER_OUT`/`OUTSIDE_IN` on strokes).
+
+## Fill-mode rendering map
+
+What each `FillMode` does with a fill-reveal `direction` at render time:
+
+| `FillMode` | `direction` consumption |
+| --- | --- |
+| `FADE` | Ignored — no travel axis; a plain alpha fade. |
+| `RADIAL` | Ignored — an expanding circle from the centroid. |
+| `LINEAR` | Hard wipe: the region *behind the edge* reveals instantly (hard clip edge, no feather). |
+| `DIRECTIONAL` | Feathered sweep: full within the revealed region, an alpha ramp (~15% of the sweep distance) across the edge band via a `BlendMode.DstIn` layer mask. |
+| `SWEEP` | Angular sweep; `DrawDirection.CENTER_OUT`/`OUTSIDE_IN` pick the start angle — resolved identically at **both** sites (clip masks and fill painting share one `sweepStartAngle`). |
+| `PATH_TRAVERSAL` | The fill boundary follows the actual path traversal; it inherits the stroke choreography (mode/start/direction) like a drawn stroke. |
+
+## Sites that honor `directionTraversal`
+
+`DirectionTraversal` (contour-order vs. direction-axis traversal for `DrawMode.FORWARD`
+strokes on **open contours**) applies at all four reveal sites:
+
+1. morph-pair stroke drawing,
+2. missing-path `DRAW` reveal (appearing/disappearing paths),
+3. `FillMode.PATH_TRAVERSAL` fill tracing,
+4. custom-geometry contours.
+
+Still excluded, by design: **closed contours** — their traversal control remains the
+`CLOCKWISE`/`COUNTER_CLOCKWISE` winding reversal — and explicit
+`REVERSE`/`CENTER_OUT`/`OUTSIDE_IN` modes, which always win over the policy.
 
 ## Viewport and layout
 
