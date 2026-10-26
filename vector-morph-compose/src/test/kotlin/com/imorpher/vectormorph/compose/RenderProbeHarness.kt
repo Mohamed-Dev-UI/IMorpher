@@ -8,6 +8,8 @@ import android.graphics.Canvas
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
@@ -166,6 +168,47 @@ internal class RenderProbeHarness(
             )
         }
         return builder.build()
+    }
+
+    /**
+     * Composes the single-vector auto-play [VectorAnimation] entry point and pumps
+     * [pumps] idle rounds (enough for a tween one-shot to finish under Robolectric
+     * choreography). [progress] = null plays the one-shot; an explicit progress skips it
+     * (settled-state reference). Parameters mirror the composable.
+     */
+    fun renderAutoPlayVector(
+        vector: ImageVector,
+        animation: VectorAnimationSpec,
+        progress: Float? = null,
+        animationSpec: AnimationSpec<Float> = tween(400),
+        pumps: Int = 24,
+    ): Bitmap {
+        val view = ComposeView(activity)
+        view.setContent {
+            Box(modifier = Modifier.size(framePx.dp), contentAlignment = Alignment.Center) {
+                VectorAnimation(
+                    vector = vector,
+                    animation = animation,
+                    progress = progress,
+                    animationSpec = animationSpec,
+                    contentDescription = null,
+                    width = framePx.dp,
+                    height = framePx.dp,
+                )
+            }
+        }
+        activity.setContentView(view)
+        pumpMainLoop()
+        view.measure(
+            View.MeasureSpec.makeMeasureSpec(framePx, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(framePx, View.MeasureSpec.EXACTLY),
+        )
+        view.layout(0, 0, framePx, framePx)
+        repeat(pumps) { pumpMainLoop() }
+        val bitmap = Bitmap.createBitmap(framePx, framePx, Bitmap.Config.ARGB_8888)
+        view.draw(Canvas(bitmap))
+        pumpMainLoop()
+        return bitmap
     }
 
     /**

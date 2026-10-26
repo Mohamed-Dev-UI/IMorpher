@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.imorpher.vectormorph.core.animation.VectorAnimation as VectorAnimationSpec
+import com.imorpher.vectormorph.core.animation.stableKey
 import com.imorpher.vectormorph.core.model.MorphConfiguration
 import com.imorpher.vectormorph.core.model.MotionPreference
 
@@ -224,13 +225,22 @@ private fun rememberAutoPlayProgress(
         MotionPreference.REDUCED -> tween<Float>(durationMillis = 120)
         else -> animationSpec
     }
-    val progress = remember(vector, animation) { Animatable(0f) }
+    // Content key, not identity: inline-DSL one-shot call sites rebuild the animation per
+    // recomposition — a VectorAnimation carries a DIFFERENT instance each pass. Keying on
+    // identity re-allocates the Animatable and re-keys the effect, restarting the timeline
+    // forever on such call sites. `stableKey` folds the timeline content instead, so
+    // content-identical rebuilds share the key; a whole-tween diff (spec change etc.)
+    // changes it and restarts legitimately. The default `tween(...)` spec allocation is
+    // read through rememberUpdatedState to give it the same tolerance.
+    val animationKey = animation.stableKey()
+    val progress = remember(vector, animationKey) { Animatable(0f) }
     val fallback = rememberUpdatedState(if (preference == MotionPreference.INSTANT) 1f else 0f)
     val animatedProgress = remember(progress) { derivedStateOf { progress.value } }
-    LaunchedEffect(vector, animation, animationSpec, preference, enabled) {
+    val latestSpec = rememberUpdatedState(effectiveSpec)
+    LaunchedEffect(vector, animationKey, preference, enabled) {
         if (!enabled || preference == MotionPreference.INSTANT) return@LaunchedEffect
         progress.snapTo(0f)
-        progress.animateTo(1f, effectiveSpec)
+        progress.animateTo(1f, latestSpec.value)
     }
     return if (enabled && preference != MotionPreference.INSTANT) animatedProgress else fallback
 }
