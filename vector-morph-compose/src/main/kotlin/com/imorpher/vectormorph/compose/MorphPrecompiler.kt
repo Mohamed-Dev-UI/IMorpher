@@ -48,10 +48,19 @@ object MorphPrecompiler {
     /**
      * Whether a plan for this pair is currently cached (always false after [MorphCaches.trim] or
      * cache eviction; re-warm to restore it).
+     *
+     * [configuration] defaults to [MorphConfiguration.Default] (source/binary compatible with
+     * the historical 2-argument call). The probe keys on [configuration]`s PLANNING fields
+     * via [com.imorpher.vectormorph.core.model.planningKey], exactly how [warm] keyed the
+     * cache — render-only fields (debug, timing, draw-order, ...) never invalidate it.
      */
-    fun isPrepared(from: ImageVector, to: ImageVector): Boolean {
-        val planningConfiguration = MorphConfiguration.Default.copy(animation = null)
-        return planCache.get(prepared(from), prepared(to), planningConfiguration) != null
+    fun isPrepared(
+        from: ImageVector,
+        to: ImageVector,
+        configuration: MorphConfiguration = MorphConfiguration.Default,
+    ): Boolean {
+        val planningConfiguration = configuration.copy(animation = null)
+        return planCache.get(prepared(from), prepared(to), planningConfiguration.planningKey()) != null
     }
 
     /** Test/diagnostic seam returning the warmed plan, if present. */

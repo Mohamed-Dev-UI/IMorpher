@@ -9,6 +9,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathNode
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
+import com.imorpher.vectormorph.core.model.FallbackStrategy
+import com.imorpher.vectormorph.core.model.MorphConfiguration
 import com.imorpher.vectormorph.core.model.MotionPreference
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -98,6 +100,31 @@ class MorphingIconTest {
 
         assertTrue(MorphPrecompiler.isPrepared(a, b))
         assertTrue(MorphPrecompiler.isPrepared(b, c))
+    }
+
+    /**
+     * `isPrepared` must probe the PLANNING fields of the caller's configuration, not
+     * `Default`: warming `warm(from, to, warmConfig)` keys on `warmConfig.planningKey()`,
+     * so only a config-aware probe can see the cached plan — today the probe hard-codes
+     * `Default` and misses, even though the very plan this composition re-uses is warm.
+     */
+    @Test
+    fun isPreparedProbesTheCallerSConfiguration() {
+        val from = square("from", 4f, 5f)
+        val to = square("to", 3f, 6f)
+        val warmConfig = MorphConfiguration(fallback = FallbackStrategy.BEST_EFFORT)
+
+        assertFalse(MorphPrecompiler.isPrepared(from, to, warmConfig))
+        runBlocking { MorphPrecompiler.warm(from, to, warmConfig) }
+
+        assertTrue(
+            "warming under warmConfig must satisfy the config-aware probe",
+            MorphPrecompiler.isPrepared(from, to, warmConfig),
+        )
+        assertFalse(
+            "the probe follows the caller's planning fields: Default's key stays miss",
+            MorphPrecompiler.isPrepared(from, to),
+        )
     }
 
     private fun square(name: String, inset: Float, size: Float): ImageVector =

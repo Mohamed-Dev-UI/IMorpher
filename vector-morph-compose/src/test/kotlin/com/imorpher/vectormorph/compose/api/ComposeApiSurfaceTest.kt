@@ -67,6 +67,7 @@ private suspend fun precompilerApiProbe() {
     MorphPrecompiler.warm(icon("from"), icon("to"))
     MorphPrecompiler.warm(MorphConfiguration.Default, icon("a") to icon("b"))
     check(!MorphPrecompiler.isPrepared(icon("from"), icon("to")) || true)
+    check(!MorphPrecompiler.isPrepared(icon("from"), icon("to"), MorphConfiguration.Default) || true)
 }
 
 /**
