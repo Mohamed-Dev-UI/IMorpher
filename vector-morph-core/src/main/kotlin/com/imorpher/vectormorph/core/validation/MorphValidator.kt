@@ -1,5 +1,17 @@
 package com.imorpher.vectormorph.core.validation
 
+import com.imorpher.vectormorph.core.animation.DrawConfig
+import com.imorpher.vectormorph.core.animation.FillRevealConfig
+import com.imorpher.vectormorph.core.animation.PropKey
+import com.imorpher.vectormorph.core.animation.VectorAnimation
+import com.imorpher.vectormorph.core.model.DrawDirection
+import com.imorpher.vectormorph.core.model.DrawOrderStrategy
+import com.imorpher.vectormorph.core.model.FallbackStrategy
+import com.imorpher.vectormorph.core.model.FillMode
+import com.imorpher.vectormorph.core.model.MissingPathBehavior
+import com.imorpher.vectormorph.core.model.MorphConfiguration
+import com.imorpher.vectormorph.core.model.PathMatchingStrategy
+import com.imorpher.vectormorph.core.model.PathStart
 import com.imorpher.vectormorph.core.model.PreparedVector
 import com.imorpher.vectormorph.core.plan.IssueSeverity
 import com.imorpher.vectormorph.core.plan.MorphIssue
@@ -25,6 +37,141 @@ object MorphValidator {
         val compiledTo = com.imorpher.vectormorph.core.compiler.VectorCompiler.compile(to)
         val plan = com.imorpher.vectormorph.core.plan.MorphPlanner.plan(compiledFrom, compiledTo, config)
         return plan.report.issues
+    }
+
+    /**
+     * Static audit of configuration/timeline parameter conflicts: knobs that render
+     * correctly but silently do nothing (dead wires), contradict each other, or carry
+     * narrow semantics easy to miss. Pure — no vectors are compiled, nothing throws — so
+     * callers may run it on any derived configuration at any time. The audit complements
+     * [validatePlan] (geometry diagnosis): plan-level findings still consult the shape
+     * data, these consult the knobs alone.
+     *
+     * [animation] defaults to [MorphConfiguration.animation] so a single call audits
+     * map-level conflicts AND any embedded reveal payload; pass `null` explicitly to
+     * audit only the maps.
+     *
+     * Categories follow [validatePlan]'s lowercase style:
+     * WARNING `custom-anchors-unused`, `custom-order-unused`, `missing-path-under-crossfade`,
+     * `fill-direction-ignored`; INFO `fallback-throw-scope`, `draw-order-not-rendered`,
+     * `stagger-order-without-delay`, `sweep-direction-on-stroke`, `custom-mappings-unused`.
+     */
+    fun validateConfiguration(
+        config: MorphConfiguration,
+        animation: VectorAnimation? = config.animation,
+    ): List<MorphIssue> {
+        val issues = ArrayList<MorphIssue>()
+
+        // (prop, reveal) pairs the evaluator will consume — payload shapes only, no vectors.
+        val reveals = animation?.tracks?.flatMap { track -> track.segments.map { track.prop to it.reveal } }.orEmpty()
+        val hasCustomStart = reveals.any { (prop, reveal) ->
+            prop === PropKey.DRAW_PROGRESS && reveal is DrawConfig && reveal.start == PathStart.CUSTOM
+        }
+
+        if (config.customDrawAnchors.isNotEmpty() && !hasCustomStart) {
+            issues.add(
+                MorphIssue(
+                    IssueSeverity.WARNING, "custom-anchors-unused", emptyList(),
+                    "customDrawAnchors is never consulted: no reveal segment requests PathStart.CUSTOM " +
+                        "(the legacy customStartOffsets fallback is equally idle without one)",
+                ),
+            )
+        }
+
+        if (config.customDrawOrder.isNotEmpty() && config.drawOrder != DrawOrderStrategy.CUSTOM) {
+            issues.add(
+                MorphIssue(
+                    IssueSeverity.WARNING, "custom-order-unused", emptyList(),
+                    "customDrawOrder is ignored: drawOrder is ${config.drawOrder}, but only " +
+                        "DrawOrderStrategy.CUSTOM consults the list",
+                ),
+            )
+        }
+
+        if (config.missingPath != MissingPathBehavior.FADE &&
+            (config.fallback == FallbackStrategy.CROSSFADE || config.fallback == FallbackStrategy.SCALE_CROSSFADE)
+        ) {
+            issues.add(
+                MorphIssue(
+                    IssueSeverity.WARNING, "missing-path-under-crossfade", emptyList(),
+                    "FallbackStrategy ${config.fallback} crossfades every pair; " +
+                        "missingPath ${config.missingPath} is ignored",
+                ),
+            )
+        }
+
+        if (config.fallback == FallbackStrategy.THROW) {
+            issues.add(
+                MorphIssue(
+                    IssueSeverity.INFO, "fallback-throw-scope", emptyList(),
+                    "FallbackStrategy.THROW throws only when one side has no paths at all; every other " +
+                        "artifact degrades silently — check the plan report",
+                ),
+            )
+        }
+
+        if (config.drawOrder != DrawOrderStrategy.BY_INDEX && config.keepRenderOrder) {
+            issues.add(
+                MorphIssue(
+                    IssueSeverity.INFO, "draw-order-not-rendered", emptyList(),
+                    "drawOrder ${config.drawOrder} shapes the reveal timing; keepRenderOrder=true keeps " +
+                        "painting in declaration order (z-order unchanged)",
+                ),
+            )
+        }
+
+        if (config.staggerDelay == 0f && config.staggerOrder != DrawOrderStrategy.TOP_LEFT_TO_BOTTOM_RIGHT) {
+            issues.add(
+                MorphIssue(
+                    IssueSeverity.INFO, "stagger-order-without-delay", emptyList(),
+                    "staggerOrder ${config.staggerOrder} needs a staggerDelay > 0 to have any effect",
+                ),
+            )
+        }
+
+        // FADE/RADIAL fills have no travel axis, so a steered direction is dead ballast.
+        val steeredFadeOrRadial = reveals.any { (prop, reveal) ->
+            prop === PropKey.FILL_PROGRESS && reveal is FillRevealConfig &&
+                (reveal.fillMode == FillMode.FADE || reveal.fillMode == FillMode.RADIAL) &&
+                reveal.fillDirection != null && reveal.fillDirection != DrawDirection.AUTO
+        }
+        if (steeredFadeOrRadial) {
+            issues.add(
+                MorphIssue(
+                    IssueSeverity.WARNING, "fill-direction-ignored", emptyList(),
+                    "a FADE/RADIAL fill reveal declares a direction its mode ignores (no travel axis)",
+                ),
+            )
+        }
+
+        // Sweep "directions" on stroke reveals: DirectionMath warns per reveal at runtime;
+        // the audit reports the combo once for the whole timeline.
+        val sweepDirectionOnStroke = reveals.any { (prop, reveal) ->
+            prop === PropKey.DRAW_PROGRESS && reveal is DrawConfig &&
+                (reveal.direction == DrawDirection.CENTER_OUT || reveal.direction == DrawDirection.OUTSIDE_IN)
+        }
+        if (sweepDirectionOnStroke) {
+            issues.add(
+                MorphIssue(
+                    IssueSeverity.INFO, "sweep-direction-on-stroke", emptyList(),
+                    "CENTER_OUT/OUTSIDE_IN carry no stroke-travel meaning (fill-sweep start-angle selectors)",
+                ),
+            )
+        }
+
+        if (config.customMappings.isNotEmpty() &&
+            config.pathMatching != PathMatchingStrategy.AUTO && config.pathMatching != PathMatchingStrategy.CUSTOM
+        ) {
+            issues.add(
+                MorphIssue(
+                    IssueSeverity.INFO, "custom-mappings-unused", emptyList(),
+                    "customMappings are ignored: pathMatching is ${config.pathMatching}; only AUTO " +
+                        "(as overrides) and CUSTOM consult them",
+                ),
+            )
+        }
+
+        return issues
     }
 
     /**
