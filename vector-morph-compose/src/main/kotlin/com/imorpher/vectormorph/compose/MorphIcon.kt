@@ -33,6 +33,9 @@ import kotlinx.coroutines.flow.first
  * second cache entry for the same icon pair (deliberate: `fallback` is planning-relevant
  * by design).
  */
+// The two internal forwarding callers below use our own deprecated `animation` parameter;
+// callers of this overload keep seeing its deprecation warning.
+@Suppress("DEPRECATION", "DEPRECATED_JAVA_ANNOTATION")
 @Composable
 fun MorphIcon(
     from: ImageVector,
@@ -97,6 +100,8 @@ fun MorphIcon(
  * second cache entry for the same icon pair (deliberate, fallback is planning-relevant by
  * design).
  */
+// Same internal forwarding of the deprecated parameter as the first overload.
+@Suppress("DEPRECATION", "DEPRECATED_JAVA_ANNOTATION")
 @Composable
 fun MorphIcon(
     from: ImageVector,
@@ -164,6 +169,8 @@ fun MorphIcon(
  * second cache entry for the same icon pair (deliberate: fallback is planning-relevant by
  * design).
  */
+// Same internal forwarding of the deprecated parameter as the first overload.
+@Suppress("DEPRECATION", "DEPRECATED_JAVA_ANNOTATION")
 @Composable
 fun MorphIcon(
     from: ImageVector,
