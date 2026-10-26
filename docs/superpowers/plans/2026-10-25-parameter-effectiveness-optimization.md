@@ -73,6 +73,8 @@ The five failure modes most likely to bite a user that no task's golden-path tes
 
 # Phase 1 — Accepted-but-broken wires (compose)
 
+> **Execution-order note (pre-flight ruling, 2026-10-25):** Task 14's planning-key split must land *before* Task 1's stale-evaluator fix. Today every config-field change re-plans (fresh plan instance), which masks the stale remember key; the split makes plan instances reusable across render-only changes and *exposes* the bug. Run 14 → 1 so Task 1's regression test guards the split.
+
 ### Task 1: Evaluator remember key includes `customDrawOrder` and `timing`
 
 **Files:**
@@ -90,12 +92,14 @@ fun timingAndCustomDrawOrderChangesRebuildTheEvaluator() {
     val to = harness.stroked("b", harness.line())
     val animation = threeRevealStagger() // three staggered draw reveals, hoisted (reuse the stagger test's timeline)
     val uniform = harness.renderMorph(from, to, 0.8f, configuration = MorphConfiguration(timing = TimingMode.UNIFORM), animation = animation)
-    val byCommand = harness.renderMorph(from, to, 0.8f, configuration = MorphConfiguration(timing = TimingMode.BY_COMMAND), animation = animation)
-    assertTrue("timing must apply on its own recomposition", difference(uniform, byCommand) > 0.005f)
+    val byPath = harness.renderMorph(from, to, 0.8f, configuration = MorphConfiguration(timing = TimingMode.BY_PATH), animation = animation)
+    assertTrue("timing must apply on its own recomposition", difference(uniform, byPath) > 0.005f)
 }
 ```
 
-Both configs render in separate `ComposeView` compositions (the harness composes fresh each call), so this only fails while the key is stale via the shared `planCache`+`remember` path.
+(Pre-flight ruling: compare `BY_PATH` vs `UNIFORM`, not `BY_COMMAND` vs `UNIFORM` — at the pair clock `BY_COMMAND` maps identically to `UNIFORM` (`TimelineEvaluator.kt:400`) and single-contour equal-command pairs would render identically, masking the fix. `BY_PATH` starts path 3 at p≥2/3, unambiguously visible at p=0.8.)
+
+**Task 1 runs AFTER Task 14** (see the phase note above): the test passes today only because every planning-config change re-plans with a fresh plan instance; after the planning-key split it fails against the stale key, and this fix is what keeps the split honest.
 
 - [ ] **Step 2: Run to verify failure** — `./gradlew.bat :vector-morph-compose:testDebugUnitTest --tests "com.imorpher.vectormorph.compose.MorphParameterApplicationTest"` → FAIL.
 - [ ] **Step 3: Implement** — extend the key list at `PlanRemember.kt:47`:
@@ -252,7 +256,7 @@ fun byNameIgnoresCustomOrderList() {
 - Test: `vector-morph-core/src/test/kotlin/com/imorpher/vectormorph/core/plan/MorphPlannerFallbackTest.kt`, `vector-morph-compose/src/test/kotlin/com/imorpher/vectormorph/compose/MorphParameterApplicationTest.kt`
 
 **Interfaces (new):**
-- Planner: `decideStrokeFill(f, t, config): StrokeFillDecision` where `data class StrokeFillDecision(val draw: Boolean, val morph: Boolean)` — `MORPH -> (draw=false, morph=true)`, `CROSSFADE -> (false,false)`, `DRAW →` unchanged `(true,false)`, AUTO resolves into one of the three.
+- Planner: `decideStrokeFill(f, t, config): StrokeFillDecision` where `data class StrokeFillDecision(val draw: Boolean, val morph: Boolean)` — `MORPH -> (draw=false, morph=true)`, `CROSSFADE -> (false,false)`, `DRAW →` unchanged `(true,false)`. **AUTO must never emit `morph = true`** (pre-flight ruling: AUTO keeps today's resolved behavior exactly so default-rendered pairs stay pixel-stable; only an explicit `strokeFill = StrokeFillStrategy.MORPH` asks for the shrink).
 - Renderer: `StrokePass` gains `strokeWidthScale: Float? = null` on its paint entry (MorphRenderer computes `if (pair.strokeFillMorph) 1f - morphT else null`); scale multiplies the interpolated stroke width (after `STROKE_WIDTH` track override), floor 0.
 - `FillPass:139-147`'s `effectiveFill` gains the branch `pair.strokeFillMorph -> morphT` (fill grows with the morph while the stroke shrinks).
 
@@ -290,7 +294,32 @@ fun linearAndDirectionalFillModesRenderDifferentMidFrames() {
 ```
 
 - [ ] **Step 2: Run** → FAIL (identical today).
-- [ ] **Step 3: Implement** — split the shared branch. In the DIRECTIONAL arm, replace `clipPath` with a saveLayer painted through `Brush.linearGradient(colors, start = edge-behind, end = edge-ahead, tileMode = TileMode.Clamp)` applied as a mask: simplest faithful implementation keeps the clip but adds an alpha ramp by drawing the fill twice — actually implement via shader mask: `drawScope.clipPath(hardPath) { drawScope.drawIntoCanvas { ... } }` is overkill; preferred concrete approach: keep `clipPath` for the region *behind* the ramp start, and in the ramp band draw the fill with `paintFillDirect(path, result, alpha * bandFraction)` clipped to the band tile — the implementer may use any mask construction as long as `paintFillDirect` still receives the original brush and the edge pixel test pins a partial-alpha band. Extend `GradientInterpolator` reuse: no changes.
+- [ ] **Step 3: Implement** — split the shared branch. Concrete recipe for the DIRECTIONAL arm (keep the brush untouched): paint the fill into a saveLayer, then multiply destination alpha by a gradient ramp via `BlendMode.DstIn`:
+
+```kotlin
+DrawMode.DIRECTIONAL -> {
+    val axis = DirectionMath.axisFor(direction)
+    val ax0 = bMinX + axis[0]*w; val ay0 = bMinY + axis[1]*h
+    val ax1 = bMinX + axis[2]*w; val ay1 = bMinY + axis[3]*h
+    val band = 0.15f * hypot(ax1 - ax0, ay1 - ay0)          // feather width
+    drawScope.drawIntoCanvas { canvas ->
+        val layerPaint = android.graphics.Paint()            // canvas-level pass through
+        canvas.saveLayer(bMinX - reach, bMinY - reach, bMaxX + reach, bMaxY + reach, layerPaint)
+        paintFillDirect(path, result, alpha)
+        drawScope.drawRect(                                   // alpha mask: full behind, ramp in band, zero ahead
+            brush = Brush.linearGradient(
+                colorStops = arrayOf(0f to Color.Black, edgeStop to Color.Black, bandEndStop to Color.Transparent),
+                start = Offset(anchorX, anchorY), end = Offset(edgeEndX, edgeEndY),
+            ),
+            topLeft = Offset(bMinX, bMinY), size = Size(w + 2*reach, h + 2*reach),
+            blendMode = BlendMode.DstIn,
+        )
+        canvas.restore()
+    }
+}
+```
+
+(`edgeStop`/`bandEndStop` = the ramp fractions inverted from `prog`: fill behind the edge sits at alpha 1, the band ramps over `band`, everything beyond the band is alpha 0 — the gradient replaces the clip entirely, no `clipPath`. Colors are irrelevant; only alpha matters to `DstIn`. Keep LINEAR exactly as the current hard clip.) An implementer using an equivalent layering is acceptable as long as the edge-band pixel test passes and `paintFillDirect` still receives the original brush. Document in the ClipPass kdoc ("behind-the-pen sweeps are hard-edged by design; feathering applies to standalone fills").
 - [ ] **Step 4: Run** → PASS; also `fillModesRenderDifferentMidFrames` (RADIAL/…, unchanged) stays green.
 - [ ] **Step 5: Commit** — `git commit -m "compose: distinguish FillMode.LINEAR (hard wipe) from DIRECTIONAL (feathered sweep)"`.
 
