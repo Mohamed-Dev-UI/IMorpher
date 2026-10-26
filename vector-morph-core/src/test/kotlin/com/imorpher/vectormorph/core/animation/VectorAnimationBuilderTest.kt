@@ -223,28 +223,6 @@ class VectorAnimationBuilderTest {
     }
 
     @Test
-    fun appearanceOnlyStaysTrueForAlphaOnlyTimelines() {
-        val alphaTrack = VectorAnimation {
-            defaultEasing(LinearEasing)
-            path("body") { alpha(0f, 1f) }
-        }
-        assertTrue(alphaTrack.appearanceOnly)
-
-        val alphaKeyframes = VectorAnimation {
-            defaultEasing(LinearEasing)
-            at(0f) { alpha = 0f }
-            at(1f) { alpha = 1f }
-        }
-        assertTrue("alpha-only keyframes are appearance-only", alphaKeyframes.appearanceOnly)
-
-        val geometryTrack = VectorAnimation {
-            defaultEasing(LinearEasing)
-            path("body") { strokeReveal() }
-        }
-        assertFalse(geometryTrack.appearanceOnly)
-    }
-
-    @Test
     fun staggerSettingsAreKeptOnTheBuiltAnimation() {
         val animation = VectorAnimation {
             defaultEasing(LinearEasing)

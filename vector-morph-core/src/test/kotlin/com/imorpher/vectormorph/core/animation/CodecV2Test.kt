@@ -65,7 +65,6 @@ class CodecV2Test {
         assertEquals(original.brushTracks.size, decoded.brushTracks.size)
         assertEquals(original.staggerDelay, decoded.staggerDelay, 0f)
         assertEquals(original.staggerOrder, decoded.staggerOrder)
-        assertEquals(original.appearanceOnly, decoded.appearanceOnly)
 
         for (i in original.tracks.indices) {
             val expected = original.tracks[i]

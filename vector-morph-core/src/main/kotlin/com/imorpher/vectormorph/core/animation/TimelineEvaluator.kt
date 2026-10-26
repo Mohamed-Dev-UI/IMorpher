@@ -522,9 +522,6 @@ class TimelineEvaluator(
             return if (override.isNaN()) globalProgress else override
         }
 
-        /** Resolves color interpolation space for a pair (used by the renderer). */
-        fun pairSpace(config: ColorInterpolationSpace): ColorInterpolationSpace = config
-
         /** Shortest-path degree interpolation, exposed for the renderer's transform math. */
         internal fun angleLerp(from: Float, to: Float, t: Float): Float =
             ColorInterpolator.lerpAngleDeg(from, to, t)

@@ -305,7 +305,7 @@ class VectorAnimationCodecTest {
         // ---- header
         out.writeInt(0x564D414E)                       // MAGIC "VMAN"
         out.writeInt(1)                                // VERSION — unchanged by the typed split
-        out.writeBoolean(false)                        // appearanceOnly (reveal tracks are geometry)
+        out.writeBoolean(false)                        // slot reserved, was appearanceOnly ≤ 0.2
         out.writeFloat(0f)                             // staggerDelay
         out.writeUTF("TOP_LEFT_TO_BOTTOM_RIGHT")       // staggerOrder
         // ---- tracks

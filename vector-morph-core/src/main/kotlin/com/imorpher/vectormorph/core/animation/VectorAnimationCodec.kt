@@ -44,7 +44,7 @@ object VectorAnimationCodec {
         val bytes = ByteArrayOutputStream()
         DataOutputStream(bytes).use { out ->
             out.writeInt(MAGIC); out.writeInt(VERSION)
-            out.writeBoolean(animation.appearanceOnly)
+            out.writeBoolean(false) // slot reserved, was appearanceOnly ≤ 0.2
             out.writeFloat(animation.staggerDelay)
             out.writeUTF(animation.staggerOrder.name)
             out.writeInt(animation.tracks.size)
@@ -125,7 +125,7 @@ object VectorAnimationCodec {
             require(version in MIN_SUPPORTED_VERSION..VERSION) {
                 "Unsupported vector animation definition version $version"
             }
-            val appearanceOnly = input.readBoolean()
+            input.readBoolean() // slot reserved, was appearanceOnly ≤ 0.2 — read and discarded
             val staggerDelay = input.readFloat()
             val staggerOrder = enumValue<com.imorpher.vectormorph.core.model.DrawOrderStrategy>(input.readUTF())
 
@@ -163,7 +163,7 @@ object VectorAnimationCodec {
                 brushTracks.add(VectorAnimation.BrushTrack(target, segments, channel))
             }
             require(input.available() == 0) { "Trailing bytes in vector animation definition" }
-            return VectorAnimation(tracks, brushTracks, appearanceOnly, staggerDelay, staggerOrder)
+            return VectorAnimation(tracks, brushTracks, staggerDelay, staggerOrder)
         }
     }
 

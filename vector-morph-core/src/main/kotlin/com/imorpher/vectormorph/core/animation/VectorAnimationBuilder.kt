@@ -46,12 +46,6 @@ class VectorAnimationBuilder internal constructor() {
     /** Easing used by any track or keyframe that does not name its own. */
     internal var defaultEasing: Easing = androidx.compose.animation.core.FastOutSlowInEasing
 
-    /**
-     * Stays true while the DSL only touched appearance (alpha multipliers and paint) —
-     * a hint that the timeline recolors/fades rather than moves geometry.
-     */
-    internal var appearanceOnly = true
-
     /** Application callback installed by [customAnimation]; rejected by the codec. */
     private var customizer: CustomVectorAnimation? = null
 
@@ -126,10 +120,6 @@ class VectorAnimationBuilder internal constructor() {
         map.putAll(scope.values)
         scope.color?.let { keyframeColors[t] = it }
         if (easing != null) keyframeEasings[t] = easing
-        // Same rule as addScalar: alpha multipliers are appearance, everything else is geometry.
-        if (scope.values.keys.any { it != PropKey.ALPHA && it != PropKey.FILL_ALPHA && it != PropKey.STROKE_ALPHA }) {
-            appearanceOnly = false
-        }
     }
 
     /** Tracks for the path named [name]; repeated names need [occurrence] (0-based). */
@@ -280,7 +270,7 @@ class VectorAnimationBuilder internal constructor() {
 
     /**
      * Records one scalar track request; intervals are clamped to 0..1 and degenerate
-     * (non-increasing) intervals are dropped. Geometry properties clear [appearanceOnly].
+     * (non-increasing) intervals are dropped.
      */
     internal fun addScalar(
         target: AnimationTarget,
@@ -298,9 +288,6 @@ class VectorAnimationBuilder internal constructor() {
             return
         }
         scalars.add(ScalarRequest(target, prop, start, end, from, to, easing, reveal))
-        if (prop != PropKey.ALPHA && prop != PropKey.FILL_ALPHA && prop != PropKey.STROKE_ALPHA) {
-            appearanceOnly = false
-        }
     }
 
     /** Records one paint track request; clamped and dropped like [addScalar]. */
@@ -441,7 +428,7 @@ class VectorAnimationBuilder internal constructor() {
         }
 
         return VectorAnimation(
-            compiledScalars, compiledBrushes, appearanceOnly, staggerDelay, staggerOrder,
+            compiledScalars, compiledBrushes, staggerDelay, staggerOrder,
             customizer, warnings.toList(),
         )
     }

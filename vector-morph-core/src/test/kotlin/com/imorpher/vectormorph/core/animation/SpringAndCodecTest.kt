@@ -132,7 +132,6 @@ class SpringAndCodecTest {
         assertEquals(source.brushTracks.size, decoded.brushTracks.size)
         assertEquals(source.staggerDelay, decoded.staggerDelay, 0f)
         assertEquals(source.staggerOrder, decoded.staggerOrder)
-        assertEquals(source.appearanceOnly, decoded.appearanceOnly)
 
         // radial → sweep is a crossfade pair; both endpoint specs must survive
         val gradientTrack = decoded.brushTracks.first { it.segments.first().from is BrushSpec.Radial }

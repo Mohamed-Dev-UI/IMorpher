@@ -74,8 +74,6 @@ enum class BrushChannel { FILL, STROKE }
 class VectorAnimation internal constructor(
     internal val tracks: List<Track>,
     internal val brushTracks: List<BrushTrack>,
-    /** True when the DSL never referenced geometry properties (pure appearance timeline). */
-    internal val appearanceOnly: Boolean,
     /** Normalized delay between ordered path animations. */
     val staggerDelay: Float = 0f,
     /** Order used to assign stagger offsets. */

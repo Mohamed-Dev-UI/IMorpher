@@ -46,10 +46,6 @@ object PathNodeNormalizer {
             segments = ArrayList(16)
         }
 
-        fun ensureBegun() {
-            // MoveTo handled explicitly; nothing to do here
-        }
-
         for (node in pathData) {
             when (node) {
                 is PathNode.MoveTo -> {
@@ -76,7 +72,6 @@ object PathNodeNormalizer {
                     hasLastCubic = false; hasLastQuad = false
                 }
                 is PathNode.LineTo -> {
-                    ensureBegun()
                     addLine(segments, cx, cy, node.x, node.y)
                     cx = node.x; cy = node.y
                     hasLastCubic = false; hasLastQuad = false

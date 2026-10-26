@@ -44,13 +44,14 @@ internal fun VectorPlanCanvas(
     tintTo: Any?,
     alignment: Alignment,
 ) {
-    val planningAnimation = animation ?: configuration.animation
+    // The [animation] parameter shadows [configuration.animation]; both callers pass the
+    // identical value, so there is nothing to fall back through.
     val evaluator = remember(
-        plan, planningAnimation, configuration.colorSpace,
+        plan, animation, configuration.colorSpace,
         configuration.staggerDelay, configuration.staggerOrder,
         configuration.customDrawOrder, configuration.timing,
     ) {
-        planningAnimation?.let {
+        animation?.let {
             // Field-by-field stagger override: the config competes with the timeline as a
             // pair, not against staggerDelay===0 — an order-only override (delay 0) must
             // still replace the timeline's rank order while an unset delay keeps the
