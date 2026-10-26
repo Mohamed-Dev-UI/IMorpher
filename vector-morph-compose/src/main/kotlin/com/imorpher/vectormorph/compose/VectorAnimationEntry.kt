@@ -65,7 +65,19 @@ fun rememberVectorAnimation(
     return if (preference == MotionPreference.INSTANT) instant else state
 }
 
-/** Variant keyed to a reusable [VectorAnimationDefinition]. */
+/**
+ * Variant keyed to a reusable [VectorAnimationDefinition].
+ *
+ * @deprecated the variant never consults the definition — [animation] is ignored here and the
+ * call degrades to the plain 3-argument entry below. Sequenced/defined animations belong to the
+ * [com.imorpher.vectormorph.compose.VectorAnimator]-style definition player; hand the definition
+ * there instead of through this overload.
+ */
+@Deprecated(
+    "Parameter is ignored by this overload; use the three-argument form and hand the " +
+        "definition to a dedicated definition player instead.",
+    level = DeprecationLevel.WARNING,
+)
 @Composable
 fun rememberVectorAnimation(
     animation: VectorAnimationDefinition,

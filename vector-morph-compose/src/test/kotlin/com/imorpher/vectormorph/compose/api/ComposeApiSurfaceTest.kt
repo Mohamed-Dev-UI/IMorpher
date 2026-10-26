@@ -24,6 +24,7 @@ import com.imorpher.vectormorph.core.model.MorphConfiguration
 import com.imorpher.vectormorph.core.model.MotionPreference
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -59,6 +60,44 @@ class ComposeApiSurfaceTest {
         assertEquals(1, pairs.size)
         assertNotNull(MorphPrecompiler)
     }
+
+    // ------------------------------------------------------------------ deprecation surface (task 15)
+
+    @Test
+    fun rememberVectorAnimationDefinitionOverloadIsDeprecated() {
+        val methods = Class.forName("com.imorpher.vectormorph.compose.VectorAnimationEntryKt")
+            .declaredMethods.filter { it.name == "rememberVectorAnimation" }
+        val overload = methods.filter {
+            it.parameterTypes.firstOrNull() == Class.forName("com.imorpher.vectormorph.compose.VectorAnimationDefinition")
+        }
+        assertTrue("the definition-keyed overload must exist: $methods", overload.isNotEmpty())
+        for (method in overload) {
+            assertTrue(
+                "rememberVectorAnimation(definition, ...) is parameter-ignored; it must be deprecated",
+                method.isAnnotationPresent(Deprecated::class.java),
+            )
+        }
+    }
+
+    @Test
+    fun morphIconAnimationParameterIsDeprecated() {
+        // Compose mangles overload facades as `MorphIcon-<hash>`; lambdas carry `_...$lambda`.
+        val methods = Class.forName("com.imorpher.vectormorph.compose.MorphIconKt")
+            .declaredMethods.filter { it.name.startsWith("MorphIcon-") }
+        assertTrue("every MorphIcon overload must exist: $methods", methods.size == 3)
+        val animationClass = Class.forName("com.imorpher.vectormorph.core.animation.VectorAnimation")
+        // Parameter names survive via -java-parameters? Never assume: find by shadow type.
+        val animationParams = methods.flatMap { method ->
+            method.parameters.filter { parameter -> parameter.type == animationClass }
+        }
+        assertEquals("every MorphIcon overload shadows configuration.animation", 3, animationParams.size)
+        for (parameter in animationParams) {
+            assertTrue(
+                "MorphIcon.animation is a two-home knob; it must be deprecated",
+                parameter.annotations.any { it.annotationClass.java.name == "java.lang.Deprecated" },
+            )
+        }
+    }
 }
 
 /** Never invoked: type-checks both precompiler entry points (suspend, so not callable here). */
@@ -71,9 +110,11 @@ private suspend fun precompilerApiProbe() {
 }
 
 /**
- * Never invoked: pure compile-time coverage of the composable entry points.
+ * Never invoked: pure compile-time coverage of the composable entry points. The deprecated
+ * definition overload stays type-checked here on purpose (surface probe), so the deprecation
+ * warning is suppressed at this one deliberate call.
  */
-@Suppress("unused")
+@Suppress("unused", "DEPRECATION")
 @Composable
 private fun composableApiSurfaceProbe(
     from: ImageVector,
@@ -85,6 +126,7 @@ private fun composableApiSurfaceProbe(
         animationSpec = tween(400),
         motionPreference = MotionPreference.FULL,
     )
+    // Deprecated overload (task 15): kept for surface probing only.
     val definitionProgress = rememberVectorAnimation(
         animation = definition,
         targetProgress = 0.5f,

@@ -23,6 +23,15 @@ import kotlinx.coroutines.flow.first
 /**
  * High-level selected/unselected icon. The animation remains interruptible when [selected]
  * changes while a previous transition is still running.
+ *
+ * Timeline home: preferring the [animation] parameter (deprecated) instead of
+ * [MorphConfiguration.animation] creates two homes for one knob — the parameter only shadows
+ * the configuration and doubles the override inside the overload; set the configuration field.
+ *
+ * Accessibility fallback override: `MotionPreference.CROSSFADE_ONLY` resolves the effective
+ * fallback to `FallbackStrategy.CROSSFADE` — a planning field — so this preference plans a
+ * second cache entry for the same icon pair (deliberate, keepRenderOrder of the Task 14
+ * planning key: `fallback` is planning-relevant by design).
  */
 @Composable
 fun MorphIcon(
@@ -32,6 +41,9 @@ fun MorphIcon(
     modifier: Modifier = Modifier,
     animationSpec: AnimationSpec<Float> = tween(350),
     configuration: MorphConfiguration = MorphConfiguration.Default,
+    // java.lang.Deprecated: Kotlin's @Deprecated has no value-parameter target; the
+    // message lives in the kdoc above (annotation-only, binary compatibility kept).
+    @java.lang.Deprecated
     animation: VectorAnimationSpec? = configuration.animation,
     contentDescription: String? = null,
     motionPreference: MotionPreference? = null,
@@ -75,6 +87,15 @@ fun MorphIcon(
  *
  * The tint replaces every painted pixel — fills, strokes, and animated gradients — while
  * preserving each pixel's alpha, so fades, stroke reveals, and antialiased edges stay intact.
+ *
+ * Timeline home: preferring the [animation] parameter (deprecated) instead of
+ * [MorphConfiguration.animation] creates two homes for one knob — the parameter only shadows
+ * the configuration and doubles the override inside the overload; set the configuration field.
+ *
+ * Accessibility fallback override: `MotionPreference.CROSSFADE_ONLY` resolves the effective
+ * fallback to `FallbackStrategy.CROSSFADE` — a planning field — so this preference plans a
+ * second cache entry for the same icon pair (deliberate, fallback is planning-relevant by
+ * design).
  */
 @Composable
 fun MorphIcon(
@@ -86,6 +107,9 @@ fun MorphIcon(
     modifier: Modifier = Modifier,
     animationSpec: AnimationSpec<Float> = tween(350),
     configuration: MorphConfiguration = MorphConfiguration.Default,
+    // java.lang.Deprecated: Kotlin's @Deprecated has no value-parameter target; the
+    // message lives in the kdoc above (annotation-only, binary compatibility kept).
+    @java.lang.Deprecated
     animation: VectorAnimationSpec? = configuration.animation,
     contentDescription: String? = null,
     motionPreference: MotionPreference? = null,
@@ -131,6 +155,14 @@ fun MorphIcon(
  * The tint replaces every painted pixel — fills, strokes, and animated gradients — while
  * preserving each pixel's alpha, so fades, stroke reveals, and antialiased edges stay intact.
  * Brush coordinates resolve against the icon's layout bounds, like `Modifier.background(brush)`.
+ * Timeline home: preferring the [animation] parameter (deprecated) instead of
+ * [MorphConfiguration.animation] creates two homes for one knob — the parameter only shadows
+ * the configuration and doubles the override inside the overload; set the configuration field.
+ *
+ * Accessibility fallback override: `MotionPreference.CROSSFADE_ONLY` resolves the effective
+ * fallback to `FallbackStrategy.CROSSFADE` — a planning field — so this preference plans a
+ * second cache entry for the same icon pair (deliberate: fallback is planning-relevant by
+ * design).
  */
 @Composable
 fun MorphIcon(
@@ -142,6 +174,9 @@ fun MorphIcon(
     modifier: Modifier = Modifier,
     animationSpec: AnimationSpec<Float> = tween(350),
     configuration: MorphConfiguration = MorphConfiguration.Default,
+    // java.lang.Deprecated: Kotlin's @Deprecated has no value-parameter target; the
+    // message lives in the kdoc above (annotation-only, binary compatibility kept).
+    @java.lang.Deprecated
     animation: VectorAnimationSpec? = configuration.animation,
     contentDescription: String? = null,
     motionPreference: MotionPreference? = null,
