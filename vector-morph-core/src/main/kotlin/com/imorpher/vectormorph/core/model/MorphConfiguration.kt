@@ -109,6 +109,9 @@ data class MorphDebugOptions(
     val showDirection: Boolean = false,
     val showStartPoints: Boolean = false,
     val showPathMatching: Boolean = false,
-    /** 0..1 position along each contour where "current point" markers are drawn. */
+    /**
+     * 0..1 arc fraction along each contour where the debug overlay's "current point"
+     * marker rings are drawn; `0` (the default) and `1` draw nothing.
+     */
     val markerArcFraction: Float = 0f,
 )

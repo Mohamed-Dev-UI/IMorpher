@@ -188,6 +188,31 @@ class DrawDebugOverlayTest {
     }
 
     /**
+     * `markerArcFraction` renders the documented "current point" markers: with a fraction
+     * in (0,1) a small magenta ring sits at that arc position of every contour and MOVES
+     * when the fraction changes; fraction 0 (and the default options set) draws nothing
+     * extra. Today the field is a silent no-op — the two fraction frames measure exactly
+     * 0 changed pixels.
+     */
+    @Test
+    fun markerArcFractionDrawsMarkersThatMove() {
+        val animation = reveal(direction = DrawDirection.LEFT_TO_RIGHT)
+        val at25 = renderLineFrame(animation, MorphDebugOptions(markerArcFraction = 0.25f))
+        val at75 = renderLineFrame(animation, MorphDebugOptions(markerArcFraction = 0.75f))
+        val off = renderLineFrame(animation, MorphDebugOptions())
+        val moved = changedCount(at25, at75)
+        val drawn = changedCount(at25, off)
+        assertTrue(
+            "the marker must render and follow the arc fraction (moved=$moved)",
+            moved > 3,
+        )
+        assertTrue(
+            "fraction 0 must draw nothing extra (drawn=$drawn)",
+            drawn > 3,
+        )
+    }
+
+    /**
      * Conflicting combo (explicit `TOP_RIGHT` start on an open contour drawn
      * `LEFT_TO_RIGHT`) with both toggles on ⇒ the warning indicator paints in the corner
      * rect; the no-conflict control scene (`LEFT` start agrees with the axis, same toggles,
@@ -311,6 +336,18 @@ class DrawDebugOverlayTest {
         var count = 0
         for (y in ys) for (x in xs) {
             if (before.getPixel(x, y) != after.getPixel(x, y) && match(after.getPixel(x, y))) count++
+        }
+        return count
+    }
+
+    /** Whole-frame changed-pixel count (no sub-rect, no color matcher). */
+    private fun changedCount(
+        a: Bitmap,
+        b: Bitmap,
+    ): Int {
+        var count = 0
+        for (y in 0 until a.height) for (x in 0 until a.width) {
+            if (a.getPixel(x, y) != b.getPixel(x, y)) count++
         }
         return count
     }

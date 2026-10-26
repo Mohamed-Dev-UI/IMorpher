@@ -5,6 +5,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
@@ -395,6 +396,27 @@ class MorphRenderer {
                 }
                 if (options.showPathNumbers) {
                     drawDebugNumber(path.index, path.centroidX + 0.6f, path.centroidY - 0.6f, color)
+                }
+            }
+
+            // "Current point" markerArcFraction markers: a small ring at the arc-fraction
+            // position of the pair's representative contours (target side preferred). A
+            // 0 fraction means off, so the default options set paints nothing extra.
+            // Note: a marker can coincide with a showStartPoints dot near arc 0; the two
+            // shapes are distinct enough (ring vs. dot) that no offset special case is
+            // spent on that collision.
+            if (options.markerArcFraction in 0.001f..0.999f) {
+                val fraction = options.markerArcFraction.coerceIn(0f, 1f)
+                val marker = PathMeasure()
+                for (contour in representative.contours) {
+                    marker.setPath(staticPath(contour), false)
+                    val position = marker.getPosition(marker.length * fraction) ?: continue
+                    drawCircle(
+                        color = Color.Magenta,
+                        radius = 0.35f,
+                        center = position,
+                        style = Stroke(width = 0.15f),
+                    )
                 }
             }
         }
