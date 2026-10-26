@@ -30,8 +30,8 @@ import kotlinx.coroutines.flow.first
  *
  * Accessibility fallback override: `MotionPreference.CROSSFADE_ONLY` resolves the effective
  * fallback to `FallbackStrategy.CROSSFADE` — a planning field — so this preference plans a
- * second cache entry for the same icon pair (deliberate, keepRenderOrder of the Task 14
- * planning key: `fallback` is planning-relevant by design).
+ * second cache entry for the same icon pair (deliberate: `fallback` is planning-relevant
+ * by design).
  */
 @Composable
 fun MorphIcon(

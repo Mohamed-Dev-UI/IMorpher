@@ -50,7 +50,7 @@ object MorphPrecompiler {
      * cache eviction; re-warm to restore it).
      *
      * [configuration] defaults to [MorphConfiguration.Default] (source/binary compatible with
-     * the historical 2-argument call). The probe keys on [configuration]`s PLANNING fields
+     * the historical 2-argument call). The probe keys on [configuration]'s PLANNING fields
      * via [com.imorpher.vectormorph.core.model.planningKey], exactly how [warm] keyed the
      * cache — render-only fields (debug, timing, draw-order, ...) never invalidate it.
      */

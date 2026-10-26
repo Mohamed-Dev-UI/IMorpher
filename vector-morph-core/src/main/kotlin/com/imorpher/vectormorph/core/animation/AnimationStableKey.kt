@@ -12,9 +12,10 @@ package com.imorpher.vectormorph.core.animation
  * Folding rules: track targets, property ordinals, segment from/to/interval floats,
  * easing identity, reveal payload fields, and brush specs fold structurally — any
  * difference changes the key. `CustomVectorAnimation` callbacks fold as
- * [System.identityHashCode] (presense marker plus instance identity: callbacks cannot be
+ * [System.identityHashCode] (presence marker plus instance identity: callbacks cannot be
  * compared structurally, so the key is deliberately unequal across processes for those
- * timelines; brush `BrushSpec.Unknown` holders are identity-folded for the same reason).
+ * timelines; `BrushSpec.Unknown` holds a custom brush by reference and folds through its
+ * identity hash for the same reason).
  * Build-time warnings are diagnostics and do NOT fold into the key.
  *
  * Pure fold over already-validated immutable data: safe on any thread.
