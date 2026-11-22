@@ -99,6 +99,30 @@ class DrawOrderAndDirectionTest {
     }
 
     @Test
+    fun customOrderDuplicatesUseLastRankAndUnknownNamesSortLastStably() {
+        val plan = twoSquarePlan()
+        val order = DrawOrder.orderIndices(
+            plan,
+            DrawOrderStrategy.CUSTOM,
+            customOrder = listOf("right", "unknown", "top", "right"),
+        )
+
+        assertEquals(listOf(2, 1, 0, 3), order.toList())
+    }
+
+    @Test
+    fun partialCustomOrderKeepsUnlistedPairsStable() {
+        val plan = twoSquarePlan()
+        val order = DrawOrder.orderIndices(
+            plan,
+            DrawOrderStrategy.CUSTOM,
+            customOrder = listOf("bottom"),
+        )
+
+        assertEquals(listOf(3, 0, 1, 2), order.toList())
+    }
+
+    @Test
     fun byNameWithoutCustomOrderSortsAlphabetically() {
         val plan = twoSquarePlan()
         val order = DrawOrder.orderIndices(plan, DrawOrderStrategy.BY_NAME, emptyList())

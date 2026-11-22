@@ -1,6 +1,6 @@
 # Parameter Effectiveness & API Optimization Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Eliminate every parameter combination in IMorpher that silently does nothing or silently overrides another parameter, and make the API surface honest about what each knob controls.
 
@@ -83,7 +83,7 @@ The five failure modes most likely to bite a user that no task's golden-path tes
 
 **Interfaces:** Consumes existing `TimelineEvaluator(animation, plan, colorSpace, staggerDelay, staggerOrder, customDrawOrder, timingMode)`. Produces no API change.
 
-- [ ] **Step 1: Write the failing test** — add to `MorphParameterApplicationTest` (fixture style: `harness.stroked(...)` + `reveal(...)` helper used by the existing stagger test `staggerDelaysLaterPathsMidMorph`):
+- [x] **Step 1: Write the failing test** — add to `MorphParameterApplicationTest` (fixture style: `harness.stroked(...)` + `reveal(...)` helper used by the existing stagger test `staggerDelaysLaterPathsMidMorph`):
 
 ```kotlin
 @Test
@@ -101,8 +101,8 @@ fun timingAndCustomDrawOrderChangesRebuildTheEvaluator() {
 
 **Task 1 runs AFTER Task 14** (see the phase note above): the test passes today only because every planning-config change re-plans with a fresh plan instance; after the planning-key split it fails against the stale key, and this fix is what keeps the split honest.
 
-- [ ] **Step 2: Run to verify failure** — `./gradlew.bat :vector-morph-compose:testDebugUnitTest --tests "com.imorpher.vectormorph.compose.MorphParameterApplicationTest"` → FAIL.
-- [ ] **Step 3: Implement** — extend the key list at `PlanRemember.kt:47`:
+- [x] **Step 2: Run to verify failure** — `./gradlew.bat :vector-morph-compose:testDebugUnitTest --tests "com.imorpher.vectormorph.compose.MorphParameterApplicationTest"` → FAIL.
+- [x] **Step 3: Implement** — extend the key list at `PlanRemember.kt:47`:
 
 ```kotlin
 val evaluator = remember(plan, planningAnimation, configuration.colorSpace,
@@ -110,8 +110,8 @@ val evaluator = remember(plan, planningAnimation, configuration.colorSpace,
     configuration.customDrawOrder, configuration.timing) { ... }
 ```
 
-- [ ] **Step 4: Run to verify pass** — same command → PASS.
-- [ ] **Step 5: Commit** — `git commit -m "compose: rebuild evaluator when customDrawOrder or timing changes (stale remember key)"`.
+- [x] **Step 4: Run to verify pass** — same command → PASS.
+- [x] **Step 5: Commit** — `git commit -m "compose: rebuild evaluator when customDrawOrder or timing changes (stale remember key)"`.
 
 ### Task 2: Config stagger overrides are checked against the whole stagger pair
 
@@ -121,7 +121,7 @@ val evaluator = remember(plan, planningAnimation, configuration.colorSpace,
 
 **Interfaces:** Consumes `MorphConfiguration.staggerDelay/staggerOrder`, `VectorAnimation.staggerDelay/staggerOrder`. Produces no API change. Semantics: a config "supplies" stagger when `staggerDelay > 0` **or** `staggerOrder != MorphConfiguration.Default.staggerOrder`; supplied values win field-by-field against the timeline's, otherwise the timeline's own stagger stands.
 
-- [ ] **Step 1: Write the failing test** — timeline with `stagger(delay, BOTTOM_RIGHT_TO_TOP_LEFT)`; render two configs: `MorphConfiguration(staggerOrder = BY_NAME)` (delay stays 0 override) and default. Assert the two frames differ mid-morph beyond noise:
+- [x] **Step 1: Write the failing test** — timeline with `stagger(delay, BOTTOM_RIGHT_TO_TOP_LEFT)`; render two configs: `MorphConfiguration(staggerOrder = BY_NAME)` (delay stays 0 override) and default. Assert the two frames differ mid-morph beyond noise:
 
 ```kotlin
 @Test
@@ -134,8 +134,8 @@ fun configStaggerOrderOverridesTimelineOrderWithoutConfigDelay() {
 }
 ```
 
-- [ ] **Step 2: Run** → FAIL (config order ignored while `staggerDelay == 0`).
-- [ ] **Step 3: Implement** at `PlanRemember.kt:53-54`:
+- [x] **Step 2: Run** → FAIL (config order ignored while `staggerDelay == 0`).
+- [x] **Step 3: Implement** at `PlanRemember.kt:53-54`:
 
 ```kotlin
 val configSuppliesStagger = configuration.staggerDelay > 0f ||
@@ -145,8 +145,8 @@ staggerDelay = if (configuration.staggerDelay > 0f) configuration.staggerDelay e
 staggerOrder = if (configSuppliesStagger) configuration.staggerOrder else it.staggerOrder,
 ```
 
-- [ ] **Step 4: Run** → PASS (plus all of `MorphParameterApplicationTest`, `TimelineEvaluatorParamsTest`).
-- [ ] **Step 5: Commit** — `git commit -m "compose: honor config staggerOrder (and delay/channel overrides) independent of staggerDelay===0"`.
+- [x] **Step 4: Run** → PASS (plus all of `MorphParameterApplicationTest`, `TimelineEvaluatorParamsTest`).
+- [x] **Step 5: Commit** — `git commit -m "compose: honor config staggerOrder (and delay/channel overrides) independent of staggerDelay===0"`.
 
 ### Task 3: Stagger offsets actually squeeze
 
@@ -157,7 +157,7 @@ staggerOrder = if (configSuppliesStagger) configuration.staggerOrder else it.sta
 
 **Interfaces:** `DrawOrder.staggerOffsets(plan, order, staggerDelay): FloatArray` signature unchanged; new guarantee: offsets are `min(delay*rank, squeeze)` with `squeeze` applied proportionally so the last offset ≤ 0.95 and relative rank spacing is preserved whenever possible.
 
-- [ ] **Step 1: Write the failing test**:
+- [x] **Step 1: Write the failing test**:
 
 ```kotlin
 @Test
@@ -171,10 +171,10 @@ fun staggerOffsetsSqueezeToKeepTheLastPathOnTimeline() {
 
 (`planWith6Pairs` — reuse the smallest existing six-pair plan fixture in this test file's helpers; if none exists, build via `MorphPlanner.plan` on two 6-filled-path vectors compiled with `VectorCompiler`.)
 
-- [ ] **Step 2: Run** → FAIL (old code: offsets 3..5 all clamp to 0.95).
-- [ ] **Step 3: Implement** — in `staggerOffsets`, after computing `offsets[i] = delay * rankOf[i]`: if `offsets.max() > 0.95f` scale all values by `0.95f / max`. Update the kdoc to say "squeezed proportionally so the last path still starts at ≤ 0.95" (matches the existing doc's promise).
-- [ ] **Step 4: Run** → PASS, plus `TimelineEvaluatorParamsTest` (its stagger expectations must survive).
-- [ ] **Step 5: Commit** — `git commit -m "core: squeeze stagger offsets so large delays keep every path visible"`.
+- [x] **Step 2: Run** → FAIL (old code: offsets 3..5 all clamp to 0.95).
+- [x] **Step 3: Implement** — in `staggerOffsets`, after computing `offsets[i] = delay * rankOf[i]`: if `offsets.max() > 0.95f` scale all values by `0.95f / max`. Update the kdoc to say "squeezed proportionally so the last path still starts at ≤ 0.95" (matches the existing doc's promise).
+- [x] **Step 4: Run** → PASS, plus `TimelineEvaluatorParamsTest` (its stagger expectations must survive).
+- [x] **Step 5: Commit** — `git commit -m "core: squeeze stagger offsets so large delays keep every path visible"`.
 
 ### Task 4: Short paths stay visible under stagger + `BY_PATH_LENGTH`
 
@@ -184,7 +184,7 @@ fun staggerOffsetsSqueezeToKeepTheLastPathOnTimeline() {
 
 **Interfaces:** `progressForPair` private; behavior contract: when stagger is active (`maxStaggerOffset > 0`), every path's mapped progress window is at least `MIN_STAGGER_WINDOW = 0.05` of the timeline. No public API change.
 
-- [ ] **Step 1: Write the failing test** (mirror the fixture style of `uniformTimingIgnoresPathLengths`, `TimelineEvaluatorParamsTest.kt:232` — one long stroked path + one near-zero-length path, timeline with `stagger(delay = 0.2f, …)`, timing default `BY_PATH_LENGTH`):
+- [x] **Step 1: Write the failing test** (mirror the fixture style of `uniformTimingIgnoresPathLengths`, `TimelineEvaluatorParamsTest.kt:232` — one long stroked path + one near-zero-length path, timeline with `stagger(delay = 0.2f, …)`, timing default `BY_PATH_LENGTH`):
 
 ```kotlin
 @Test
@@ -199,8 +199,8 @@ fun staggerKeepsShortPathsVisibleUnderPathLengthTiming() {
 
 (Read the drawn state the same way `uniformTimingIgnoresPathLengths` asserts clocks.)
 
-- [ ] **Step 2: Run** → FAIL (short path already saturated to 1).
-- [ ] **Step 3: Implement** — in the `BY_PATH_LENGTH` branch, clamp the speed-up factor by the path's remaining window:
+- [x] **Step 2: Run** → FAIL (short path already saturated to 1).
+- [x] **Step 3: Implement** — in the `BY_PATH_LENGTH` branch, clamp the speed-up factor by the path's remaining window:
 
 ```kotlin
 TimingMode.BY_PATH_LENGTH -> {
@@ -216,8 +216,8 @@ TimingMode.BY_PATH_LENGTH -> {
 ```
 
 (`companion object { private const val MIN_STAGGER_WINDOW = 0.05f }`; extend the inline comment at lines 380-383 to document the guarantee.)
-- [ ] **Step 4: Run** → PASS plus `MorphPlanningTest:205` (`pathLengthTimingLetsShortPathsFinishBeforeLongPaths` must stay green — that test runs without stagger).
-- [ ] **Step 5: Commit** — `git commit -m "core: guarantee a visible draw window for short paths when stagger + BY_PATH_LENGTH combine"`.
+- [x] **Step 4: Run** → PASS plus `MorphPlanningTest:205` (`pathLengthTimingLetsShortPathsFinishBeforeLongPaths` must stay green — that test runs without stagger).
+- [x] **Step 5: Commit** — `git commit -m "core: guarantee a visible draw window for short paths when stagger + BY_PATH_LENGTH combine"`.
 
 ---
 
@@ -231,7 +231,7 @@ TimingMode.BY_PATH_LENGTH -> {
 
 **Interfaces:** No signature change. After this task `customDrawOrder` affects only `DrawOrderStrategy.CUSTOM` (and z-order for `CUSTOM` when `keepRenderOrder = false`).
 
-- [ ] **Step 1: Write the failing test**:
+- [x] **Step 1: Write the failing test**:
 
 ```kotlin
 @Test
@@ -242,10 +242,10 @@ fun byNameIgnoresCustomOrderList() {
 }
 ```
 
-- [ ] **Step 2: Run** → FAIL (today `withList` reorders).
-- [ ] **Step 3: Implement** — replace `val order = customOrder.ifEmpty { ...sorted names... }` with the always-derived `val order = pairs.mapNotNull { pathOf(it)?.name }.sorted()`; pass that to `sortByNames`. Remove `customOrder` from any BY_NAME path (the `when` branch takes no params).
-- [ ] **Step 4: Run** → PASS.
-- [ ] **Step 5: Commit** — `git commit -m "core: BY_NAME draw order derives name rank itself; customDrawOrder is CUSTOM-only"`.
+- [x] **Step 2: Run** → FAIL (today `withList` reorders).
+- [x] **Step 3: Implement** — replace `val order = customOrder.ifEmpty { ...sorted names... }` with the always-derived `val order = pairs.mapNotNull { pathOf(it)?.name }.sorted()`; pass that to `sortByNames`. Remove `customOrder` from any BY_NAME path (the `when` branch takes no params).
+- [x] **Step 4: Run** → PASS.
+- [x] **Step 5: Commit** — `git commit -m "core: BY_NAME draw order derives name rank itself; customDrawOrder is CUSTOM-only"`.
 
 ### Task 6: `strokeFill = MORPH` gets its documented stroke-shrink behavior
 
@@ -260,7 +260,7 @@ fun byNameIgnoresCustomOrderList() {
 - Renderer: `StrokePass` gains `strokeWidthScale: Float? = null` on its paint entry (MorphRenderer computes `if (pair.strokeFillMorph) 1f - morphT else null`); scale multiplies the interpolated stroke width (after `STROKE_WIDTH` track override), floor 0.
 - `FillPass:139-147`'s `effectiveFill` gains the branch `pair.strokeFillMorph -> morphT` (fill grows with the morph while the stroke shrinks).
 
-- [ ] **Step 1: Write failing tests**:
+- [x] **Step 1: Write failing tests**:
   Core — `morphStrokeFillPlansAStrokeShrinkPair`: config `MorphConfiguration(strokeFill = StrokeFillStrategy.MORPH)` over a filled+stroked pair asserts `pairs.single().strokeFillMorph == true` (and `CROSSFADE` maps to `false`).
   Compose — bitmap probe: same pair rendered at `0.5` under `MORPH` vs `CROSSFADE` differ > 0.01 mid-frame (MORPH shows a shrunk, partially-orange fill; CROSSFADE shows the plain crossfade):
   
@@ -269,10 +269,10 @@ fun byNameIgnoresCustomOrderList() {
 fun strokeFillMorphShrinksTheStrokeMidMorph() { /* renderMorph at 0.5 with config strokeFill=MORPH vs CROSSFADE; assertTrue(difference > 0.01f) */ }
 ```
 
-- [ ] **Step 2: Run** → both FAIL.
-- [ ] **Step 3: Implement** planner decision object + pair field + renderer wiring as in Interfaces. `MorphRenderer.render` already has `pair` and `morphT` at the pair loop; thread the scale into the stroke paint call only when the pair carries both fill and stroke (otherwise `null`).
-- [ ] **Step 4: Run** module suites → PASS.
-- [ ] **Step 5: Commit** — `git commit -m "core+compose: implement StrokeFillStrategy.MORPH (stroke shrinks while fill grows)"`.
+- [x] **Step 2: Run** → both FAIL.
+- [x] **Step 3: Implement** planner decision object + pair field + renderer wiring as in Interfaces. `MorphRenderer.render` already has `pair` and `morphT` at the pair loop; thread the scale into the stroke paint call only when the pair carries both fill and stroke (otherwise `null`).
+- [x] **Step 4: Run** module suites → PASS.
+- [x] **Step 5: Commit** — `git commit -m "core+compose: implement StrokeFillStrategy.MORPH (stroke shrinks while fill grows)"`.
 
 ### Task 7: `FillMode.LINEAR` becomes the hard wipe, `DIRECTIONAL` grows the feathered sweep
 
@@ -282,7 +282,7 @@ fun strokeFillMorphShrinksTheStrokeMidMorph() { /* renderMorph at 0.5 with confi
 
 **Decision (target semantics):** the existing shared hard-edged clip stays as **LINEAR** ("hard-edged linear sweep", kdoc as-written). **DIRECTIONAL** becomes the same positioned sweep but painted through a linear-gradient alpha ramp around the moving edge — feather band width `0.15 * axisLength`, ramp fully open behind the edge, fully closed ahead. The clip-mask route in `ClipPass.withFillRevealClip` (used only when a stroke reveal owns the path) keeps the hard edge for every mode — document that in its kdoc ("behind-the-pen sweeps are hard-edged by design; feathering applies to standalone fills").
 
-- [ ] **Step 1: Write the failing test** (both directions must now differ):
+- [x] **Step 1: Write the failing test** (both directions must now differ):
 
 ```kotlin
 @Test
@@ -293,8 +293,8 @@ fun linearAndDirectionalFillModesRenderDifferentMidFrames() {
 }
 ```
 
-- [ ] **Step 2: Run** → FAIL (identical today).
-- [ ] **Step 3: Implement** — split the shared branch. Concrete recipe for the DIRECTIONAL arm (keep the brush untouched): paint the fill into a saveLayer, then multiply destination alpha by a gradient ramp via `BlendMode.DstIn`:
+- [x] **Step 2: Run** → FAIL (identical today).
+- [x] **Step 3: Implement** — split the shared branch. Concrete recipe for the DIRECTIONAL arm (keep the brush untouched): paint the fill into a saveLayer, then multiply destination alpha by a gradient ramp via `BlendMode.DstIn`:
 
 ```kotlin
 DrawMode.DIRECTIONAL -> {
@@ -320,8 +320,8 @@ DrawMode.DIRECTIONAL -> {
 ```
 
 (`edgeStop`/`bandEndStop` = the ramp fractions inverted from `prog`: fill behind the edge sits at alpha 1, the band ramps over `band`, everything beyond the band is alpha 0 — the gradient replaces the clip entirely, no `clipPath`. Colors are irrelevant; only alpha matters to `DstIn`. Keep LINEAR exactly as the current hard clip.) An implementer using an equivalent layering is acceptable as long as the edge-band pixel test passes and `paintFillDirect` still receives the original brush. Document in the ClipPass kdoc ("behind-the-pen sweeps are hard-edged by design; feathering applies to standalone fills").
-- [ ] **Step 4: Run** → PASS; also `fillModesRenderDifferentMidFrames` (RADIAL/…, unchanged) stays green.
-- [ ] **Step 5: Commit** — `git commit -m "compose: distinguish FillMode.LINEAR (hard wipe) from DIRECTIONAL (feathered sweep)"`.
+- [x] **Step 4: Run** → PASS; also `fillModesRenderDifferentMidFrames` (RADIAL/…, unchanged) stays green.
+- [x] **Step 5: Commit** — `git commit -m "compose: distinguish FillMode.LINEAR (hard wipe) from DIRECTIONAL (feathered sweep)"`.
 
 ### Task 8: One SWEEP start angle for both fill sites
 
@@ -332,7 +332,7 @@ DrawMode.DIRECTIONAL -> {
 
 **Interfaces (new):** `DirectionMath.sweepStartAngle(direction: DrawDirection): Float` — degrees for the arc that starts "where the direction's anchor is": for `CLOCKWISE`/`COUNTER_CLOCKWISE` (and any direction whose anchor is the top: `TOP_TO_BOTTOM`, `TOP_LEFT…`) it is `-90f` (unchanged historical default for those), for `LEFT_TO_RIGHT` `180f`, `RIGHT_TO_LEFT` `0f`, `TOP_TO_BOTTOM`, `BOTTOM_TO_TOP`, corners per `anchorFor`'s atan2 mapping — exactly the formula currently in `FillPass.kt:372-377`.
 
-- [ ] **Step 1: Write the failing test** — pair fill (square→square, fill on both sides so ClipPass runs) with `reveal(fill(mode = SWEEP, direction = DrawDirection.LEFT_TO_RIGHT))`: mid-frame must differ from the same fill with `direction = DrawDirection.TOP_TO_BOTTOM`:
+- [x] **Step 1: Write the failing test** — pair fill (square→square, fill on both sides so ClipPass runs) with `reveal(fill(mode = SWEEP, direction = DrawDirection.LEFT_TO_RIGHT))`: mid-frame must differ from the same fill with `direction = DrawDirection.TOP_TO_BOTTOM`:
 
 ```kotlin
 @Test
@@ -345,10 +345,10 @@ fun sweepOnPairFillsHonorsDirectionStartAngle() {
 
 (pairFillSweep uses a vector-level `fill(mode = SWEEP, direction = …)` track so the pair fill goes through `ClipPass`.)
 
-- [ ] **Step 2: Run** → FAIL (ClipPass always starts at -90, so both directions match).
-- [ ] **Step 3: Implement** — move `FillPass`'s start-angle `when` into `DirectionMath.sweepStartAngle`; call it from `ClipPass` and `FillPass` (`startAngle = DirectionMath.sweepStartAngle(direction)`). `clockwise` flag logic in both sites stays as-is.
-- [ ] **Step 4: Run** → PASS; confirm `DrawParamCoherenceTest` showcase expectations unaffected (they don't cover pair-fills with axis directions).
-- [ ] **Step 5: Commit** — `git commit -m "compose: SWEEP reveal start angle derives direction consistently at both fill sites"`.
+- [x] **Step 2: Run** → FAIL (ClipPass always starts at -90, so both directions match).
+- [x] **Step 3: Implement** — move `FillPass`'s start-angle `when` into `DirectionMath.sweepStartAngle`; call it from `ClipPass` and `FillPass` (`startAngle = DirectionMath.sweepStartAngle(direction)`). `clockwise` flag logic in both sites stays as-is.
+- [x] **Step 4: Run** → PASS; confirm `DrawParamCoherenceTest` showcase expectations unaffected (they don't cover pair-fills with axis directions).
+- [x] **Step 5: Commit** — `git commit -m "compose: SWEEP reveal start angle derives direction consistently at both fill sites"`.
 
 ### Task 9: Thread `timing`, `honorDirection`, and custom anchors into the ignored render sites
 
@@ -360,7 +360,7 @@ fun sweepOnPairFillsHonorsDirectionStartAngle() {
 
 **Interfaces:** no new public API; parameters mirror those `drawMorph` already threads (`StrokePass.kt:60-83`). Defaults preserve today's behavior (`honorDirection = false`, `timingMode = mapper-default`) so custom-geometry callers compile unchanged.
 
-- [ ] **Step 1: Write failing tests** (three probes, name style of `TraversalPolicyApplicationTest`):
+- [x] **Step 1: Write failing tests** (three probes, name style of `TraversalPolicyApplicationTest`):
 
 ```kotlin
 @Test // a) missingPath = DRAW honors directionTraversal
@@ -375,10 +375,10 @@ For (c): pass a timeline `draw(start = PathStart.CUSTOM)` + `fill(mode = PATH_TR
 For (a): `missingPath = DRAW`, open contour, direction `LEFT_TO_RIGHT`, `HONOR_DIRECTION` vs `LEGACY` render mid-frames different (today identical).
 For (b): fill `PATH_TRAVERSAL` with `configuration.timing = BY_PATH` vs `UNIFORM`; short-contour pairs must differ mid-frame (stale default was UNIFORM-only path).
 
-- [ ] **Step 2: Run** → all three FAIL.
-- [ ] **Step 3: Implement** — add the parameters and thread them from `MorphRenderer` exactly as `drawMorph` does (`MorphRenderer.kt:979-1188`); in FillPass resolve `customStartFraction` via the anchors chain (`StrokePass.drawAnchorFor`, used by `MorphRenderer.kt:846,977,1183`).
-- [ ] **Step 4: Run** both module suites → PASS; `RetargetProbeTest`/goldens unaffected (defaults preserve old frames for configs that don't use these knobs... except (a)/(b)/(c) tests themselves are behavior changes — expected, they are the fixes).
-- [ ] **Step 5: Commit** — `git commit -m "compose: directionTraversal/timing/custom anchors apply at missing-side, custom-geometry, and PATH_TRAVERSAL fill sites"`.
+- [x] **Step 2: Run** → all three FAIL.
+- [x] **Step 3: Implement** — add the parameters and thread them from `MorphRenderer` exactly as `drawMorph` does (`MorphRenderer.kt:979-1188`); in FillPass resolve `customStartFraction` via the anchors chain (`StrokePass.drawAnchorFor`, used by `MorphRenderer.kt:846,977,1183`).
+- [x] **Step 4: Run** both module suites → PASS; `RetargetProbeTest`/goldens unaffected (defaults preserve old frames for configs that don't use these knobs... except (a)/(b)/(c) tests themselves are behavior changes — expected, they are the fixes).
+- [x] **Step 5: Commit** — `git commit -m "compose: directionTraversal/timing/custom anchors apply at missing-side, custom-geometry, and PATH_TRAVERSAL fill sites"`.
 
 ### Task 10: Render the debug `markerArcFraction` markers
 
@@ -389,7 +389,7 @@ For (b): fill `PATH_TRAVERSAL` with `configuration.timing = BY_PATH` vs `UNIFORM
 
 **Interfaces:** none new. Semantics: when `debug != null` and `debug.markerArcFraction in 0.001..0.999`, draw a small magenta ring at the arc-fraction position of every morph pair's target contour (reuse the same PathMeasure used by `showStartPoints`, offset unless it collides with the start-point dot).
 
-- [ ] **Step 1: Write the failing test** (style of `DrawDebugOverlayTest`):
+- [x] **Step 1: Write the failing test** (style of `DrawDebugOverlayTest`):
 
 ```kotlin
 @Test
@@ -402,10 +402,10 @@ fun markerArcFractionDrawsMarkersThatMove() {
 }
 ```
 
-- [ ] **Step 2: Run** → FAIL.
-- [ ] **Step 3: Implement** in `drawDebugOverlay`: for each pair with a revealed target contour, measure the interpolated target path (same measurement the start-point overlay uses), `getSegment(0f, fraction * len, markerPath, true)`, draw the marker at `markerPath.getLastPt()`.
-- [ ] **Step 4: Run** → PASS; `DrawDebugOverlayTest` existing cases stay green.
-- [ ] **Step 5: Commit** — `git commit -m "compose: render debug markerArcFraction as a moving contour marker"`.
+- [x] **Step 2: Run** → FAIL.
+- [x] **Step 3: Implement** in `drawDebugOverlay`: for each pair with a revealed target contour, measure the interpolated target path (same measurement the start-point overlay uses), `getSegment(0f, fraction * len, markerPath, true)`, draw the marker at `markerPath.getLastPt()`.
+- [x] **Step 4: Run** → PASS; `DrawDebugOverlayTest` existing cases stay green.
+- [x] **Step 5: Commit** — `git commit -m "compose: render debug markerArcFraction as a moving contour marker"`.
 
 ---
 
@@ -419,7 +419,7 @@ fun markerArcFractionDrawsMarkersThatMove() {
 
 **Interfaces:** no API change; the appearing/disappearing pairs produced while `fallbackDecision.crossfadeAll` carry a warning string on the pair (`pair.warnings` extended upstream at pair construction, same channel `validatePlan` already escalates): `"FallbackStrategy ${decision.strategy} crossfades every pair; missingPath ${config.missingPath} is ignored"`.
 
-- [ ] **Step 1: Write the failing test** — `fallback = CROSSFADE` + `missingPath = DRAW`, a plan with one appearing path: assert the plan's report/issues (or pair warnings) include the conflict string.
+- [x] **Step 1: Write the failing test** — `fallback = CROSSFADE` + `missingPath = DRAW`, a plan with one appearing path: assert the plan's report/issues (or pair warnings) include the conflict string.
 
 ```kotlin
 @Test
@@ -429,10 +429,10 @@ fun crossfadeFallbackRecordsIgnoredMissingPath() {
 }
 ```
 
-- [ ] **Step 2: Run** → FAIL.
-- [ ] **Step 3: Implement** — thread the string into `planAppearingPair`/`planDisappearingPair` when `fallbackDecision.crossfadeAll && config.missingPath != MissingPathBehavior.FADE` (append to the pair's warnings list the same way existing fallback warnings flow into `MorphReport`).
-- [ ] **Step 4: Run** `MorphPlannerFallbackTest` → PASS (existing `:360-367` pins keep passing).
-- [ ] **Step 5: Commit** — `git commit -m "core: plan diagnosis records missingPath discarded by crossfade fallbacks"`.
+- [x] **Step 2: Run** → FAIL.
+- [x] **Step 3: Implement** — thread the string into `planAppearingPair`/`planDisappearingPair` when `fallbackDecision.crossfadeAll && config.missingPath != MissingPathBehavior.FADE` (append to the pair's warnings list the same way existing fallback warnings flow into `MorphReport`).
+- [x] **Step 4: Run** `MorphPlannerFallbackTest` → PASS (existing `:360-367` pins keep passing).
+- [x] **Step 5: Commit** — `git commit -m "core: plan diagnosis records missingPath discarded by crossfade fallbacks"`.
 
 ### Task 12: `MorphValidator.validateConfiguration` — static audit of parameter conflicts
 
@@ -463,11 +463,11 @@ Checks emitted (category strings chosen to match the existing lowercase style):
 | `direction == CENTER_OUT`/`OUTSIDE_IN` on a stroke-reveal segment | INFO `sweep-direction-on-stroke` (mirrors the runtime warning) |
 | `customMappings` non-empty while `pathMatching ∉ {AUTO, CUSTOM}` | INFO `custom-mappings-unused` (BY_NAME/GEOMETRY/AREA/CENTROID/INDEX/ID ignore them — A28) |
 
-- [ ] **Step 1: Write failing tests** — one per row: build `MorphConfiguration(...)` (+ minimal DSL animation via `VectorAnimationBuilder` where needed) and assert issue category presence/absence; etiquettes: `coherentDefaultConfigIsSilent` mirrors runtime behavior.
-- [ ] **Step 2: Run** → FAIL.
-- [ ] **Step 3: Implement** the checks; walk `animation.tracks` (internal to core — validator is in core) for `Segment.reveal` payloads; keep the function pure and allocation-light.
-- [ ] **Step 4: Run** → PASS.
-- [ ] **Step 5: Commit** — `git commit -m "core: MorphValidator.validateConfiguration audits conflicting parameter combos"`.
+- [x] **Step 1: Write failing tests** — one per row: build `MorphConfiguration(...)` (+ minimal DSL animation via `VectorAnimationBuilder` where needed) and assert issue category presence/absence; etiquettes: `coherentDefaultConfigIsSilent` mirrors runtime behavior.
+- [x] **Step 2: Run** → FAIL.
+- [x] **Step 3: Implement** the checks; walk `animation.tracks` (internal to core — validator is in core) for `Segment.reveal` payloads; keep the function pure and allocation-light.
+- [x] **Step 4: Run** → PASS.
+- [x] **Step 5: Commit** — `git commit -m "core: MorphValidator.validateConfiguration audits conflicting parameter combos"`.
 
 ---
 
@@ -481,11 +481,11 @@ Checks emitted (category strings chosen to match the existing lowercase style):
 
 **Interfaces (new overload):** `fun isPrepared(from: ImageVector, to: ImageVector, configuration: MorphConfiguration = MorphConfiguration.Default): Boolean` — old 2-arg call keeps source/binary compatibility via the default value.
 
-- [ ] **Step 1: Write failing test** — `warm(from, to, warmConfig)` then `isPrepared(from, to, warmConfig)` must be `true` (today `false` because it probes Default).
-- [ ] **Step 2: Run** → FAIL.
-- [ ] **Step 3: Implement** — add the parameter, probe with `configuration.copy(animation = null)`.
-- [ ] **Step 4: Run** → PASS.
-- [ ] **Step 5: Commit** — `git commit -m "compose: isPrepared probes the caller's configuration"`.
+- [x] **Step 1: Write failing test** — `warm(from, to, warmConfig)` then `isPrepared(from, to, warmConfig)` must be `true` (today `false` because it probes Default).
+- [x] **Step 2: Run** → FAIL.
+- [x] **Step 3: Implement** — add the parameter, probe with `configuration.copy(animation = null)`.
+- [x] **Step 4: Run** → PASS.
+- [x] **Step 5: Commit** — `git commit -m "compose: isPrepared probes the caller's configuration"`.
 
 ### Task 14: Plan cache keys on a planning-only key
 
@@ -512,7 +512,7 @@ data class PlanningKey(
 
 Fields enumerated = exactly the config reads in the planner today (`MorphPlanner.kt:58-63, 313-337, 616, 552-570`); if Task 6 changes the consumed set (it adds no planning field — MORPH resolution is config-driven already), keep the list in sync.
 
-- [ ] **Step 1: Write failing test** — cache test: `getOrPut(from,to,config(a=...))` plausibly fills with `debug = MorphDebugOptions(...)` toggled to a different value (via two full configs) must REUSE the plan instance (reference equality):
+- [x] **Step 1: Write failing test** — cache test: `getOrPut(from,to,config(a=...))` plausibly fills with `debug = MorphDebugOptions(...)` toggled to a different value (via two full configs) must REUSE the plan instance (reference equality):
 
 ```kotlin
 @Test
@@ -523,10 +523,10 @@ fun planCacheIgnoresRenderOnlyFields() {
 }
 ```
 
-- [ ] **Step 2: Run** → FAIL (distinct keys, second miss).
-- [ ] **Step 3: Implement** — key splitting; the caching callers switch to the PlanningKey overload (`PlanRemember.kt` also swaps its `remember` key from the full `planningConfiguration` to `from`+`to`+`planningConfiguration.planningKey()` so Compose recomposition doesn't re-plan on debug toggles either). Note the deliberate consequence: `CROSSFADE_ONLY` forcing still re-keys (fallback is planning-relevant) — documented at `MorphIcon.kt` kdoc in Task 15 docs.
-- [ ] **Step 4: Run** `MorphPlanCacheByteBudgetTest`, `MorphPlanningTest`, `StructuralKeyTest`, compose unit suites → PASS.
-- [ ] **Step 5: Commit** — `git commit -m "core+compose: plan cache keys a dedicated planning key; render-only config fields stop invalidating plans"`.
+- [x] **Step 2: Run** → FAIL (distinct keys, second miss).
+- [x] **Step 3: Implement** — key splitting; the caching callers switch to the PlanningKey overload (`PlanRemember.kt` also swaps its `remember` key from the full `planningConfiguration` to `from`+`to`+`planningConfiguration.planningKey()` so Compose recomposition doesn't re-plan on debug toggles either). Note the deliberate consequence: `CROSSFADE_ONLY` forcing still re-keys (fallback is planning-relevant) — documented at `MorphIcon.kt` kdoc in Task 15 docs.
+- [x] **Step 4: Run** `MorphPlanCacheByteBudgetTest`, `MorphPlanningTest`, `StructuralKeyTest`, compose unit suites → PASS.
+- [x] **Step 5: Commit** — `git commit -m "core+compose: plan cache keys a dedicated planning key; render-only config fields stop invalidating plans"`.
 
 ### Task 15: Deprecate the misleading no-op overloads and double homes
 
@@ -539,11 +539,11 @@ fun planCacheIgnoresRenderOnlyFields() {
 - `@Deprecated("Parameter is ignored by this overload; use the three-argument form and hand the definition to VectorAnimator", level = DeprecationLevel.WARNING) fun rememberVectorAnimation(animation: VectorAnimationDefinition, ...)`.
 - `MorphIcon`'s `animation` parameter: add `@DeprecationLevel.WARNING` deprecation with message "Two homes: set configuration.animation instead; the parameter only shadows it and doubles the override inside the overload". (Binary compatibility kept — deprecating a parameter is annotation-only.)
 
-- [ ] **Step 1: Write the api-surface test** (compile-level assertions used by `ComposeApiSurfaceTest`): reflection-check the annotation exists on the overload and on the parameter.
-- [ ] **Step 2: Run** → FAIL (annotations missing).
-- [ ] **Step 3: Implement** exactly the two annotations + kdoc paragraphs (also document the `CROSSFADE_ONLY` fallback override in the same kdoc: "Accessibility CROSSFADE_ONLY resolves the effective fallback to CROSSFADE and plans a second cache entry").
-- [ ] **Step 4: Run** → PASS.
-- [ ] **Step 5: Commit** — `git commit -m "compose: deprecate the ignored rememberVectorAnimation(definition) overload and MorphIcon.animation shadowing"`.
+- [x] **Step 1: Write the api-surface test** (compile-level assertions used by `ComposeApiSurfaceTest`): reflection-check the annotation exists on the overload and on the parameter.
+- [x] **Step 2: Run** → FAIL (annotations missing).
+- [x] **Step 3: Implement** exactly the two annotations + kdoc paragraphs (also document the `CROSSFADE_ONLY` fallback override in the same kdoc: "Accessibility CROSSFADE_ONLY resolves the effective fallback to CROSSFADE and plans a second cache entry").
+- [x] **Step 4: Run** → PASS.
+- [x] **Step 5: Commit** — `git commit -m "compose: deprecate the ignored rememberVectorAnimation(definition) overload and MorphIcon.animation shadowing"`.
 
 ### Task 16: Kill the dead wires
 
@@ -553,11 +553,11 @@ fun planCacheIgnoresRenderOnlyFields() {
 - Modify: `vector-morph-compose/.../PlanRemember.kt:46` (delete unreachable `?: configuration.animation`)
 - Test: `vector-morph-core/src/test/kotlin/com/imorpher/vectormorph/core/VectorAnimationCodecTest.kt`, `VectorAnimationBuilderTest.kt:226-244`, `SpringAndCodecTest.kt:135`, `CodecV2Test.kt:68`, `DeprecatedDrawConfigForTest.kt`
 
-- [ ] **Step 1: Update tests first** — delete the `appearanceOnly` assertions (`VectorAnimationBuilderTest.kt:226-244`, `CodecV2Test.kt:68`, `SpringAndCodecTest.kt:135` line); keep a codec round-trip test asserting an old stream (boolean written) decodes fine.
-- [ ] **Step 2: Run** → the simplified suite is the new baseline (plus remaining failures drive implementation).
-- [ ] **Step 3: Implement** — remove the field/var/update logic; codec keeps writing/reading the reserved slot; delete `pairSpace`, `ensureBegun`, dead branch.
-- [ ] **Step 4: Run** both module suites → PASS.
-- [ ] **Step 5: Commit** — `git commit -m "core: remove dead appearanceOnly flag, pairSpace, ensureBegun; reserve codec slot"`.
+- [x] **Step 1: Update tests first** — delete the `appearanceOnly` assertions (`VectorAnimationBuilderTest.kt:226-244`, `CodecV2Test.kt:68`, `SpringAndCodecTest.kt:135` line); keep a codec round-trip test asserting an old stream (boolean written) decodes fine.
+- [x] **Step 2: Run** → the simplified suite is the new baseline (plus remaining failures drive implementation).
+- [x] **Step 3: Implement** — remove the field/var/update logic; codec keeps writing/reading the reserved slot; delete `pairSpace`, `ensureBegun`, dead branch.
+- [x] **Step 4: Run** both module suites → PASS.
+- [x] **Step 5: Commit** — `git commit -m "core: remove dead appearanceOnly flag, pairSpace, ensureBegun; reserve codec slot"`.
 
 ### Task 17: Inline-DSL one-shots stop restarting (stable key)
 
@@ -568,7 +568,7 @@ fun planCacheIgnoresRenderOnlyFields() {
 
 **Interfaces (new public API, core):** `fun VectorAnimation.stableKey(): Int`. Contract: two builds from identical DSL calls return the same key; any track/segment/payload difference changes it. Customizer callbacks and brush *identity* are folded as `system.identityHashCode` (documented: unequal across processes by design).
 
-- [ ] **Step 1: Write failing tests**:
+- [x] **Step 1: Write failing tests**:
 
 ```kotlin
 @Test fun identicalDslBuildsShareAStableKey() {
@@ -582,10 +582,10 @@ fun planCacheIgnoresRenderOnlyFields() {
 
 Plus a compose probe: compose `VectorAnimation(vector, inlineDslBuild())` twice in Robolectric — after pumping, the bitmap at rest equals the settled state (progress reached 1; identity-keyed version restarts forever). Compose probe asserts settled state via `RenderProbeHarness` by pumping the looper far enough.
 
-- [ ] **Step 2: Run** → FAIL.
-- [ ] **Step 3: Implement** — the fold in `AnimationStableKey.kt` (no public mutable state, safe on any thread) + swap effect keys in `VectorAnimationEntry.kt`.
-- [ ] **Step 4: Run** both suites + `RetargetProbeTest` androidTest skipped locally (needs device; note in PR description) → PASS for unit suites.
-- [ ] **Step 5: Commit** — `git commit -m "core+compose: VectorAnimation.stableKey; inline-DSL one-shots survive recomposition"`.
+- [x] **Step 2: Run** → FAIL.
+- [x] **Step 3: Implement** — the fold in `AnimationStableKey.kt` (no public mutable state, safe on any thread) + swap effect keys in `VectorAnimationEntry.kt`.
+- [x] **Step 4: Run** both suites + `RetargetProbeTest` androidTest skipped locally (needs device; note in PR description) → PASS for unit suites.
+- [x] **Step 5: Commit** — `git commit -m "core+compose: VectorAnimation.stableKey; inline-DSL one-shots survive recomposition"`.
 
 ---
 
@@ -612,9 +612,9 @@ Content requirements (each is a promise the code now keeps after Tasks 1–17):
 - `MIGRATION.md`: deprecations (Task 15), `BY_POSITION`, notes for `isPrepared(config)` and `stableKey()`.
 - `CHANGELOG.md`: 0.3.0-Unreleased section, one bullet per behavior change from Tasks 3, 4, 6, 7, 8, 9, 10, 14.
 
-- [ ] **Step 1: Write/update all docs** per the list above (no test steps; keep the enum deprecation annotation in the same commit).
-- [ ] **Step 2: Run the full unit gate** `./gradlew.bat :vector-morph-core:testDebugUnitTest :vector-morph-compose:testDebugUnitTest :app:testDebugUnitTest :benchmark:test` → PASS (app/benchmark compile unchanged).
-- [ ] **Step 3: Commit** — `git commit -m "docs: parameter reference reflects resolved precedence, distinct fill modes, and 0.3 deprecations"`.
+- [x] **Step 1: Write/update all docs** per the list above (no test steps; keep the enum deprecation annotation in the same commit).
+- [x] **Step 2: Run the full unit gate** `./gradlew.bat :vector-morph-core:testDebugUnitTest :vector-morph-compose:testDebugUnitTest :app:testDebugUnitTest :benchmark:test` → PASS (app/benchmark compile unchanged).
+- [x] **Step 3: Commit** — `git commit -m "docs: parameter reference reflects resolved precedence, distinct fill modes, and 0.3 deprecations"`.
 
 ---
 

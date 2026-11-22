@@ -1,4 +1,4 @@
-# Configuration Reference (0.3.0 — unreleased)
+# Configuration Reference (0.3.0)
 
 This document is the authoritative reference for every public parameter of IMorpher
 0.3.0: the fields of `MorphConfiguration` and `MorphDebugOptions`, every enum, and the
@@ -19,7 +19,7 @@ Package: `com.imorpher.vectormorph.core.model`.
 | Field | Type | Default | Semantics |
 | --- | --- | --- | --- |
 | `pathMatching` | `PathMatchingStrategy` | `AUTO` | How source paths pair with target paths before any geometry is touched. |
-| `customMappings` | `List<PathMapping>` | `emptyList()` | Explicit `PathMapping(source, target)` pairs; the exclusive match source for `PathMatchingStrategy.CUSTOM`, and overrides under `AUTO`. |
+| `customMappings` | `List<PathMapping>` | `emptyList()` | Explicit `PathMapping(source, target)` pairs; the exclusive match source for `PathMatchingStrategy.CUSTOM`, and overrides under `AUTO`. Active lists are checked for blank and duplicate names; vector-aware unknown endpoints appear as plan warnings. Duplicate handling remains first-entry/first-target-wins. |
 | `startPoint` | `StartPointStrategy` | `AUTO` | How closed contours align their starting points before morphing. |
 | `pathDirection` | `PathDirectionStrategy` | `AUTO` | How contour winding (cw/ccw) is normalized between the pair. |
 
@@ -27,12 +27,12 @@ Package: `com.imorpher.vectormorph.core.model`.
 
 | Field | Type | Default | Semantics |
 | --- | --- | --- | --- |
-| `drawOrder` | `DrawOrderStrategy` | `BY_INDEX` | Controls **render z-order only when `keepRenderOrder = false`**; stagger timing is always assigned from `staggerOrder`. |
-| `customDrawOrder` | `List<String>` | `emptyList()` | Explicit path-name order used when `drawOrder == CUSTOM`. |
+| `drawOrder` | `DrawOrderStrategy` | `BY_INDEX` | Controls render z-order only when `keepRenderOrder = false`; it does not control stagger timing (`staggerOrder` does). |
+| `customDrawOrder` | `List<String>` | `emptyList()` | Explicit path-name order consumed by render ordering when `drawOrder == CUSTOM` and `keepRenderOrder = false`, or by path-timeline ordering when the resolved `staggerOrder == CUSTOM` and that order is consumed by a delay or `timing = BY_PATH`. Active lists are checked for blank, duplicate, and unknown names. Partial orders are valid; omitted paths retain stable prior order. |
 | `staggerDelay` | `Float` | `0f` | Stagger applied to vector-level draw/reveal intervals, in normalized timeline units. |
-| `staggerOrder` | `DrawOrderStrategy` | `TOP_LEFT_TO_BOTTOM_RIGHT` | Order used to assign stagger offsets. Override rule (compose `PlanRemember`): the config supplies the timeline stagger only when `staggerDelay > 0` **or** `staggerOrder` differs from the default; otherwise the timeline's own stagger stands — a config can override a timeline's stagger but never cancel it. |
-| `keepRenderOrder` | `Boolean` | `true` | Render paths strictly in declaration order even when a draw-order strategy reorders reveals (strategies only affect stagger timing while true). |
-| `timing` | `TimingMode` | `BY_PATH_LENGTH` | How draw/reveal time maps onto geometry. |
+| `staggerOrder` | `DrawOrderStrategy` | `TOP_LEFT_TO_BOTTOM_RIGHT` | Order used for path stagger offsets and `timing = BY_PATH` ranks. The config supplies the timeline order when `staggerDelay > 0` **or** `staggerOrder` differs from the default; otherwise the timeline order stands. The delay resolves independently: a positive config delay overrides the timeline delay, otherwise the timeline delay is inherited. A non-default configured order can therefore be active with a zero config delay. |
+| `keepRenderOrder` | `Boolean` | `true` | Render paths strictly in declaration order; when true, `drawOrder` does not reorder paint and only `staggerOrder` affects timeline path ordering. |
+| `timing` | `TimingMode` | `BY_PATH_LENGTH` | How draw/reveal time maps onto geometry; `BY_PATH` uses `staggerOrder` to assign per-path ranks even when stagger delay is zero. |
 | `directionTraversal` | `DirectionTraversal` | `HONOR_DIRECTION` | How directional (`FORWARD`) stroke reveals travel along open contours. |
 
 ### Paint
@@ -55,18 +55,56 @@ Package: `com.imorpher.vectormorph.core.model`.
 
 | Field | Type | Default | Semantics |
 | --- | --- | --- | --- |
-| `segmentBudget` | `Int?` | `null` | Cap on cubic segments per contour pair; `null` keeps the natural `max(source, target)` count. Reduction merges adjacent curves by least-squares fit and re-equalizes at the largest count that fits the budget when no merge stays within tolerance. |
-| `simplificationTolerance` | `Float` | `0.25f` | Maximum sampled deviation (viewport units) tolerated while `segmentBudget` reduces a contour. |
+| `segmentBudget` | `Int?` | `null` | Target ceiling for cubic segments per contour pair; `null` keeps the natural `max(source, target)` count. Values below 2 are raised to the planner minimum of 2 (`segment-budget-clamped` INFO). Each side's error-driven reduction may stop above the target when the next merge exceeds tolerance; the sides are then re-equalized at the largest surviving count, so silhouette quality can take precedence over the budget. |
+| `simplificationTolerance` | `Float` | `0.25f` | Maximum finite, non-negative sampled deviation (viewport units) tolerated while `segmentBudget` reduces a contour. Invalid negative/non-finite values are treated as zero and reported (`simplification-tolerance-invalid` WARNING); a non-default valid tolerance without a budget has no effect (`simplification-tolerance-unused` INFO). |
 | `viewportNormalization` | `ViewportNormalization` | `STRETCH` | How the target viewport maps into the source viewport during planning. |
 
 ### Draw anchors, timelines, and debug
 
 | Field | Type | Default | Semantics |
 | --- | --- | --- | --- |
-| `customDrawAnchors` | `Map<String, Float>` | `emptyMap()` | Normalized arc fraction (0–1) per path name for `PathStart.CUSTOM` draw anchoring — where the stroke pen begins on that path. Requires a `PathStart.CUSTOM` on the draw track; otherwise silently unused — `MorphValidator.validateConfiguration` warns (`custom-anchors-unused`). |
+| `customDrawAnchors` | `Map<String, Float>` | `emptyMap()` | Normalized arc fraction (0–1) per path name for `PathStart.CUSTOM` draw anchoring — where the stroke pen begins on that path. Requires a `PathStart.CUSTOM` on the draw track; otherwise silently unused — `MorphValidator.validateConfiguration` warns (`custom-anchors-unused`). Active values outside finite 0..1 are warned and clamped. |
 | `animation` | `VectorAnimation?` | `null` | Optional timeline. When null, a plain geometry/color morph drives everything. See the [DSL guide](TIMELINE-DSL.md). |
 | `debug` | `MorphDebugOptions?` | `null` | Debug overlay options; null disables debug rendering. |
-| `customStartOffsets` | `Map<String, Float>` | `emptyMap()` | **Deprecated.** Legacy per-path alignment offsets: under `StartPointStrategy.CUSTOM` today's alignment still reads **only this map** — `customDrawAnchors` never moves geometry (it anchors pens only). Retained as the fallback draw-anchor source for `PathStart.CUSTOM` when `customDrawAnchors` has no entry for that path. Migration checklist: give pen anchors to `customDrawAnchors`, keep alignment offsets here until the 0.3 alignment home lands (see [MIGRATION.md](MIGRATION.md) §8 — interim state). |
+| `customStartOffsets` | `Map<String, Float>` | `emptyMap()` | **Deprecated.** Legacy per-path alignment offsets: under `StartPointStrategy.CUSTOM` alignment reads this map only for paths `customStartAlignments` leaves unmapped (the 0.3 alignment home landed — see `customStartAlignments`). `customDrawAnchors` never moves geometry (it anchors pens only); this map remains the fallback draw-anchor source for `PathStart.CUSTOM` when `customDrawAnchors` has no entry for that path. Warned unused unless either alignment or a custom-start draw reveal is active; active values outside finite 0..1 are warned and clamped. Disagreeing entries for the same path are warned as `custom-start-alignment-conflict`. Migration checklist: give pen anchors to `customDrawAnchors`, then move alignment offsets to `customStartAlignments` (see [MIGRATION.md](MIGRATION.md) §2). |
+| `customStartAlignments` | `Map<String, Float>` | `emptyMap()` | Per-path normalized arc-fraction (0..1) start overrides for `StartPointStrategy.CUSTOM` geometry correspondence — the modern home for `customStartOffsets`. Alignment-only: it never anchors `PathStart.CUSTOM` pens and is not consulted for draw anchoring. Warned unused without `StartPointStrategy.CUSTOM` (`custom-start-alignments-unused`); active values outside finite 0..1 are warned and clamped. Part of the planning key. |
+
+---
+
+## Consumer and interaction matrix
+
+This matrix complements the field semantics above with the consuming layer and the
+important precedence or capability relationships. “Planner” means plan-time geometry;
+“Evaluator” means per-progress timeline values; “Renderer” means paint/layout-time work.
+
+| Parameters | Consumer | Interaction / effectiveness contract |
+| --- | --- | --- |
+| `pathMatching`, `customMappings` | Planner: `PathMatcher` | `customMappings` are exclusive under `CUSTOM`, overrides under `AUTO`, and unused by other matching strategies. Active mappings with blank/duplicate names are diagnosed; missing vector endpoints appear in plan issues without changing fallback behavior. |
+| `startPoint`, `customStartAlignments`, `customStartOffsets` | Planner: `ContourAligner` | `customStartAlignments`/`customStartOffsets` affect geometry alignment only for `StartPointStrategy.CUSTOM` (the new map wins per path); `customDrawAnchors` do not move geometry. |
+| `pathDirection` | Planner: `ContourAligner` | Controls contour winding normalization; fill-rule-hole parity can force preservation under `AUTO`. |
+| `missingPath`, `fallback` | Planner and renderer | Whole-vector crossfade fallbacks ignore non-`FADE` missing-path behavior and report it; `DRAW_REVEAL` uses the stroke reveal path. |
+| `strokeFill` | Planner and renderer | Selects stroke↔fill choreography per pair; `AUTO` resolves from pair paint/geometry. |
+| `segmentBudget`, `simplificationTolerance` | Planner: contour reduction | Budget is a target ceiling (minimum 2), not a hard guarantee: reduction stops before an over-tolerance merge and re-equalizes at the surviving count. Tolerance matters only with a budget; invalid values are treated as zero and diagnosed. |
+| `viewportNormalization` | Planner: target normalization | `FIT` vs `STRETCH` changes normalized geometry before path matching and planning. |
+| `animation` | Evaluator: `TimelineEvaluator`; renderer fallback | With a Compose animation entry, that entry's timeline drives values; renderer uses it for reveal payloads. Configuration may carry a default timeline when no explicit entry supersedes it. |
+| `staggerDelay`, `staggerOrder`, `customDrawOrder` | Evaluator: `TimelineEvaluator` | Positive config delay overrides timeline delay; otherwise timeline delay is inherited. Config order overrides timeline order when config delay is positive or config order is non-default. Negative/non-finite config or animation delays are ignored and reported as `stagger-delay-invalid`. `customDrawOrder` is consumed for `CUSTOM` render order or active `CUSTOM` path-timeline ordering. |
+| `timing`, `staggerOrder` | Evaluator and renderer | `BY_PATH` uses path ranks even without delay; delay staggering also uses path ranks. Vector/group tracks share their own clocks and do not consume path-order ranks. |
+| `drawOrder`, `keepRenderOrder`, `customDrawOrder` | Renderer: pair ordering | With `keepRenderOrder = true`, declaration paint order wins. Otherwise `drawOrder` selects z-order; it does not define stagger timing. Duplicate order names retain their last rank; unknown names are ignored after a plan warning, and omitted names in partial orders remain stable. |
+| `colorSpace` | Evaluator and renderer | Applies to animated solid/gradient interpolation and tint interpolation; does not change geometry plans. |
+| `customDrawAnchors`, `customStartOffsets` | Renderer: stroke reveal resolution | `PathStart.CUSTOM` consumes the new anchor map first, then the deprecated map as per-path fallback; without a custom-start reveal both are idle. |
+| `defaultFillMode`, `defaultFillDirection` | Renderer: fill reveal sites | Used only when the resolved fill reveal payload omits its mode/direction; explicit timeline values take precedence. Modes may ignore direction (e.g. `FADE`/`RADIAL`). |
+| `directionTraversal` | Renderer: open-contour `FORWARD` reveal | Governs directional traversal; explicit reveal modes and closed-contour winding behavior take precedence. |
+| `debug` | Renderer: overlay | `null` disables the overlay. With any non-null options object, resolution warnings can still draw; anchor collection is enabled only for `showStartPoints` or `showDirection`. |
+
+Custom stroke/fill reveal modes (`DrawMode.CUSTOM`, `DrawDirection.CUSTOM`) and `missingPath = CUSTOM` require a configured `CustomVectorAnimation`; `validateConfiguration` warns when it is absent (`custom-callback-missing`). The callback must still return the relevant geometry at runtime.
+
+The fields of `MorphDebugOptions` are all renderer-owned: `showPathPoints`,
+`showPathNumbers`, `showBoundingBoxes`, `showCentroids`, and `showPathMatching` toggle
+geometry annotations; `showStartPoints` and `showDirection` additionally request resolved
+anchor collection; `markerArcFraction` places the current-point ring only for fractions
+strictly between 0 and 1. None participates in the plan cache key. Note that a debug
+options object can still display recorded resolution warnings even when every geometry
+toggle is false.
 
 ---
 
@@ -112,7 +150,7 @@ any toggle enabled, not only the ones below.
 | `MATCH_SOURCE` | Target aligns to the source's start point. |
 | `MATCH_TARGET` | Source aligns to the target's start point. |
 | `BEST_GEOMETRIC_MATCH` | Both align to the same geometric feature (e.g. dominant extreme point). |
-| `CUSTOM` | Uses the deprecated `customStartOffsets` map (normalized arc fraction per path). |
+| `CUSTOM` | Uses `customStartAlignments` (normalized arc fraction per path), falling back to the deprecated `customStartOffsets` map for paths the new map leaves unmapped. |
 
 ### `PathDirectionStrategy` (default `AUTO`)
 
@@ -125,7 +163,7 @@ any toggle enabled, not only the ones below.
 
 ### `DrawOrderStrategy` (default `BY_INDEX`)
 
-Stagger timing always uses it; render z-order only with `keepRenderOrder = false`.
+Timeline staggering and `BY_PATH` rank timing use `staggerOrder`; render z-order uses `drawOrder` only with `keepRenderOrder = false`.
 
 | Entry | Behavior |
 | --- | --- |
@@ -340,9 +378,10 @@ Still excluded, by design: **closed contours** — their traversal control remai
 
 Different target viewport dimensions are scaled into source-viewport space during
 planning (`ViewportNormalization`). Intrinsic layout dimensions remain caller
-controlled (`width`/`height` default to the target vector's). Layout is always
-aspect-fit; `alignment` placement only. Crop/fill `ContentScale` and multiplatform
-(KMP) rendering are out of scope of this release.
+controlled (`width`/`height` default to the target vector's). Layout resolves the plan's
+viewport into the layout box through Compose's `ContentScale` — `Fit` (the default) keeps the
+historical aspect-fit letterbox; crop/fill/custom values follow Compose's own contract with
+`alignment` placement. Multiplatform (KMP) rendering is out of scope of this release.
 
 ## Limits
 

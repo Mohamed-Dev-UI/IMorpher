@@ -2,6 +2,7 @@ package com.imorpher.vectormorph.compose.renderer
 
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Color
@@ -12,6 +13,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import com.imorpher.vectormorph.core.animation.EvaluatedFrame
@@ -38,6 +40,7 @@ import com.imorpher.vectormorph.core.reveal.DirectionMath
 import com.imorpher.vectormorph.core.reveal.DrawOrder
 import com.imorpher.vectormorph.core.reveal.DrawResolutionWarning
 import kotlin.math.cos
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -175,6 +178,7 @@ class MorphRenderer {
         tintFrom: Any? = null,
         tintTo: Any? = null,
         alignment: Alignment = Alignment.Center,
+        contentScale: ContentScale = ContentScale.Fit,
     ) {
         drawWarnings.clear()
         drawAnchors.clear()
@@ -189,11 +193,20 @@ class MorphRenderer {
 
         val scaleX = drawScope.size.width / vw
         val scaleY = drawScope.size.height / vh
-        val uniform = min(scaleX, scaleY)
-        val contentWidth = vw * uniform
-        val contentHeight = vh * uniform
+        // How the plan's viewport maps into the canvas. `Fit` is the historical behavior
+        // (uniform letterbox); every other value follows Compose's own ContentScale contract.
+        val (scaleXAxis, scaleYAxis) = contentScaleFactors(
+            contentScale = contentScale,
+            viewportWidth = vw,
+            viewportHeight = vh,
+            scaleX = scaleX,
+            scaleY = scaleY,
+        )
+        val contentWidth = vw * scaleXAxis
+        val contentHeight = vh * scaleYAxis
         // Alignment.Center keeps the exact historical float centering; other alignments resolve
-        // through Compose's Alignment contract (integer layout offsets, LTR).
+        // through Compose's Alignment contract (integer layout offsets, LTR). Overflowing
+        // content (Crop, FillWidth) produces negative offsets, cropping symmetrically.
         val dx: Float
         val dy: Float
         if (alignment === Alignment.Center) {
@@ -216,7 +229,7 @@ class MorphRenderer {
         fun drawIconContents() {
             drawScope.withTransform({
                 translate(dx, dy)
-                scale(uniform, uniform, pivot = Offset.Zero)
+                scale(scaleXAxis, scaleYAxis, pivot = Offset.Zero)
             }) {
                 applyVectorTransform(frame, vw, vh) {
                     for (pairIndex in order) {
@@ -230,7 +243,7 @@ class MorphRenderer {
             val debug = config.debug ?: return
             drawScope.withTransform({
                 translate(dx, dy)
-                scale(uniform, uniform, pivot = Offset.Zero)
+                scale(scaleXAxis, scaleYAxis, pivot = Offset.Zero)
             }) {
                 applyVectorTransform(frame, vw, vh) { drawDebugOverlay(plan, debug) }
             }
@@ -248,12 +261,52 @@ class MorphRenderer {
             plan = plan,
             contentWidth = contentWidth,
             contentHeight = contentHeight,
-            uniformScale = uniform,
+            // Stroke padding follows the larger axis so a non-uniform scale never clips a stroke.
+            uniformScale = max(scaleXAxis, scaleYAxis),
             dx = dx,
             dy = dy,
             drawContents = { drawIconContents() },
         )
         drawDebug()
+    }
+
+    /**
+     * Viewport-to-canvas scale for one [contentScale].
+     *
+     * The six built-in values are computed from the exact (float) axis ratios, so `Fit`
+     * reproduces the renderer's historical letterbox byte-for-byte. `ContentScale.Inside` and
+     * any custom implementation delegate to Compose's own [ContentScale.computeScaleFactor]
+     * with quantized viewport sizes, so the platform's semantics stay authoritative.
+     */
+    private fun contentScaleFactors(
+        contentScale: ContentScale,
+        viewportWidth: Float,
+        viewportHeight: Float,
+        scaleX: Float,
+        scaleY: Float,
+    ): Pair<Float, Float> {
+        val fit = min(scaleX, scaleY)
+        return when (contentScale) {
+            ContentScale.Fit -> fit to fit
+            ContentScale.Crop -> max(scaleX, scaleY) to max(scaleX, scaleY)
+            ContentScale.FillBounds -> scaleX to scaleY
+            ContentScale.FillWidth -> scaleX to scaleX
+            ContentScale.FillHeight -> scaleY to scaleY
+            ContentScale.None -> 1f to 1f
+            else -> {
+                val factor = contentScale.computeScaleFactor(
+                    srcSize = Size(
+                        viewportWidth.roundToInt().coerceAtLeast(1).toFloat(),
+                        viewportHeight.roundToInt().coerceAtLeast(1).toFloat(),
+                    ),
+                    dstSize = Size(
+                        (viewportWidth * scaleX).roundToInt().coerceAtLeast(1).toFloat(),
+                        (viewportHeight * scaleY).roundToInt().coerceAtLeast(1).toFloat(),
+                    ),
+                )
+                factor.scaleX to factor.scaleY
+            }
+        }
     }
 
     /**

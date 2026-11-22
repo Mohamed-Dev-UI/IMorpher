@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import com.imorpher.vectormorph.core.animation.VectorAnimation as VectorAnimationSpec
 import com.imorpher.vectormorph.core.model.FallbackStrategy
@@ -54,6 +55,7 @@ fun MorphIcon(
     width: Dp = to.defaultWidth,
     height: Dp = to.defaultHeight,
     alignment: Alignment = Alignment.Center,
+    contentScale: ContentScale = ContentScale.Fit,
 ) {
     val effectiveConfiguration = configuration.copy(animation = animation)
     val resolvedMotion = motionPreference ?: rememberMotionPreference()
@@ -80,6 +82,7 @@ fun MorphIcon(
         tintFrom = null,
         tintTo = null,
         alignment = alignment,
+        contentScale = contentScale,
     )
 }
 
@@ -122,6 +125,7 @@ fun MorphIcon(
     width: Dp = to.defaultWidth,
     height: Dp = to.defaultHeight,
     alignment: Alignment = Alignment.Center,
+    contentScale: ContentScale = ContentScale.Fit,
 ) {
     val effectiveConfiguration = configuration.copy(animation = animation)
     val resolvedMotion = motionPreference ?: rememberMotionPreference()
@@ -148,6 +152,7 @@ fun MorphIcon(
         tintFrom = tintFrom,
         tintTo = tintTo,
         alignment = alignment,
+        contentScale = contentScale,
     )
 }
 
@@ -191,6 +196,7 @@ fun MorphIcon(
     width: Dp = to.defaultWidth,
     height: Dp = to.defaultHeight,
     alignment: Alignment = Alignment.Center,
+    contentScale: ContentScale = ContentScale.Fit,
 ) {
     val effectiveConfiguration = configuration.copy(animation = animation)
     val resolvedMotion = motionPreference ?: rememberMotionPreference()
@@ -217,6 +223,7 @@ fun MorphIcon(
         tintFrom = tintFrom,
         tintTo = tintTo,
         alignment = alignment,
+        contentScale = contentScale,
     )
 }
 

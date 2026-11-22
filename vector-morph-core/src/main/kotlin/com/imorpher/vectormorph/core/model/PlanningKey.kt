@@ -21,6 +21,7 @@ data class PlanningKey(
     val simplificationTolerance: Float,
     val viewportNormalization: ViewportNormalization,
     @Suppress("DEPRECATION") val customStartOffsets: Map<String, Float>,
+    @Suppress("DEPRECATION") val customStartAlignments: Map<String, Float>,
 )
 
 /**
@@ -41,4 +42,5 @@ fun MorphConfiguration.planningKey(): PlanningKey = PlanningKey(
     simplificationTolerance = simplificationTolerance,
     viewportNormalization = viewportNormalization,
     customStartOffsets = customStartOffsets,
+    customStartAlignments = customStartAlignments,
 )

@@ -1,6 +1,6 @@
 # Production Docs + Full-Coverage Showcase Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Ship-ready 0.2.0: consumer docs (`README.md` + `docs/` guides, no maintainer
 setup guides), a showcase app that exposes every library parameter, and a tagged
@@ -65,7 +65,7 @@ codec, custom geometry); release chores land last so CI publishes the final tree
 `docs/CUSTOM-GEOMETRY.md`, `docs/MIGRATION.md`, `docs/SHOWCASE-APP.md` (created in
 D2–D5; links present from day one).
 
-- [ ] **Step 1:** Write the README per spec §Part 1 (badges: Maven Central, CI
+- [x] **Step 1:** Write the README per spec §Part 1 (badges: Maven Central, CI
       `actions/workflows/ci.yml/badge.svg`, License Apache-2.0; quickstart with
       `MorphIcon`/`MorphVector`/`MorphingIcon` code; feature matrix; 0.2.0 highlights
       list; 24-param overview table; debugging/performance snapshots; troubleshooting
@@ -73,41 +73,41 @@ D2–D5; links present from day one).
       delete the entire "Publishing to Maven Central" section and any setup steps)
       and `CHANGELOG.md` (Keep-a-Changelog; entries for `0.2.0` and `0.1.0`
       reconstructed from the two plan docs + README history).
-- [ ] **Step 2:** Verify: `grep -c "Publishing to Maven Central\|generate a user token\|GPG\|signing"` in README/CHANGELOG = 0; all `docs/...md` hrefs exist on disk.
-- [ ] **Step 3:** Commit `docs: consumer-facing README, changelog for 0.2.0`.
+- [x] **Step 2:** Verify: `grep -c "Publishing to Maven Central\|generate a user token\|GPG\|signing"` in README/CHANGELOG = 0; all `docs/...md` hrefs exist on disk.
+- [x] **Step 3:** Commit `docs: consumer-facing README, changelog for 0.2.0`.
 
 ### Task D2: `docs/CONFIGURATION.md` + `docs/MIGRATION.md`
 
 **Files:** Create `docs/CONFIGURATION.md`, `docs/MIGRATION.md`.
 
-- [ ] **Step 1:** CONFIGURATION.md: param-by-param reference of all 24 fields +
+- [x] **Step 1:** CONFIGURATION.md: param-by-param reference of all 24 fields +
       `MorphDebugOptions` (type/default/semantics from the exploration), every enum
       table, precedence contract ported from current README "start and direction"
       bullets, fill-direction inheritance, viewport rules.
-- [ ] **Step 2:** MIGRATION.md: `HONOR_DIRECTION` default flip + `LEGACY` recipe;
+- [x] **Step 2:** MIGRATION.md: `HONOR_DIRECTION` default flip + `LEGACY` recipe;
       `customStartOffsets` → `customDrawAnchors`/CUSTOM correspondences; `START` vs
       `AUTO` anchor change; `AUTO`+`CUSTOM` `MISSING_CONCRETE_ANCHOR` note; codec v1
       read / v2 write.
-- [ ] **Step 3:** Verify links from README resolve; commit `docs: configuration and migration guides`.
+- [x] **Step 3:** Verify links from README resolve; commit `docs: configuration and migration guides`.
 
 ### Task D3: `docs/TIMELINE-DSL.md` + `docs/DIAGNOSTICS.md` + `docs/CUSTOM-GEOMETRY.md` + `docs/README.md` index
 
 **Files:** Create the four files (index includes the disclaimer that
 `docs/superpowers/` holds internal working docs).
 
-- [ ] **Step 1:** Write all four; every documented symbol must exist in source
+- [x] **Step 1:** Write all four; every documented symbol must exist in source
       (verify by grep before commit).
-- [ ] **Step 2:** Commit `docs: DSL cookbook, diagnostics, custom geometry, docs index`.
+- [x] **Step 2:** Commit `docs: DSL cookbook, diagnostics, custom geometry, docs index`.
 
 ### Task D4: `docs/SHOWCASE-APP.md`
 
 **Files:** Create `docs/SHOWCASE-APP.md`.
 
-- [ ] **Step 1:** Write the app tour AFTER Task A4 lands (section: what each topic /
+- [x] **Step 1:** Write the app tour AFTER Task A4 lands (section: what each topic /
       panel section demonstrates + full param table → control map). Draft only the
       final file content in this task, but execute after A4; keep task order D-first
       only for README-adjacent files.
-- [ ] **Step 2:** Commit `docs: showcase app tour`.
+- [x] **Step 2:** Commit `docs: showcase app tour`.
 
 ### Task A1: `ShowcaseState` full-coverage expansion
 
@@ -153,18 +153,18 @@ fun ShowcaseState.toAlignment(): Alignment                // per TextAlignmentKi
 `toConfiguration()` extended to map all of the above verbatim (full mapping; the
 deprecated `customStartOffsets` stays unmapped).
 
-- [ ] **Step 1 (failing tests):** extend `ShowcaseStateTest`: (a) every new field
+- [x] **Step 1 (failing tests):** extend `ShowcaseStateTest`: (a) every new field
       round-trips through save/load JSON; (b) malformed blob per new field falls back
       to the validated default without throwing; (c) `toConfiguration()` full-mapping
       assertion — set every field to a non-default sentinel, assert the produced
       `MorphConfiguration` equals an expected literal; (d) `toDebugOptions()` null vs
       populated mapping; (e) `toAnimationSpec()`/`toAlignment()` kind mapping.
-- [ ] **Step 2:** run `./gradlew :app:testDebugUnitTest --tests "*ShowcaseState*"`
+- [x] **Step 2:** run `./gradlew :app:testDebugUnitTest --tests "*ShowcaseState*"`
       → FAIL (fields missing).
-- [ ] **Step 3:** implement fields, persistence keys + validation fallbacks, helpers,
+- [x] **Step 3:** implement fields, persistence keys + validation fallbacks, helpers,
       `toConfiguration()` mapping.
-- [ ] **Step 4:** same command → PASS.
-- [ ] **Step 5:** commit `feat(app): full-coverage showcase state with persistence`.
+- [x] **Step 4:** same command → PASS.
+- [x] **Step 5:** commit `feat(app): full-coverage showcase state with persistence`.
 
 ### Task A2: Shared `ConfigurationPanel` + playground rewiring
 
@@ -199,16 +199,16 @@ keep it compiling here.
 `suspend fun pathNamesFor(from: ImageVector, to: ImageVector): List<String>` (cache,
 fallback names when planning fails).
 
-- [ ] **Step 1 (failing test):** `ConfigurationPanelCoverageTest` (Robolectric):
+- [x] **Step 1 (failing test):** `ConfigurationPanelCoverageTest` (Robolectric):
       build the state with sentinels (A1 style), assert `toConfiguration()` inherits
       everything and list contents of every enum const shuffled vs the dropdown list
       constants — pin each of the control lists to `EnumClass.entries`.
-- [ ] **Step 2:** run → FAIL.
-- [ ] **Step 3:** implement panel + rewiring + helper widgets; delete duplicated
+- [x] **Step 2:** run → FAIL.
+- [x] **Step 3:** implement panel + rewiring + helper widgets; delete duplicated
       playground dropdowns; wire `onSettled` event log into the MorphIcon playground
       (`lastSettleEvents: List<String>` local, not persisted).
-- [ ] **Step 4:** `./gradlew :app:testDebugUnitTest` → PASS (existing nav/render tests too).
-- [ ] **Step 5:** commit `feat(app): shared full-coverage ConfigurationPanel`.
+- [x] **Step 4:** `./gradlew :app:testDebugUnitTest` → PASS (existing nav/render tests too).
+- [x] **Step 5:** commit `feat(app): shared full-coverage ConfigurationPanel`.
 
 ### Task A3: Demo vectors + catalog
 
@@ -224,10 +224,10 @@ fallback names when planning fails).
   automatically); add degradation assertion `BannerWidePaintsTest.kt`: FIT letterboxes
   (paint bounds narrower than layout) while STRETCH fills the layout width.
 
-- [ ] **Step 1:** implement icons + catalog + keep rules.
-- [ ] **Step 2:** `./gradlew :app:testDebugUnitTest` (adds new icons to all scans)
+- [x] **Step 1:** implement icons + catalog + keep rules.
+- [x] **Step 2:** `./gradlew :app:testDebugUnitTest` (adds new icons to all scans)
       → PASS.
-- [ ] **Step 3:** commit `feat(app): named/clip/wide demo vectors for new showcases`.
+- [x] **Step 3:** commit `feat(app): named/clip/wide demo vectors for new showcases`.
 
 ### Task A4: New curated showcases + Diagnostics topic
 
@@ -249,19 +249,19 @@ fun codecRoundTrip(animation: VectorAnimation): DecodeStatus // encode+bytes→d
 ```
 in `PairSuggestions.kt`-style engine file `DiagnosticsEngine.kt`.
 
-- [ ] **Step 1 (failing tests):** `AllCombinationsScanTest` extension: every catalog
+- [x] **Step 1 (failing tests):** `AllCombinationsScanTest` extension: every catalog
       pair plans+renders with `segmentBudget = 4` config and the debug overlay
       enabled (all flags on) without throwing; `ShowcaseNavigationTest`: new topic +
       11 item ids navigate; `DiagnosticsScreenTest` (Robolectric): report card text
       contains counts for a known pair and codec round-trip plays a restored
       animation.
-- [ ] **Step 2:** run → FAIL.
-- [ ] **Step 3:** implement registry entries, screens (vote for named paths on
+- [x] **Step 2:** run → FAIL.
+- [x] **Step 3:** implement registry entries, screens (vote for named paths on
       Seal icons: anchors/order/mappings editors show real names), viewport/fill/
       gradient/clip/follow-fill/state-fill/chain showcases, Diagnostics engine +
       screens.
-- [ ] **Step 4:** `./gradlew :app:testDebugUnitTest` → PASS.
-- [ ] **Step 5:** commit `feat(app): new showcases and Diagnostics topic`.
+- [x] **Step 4:** `./gradlew :app:testDebugUnitTest` → PASS.
+- [x] **Step 5:** commit `feat(app): new showcases and Diagnostics topic`.
 
 ### Task A5: Snippet + suggestions parity
 
@@ -272,17 +272,17 @@ in `PairSuggestions.kt`-style engine file `DiagnosticsEngine.kt`.
 - Test: extend existing state tests with snippet assertions (a sentinel state
       produces text containing each non-default param).
 
-- [ ] **Step 1 (failing test):** sentinel-state snippet text contains
+- [x] **Step 1 (failing test):** sentinel-state snippet text contains
       `pathMatching = PathMatchingStrategy.BY_NAME`, `debug = MorphDebugOptions(...)`,
       `segmentBudget = 12`, `viewportNormalization = ...`, etc., and omits defaults.
-- [ ] **Step 2:** run → FAIL; **Step 3:** implement; **Step 4:** run → PASS;
-- [ ] **Step 5:** commit `feat(app): snippets and pair cards reflect full configuration`.
+- [x] **Step 2:** run → FAIL; **Step 3:** implement; **Step 4:** run → PASS;
+- [x] **Step 5:** commit `feat(app): snippets and pair cards reflect full configuration`.
 
 ### Task R1: Release
 
 **Files:** none new; uses accumulated tree.
 
-- [ ] **Step 1:** `./gradlew :vector-morph-core:testDebugUnitTest :vector-morph-compose:testDebugUnitTest :app:testDebugUnitTest` → PASS.
-- [ ] **Step 2:** `git add -A && git commit` (`release: 0.2.0 production docs + full-coverage showcase`), `git push origin master`.
-- [ ] **Step 3:** `git tag v0.2.0 && git push origin v0.2.0` (publish.yml trigger).
-- [ ] **Step 4:** no cleanup guides to delete (done at D1) — final grep check passes.
+- [x] **Step 1:** `./gradlew :vector-morph-core:testDebugUnitTest :vector-morph-compose:testDebugUnitTest :app:testDebugUnitTest` → PASS.
+- [x] **Step 2:** `git add -A && git commit` (`release: 0.2.0 production docs + full-coverage showcase`), `git push origin master`.
+- [x] **Step 3:** `git tag v0.2.0 && git push origin v0.2.0` (publish.yml trigger).
+- [x] **Step 4:** no cleanup guides to delete (done at D1) — final grep check passes.

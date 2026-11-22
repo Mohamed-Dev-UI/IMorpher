@@ -6,6 +6,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import com.imorpher.vectormorph.core.model.MorphConfiguration
 
@@ -26,6 +27,7 @@ fun MorphVector(
     width: Dp = to.defaultWidth,
     height: Dp = to.defaultHeight,
     alignment: Alignment = Alignment.Center,
+    contentScale: ContentScale = ContentScale.Fit,
 ) {
     val plan = rememberPlan(from, to, configuration)
     VectorPlanCanvas(
@@ -40,6 +42,7 @@ fun MorphVector(
         tintFrom = null,
         tintTo = null,
         alignment = alignment,
+        contentScale = contentScale,
     )
 }
 
@@ -67,6 +70,7 @@ fun MorphVector(
     width: Dp = to.defaultWidth,
     height: Dp = to.defaultHeight,
     alignment: Alignment = Alignment.Center,
+    contentScale: ContentScale = ContentScale.Fit,
 ) {
     val plan = rememberPlan(from, to, configuration)
     VectorPlanCanvas(
@@ -81,6 +85,7 @@ fun MorphVector(
         tintFrom = tintFrom,
         tintTo = tintTo,
         alignment = alignment,
+        contentScale = contentScale,
     )
 }
 
@@ -110,6 +115,7 @@ fun MorphVector(
     width: Dp = to.defaultWidth,
     height: Dp = to.defaultHeight,
     alignment: Alignment = Alignment.Center,
+    contentScale: ContentScale = ContentScale.Fit,
 ) {
     val plan = rememberPlan(from, to, configuration)
     VectorPlanCanvas(
@@ -124,5 +130,6 @@ fun MorphVector(
         tintFrom = tintFrom,
         tintTo = tintTo,
         alignment = alignment,
+        contentScale = contentScale,
     )
 }

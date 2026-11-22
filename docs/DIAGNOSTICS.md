@@ -26,20 +26,58 @@ throws). Categories:
 
 | Category | Severity | When |
 | --- | --- | --- |
-| `custom-anchors-unused` | WARNING | `customDrawAnchors` non-empty but no draw track requests `PathStart.CUSTOM` (the `customStartOffsets` fallback is equally idle without one). |
-| `custom-order-unused` | WARNING | `customDrawOrder` non-empty while `drawOrder != CUSTOM` (only `CUSTOM` consults the list). |
+| `custom-anchors-unused` | WARNING | `customDrawAnchors` non-empty but no draw track requests `PathStart.CUSTOM`. |
+| `custom-start-offsets-unused` | WARNING | Deprecated `customStartOffsets` has no consumer: neither `StartPointStrategy.CUSTOM` alignment nor a `PathStart.CUSTOM` draw reveal is active. |
+| `custom-start-alignments-unused` | WARNING | `customStartAlignments` has no consumer: it only moves geometry under `StartPointStrategy.CUSTOM` (it is not a draw-anchor fallback). |
+| `custom-start-alignment-invalid` | WARNING | An active `customStartAlignments` entry is not a finite value in 0..1; finite out-of-range values are clamped, NaN is not a valid offset. |
+| `custom-start-alignment-conflict` | WARNING | `customStartAlignments` and the deprecated `customStartOffsets` carry different values for the same path; alignment reads `customStartAlignments` first and the deprecated map keeps its legacy fallback. |
+| `custom-draw-anchor-invalid` | WARNING | An active custom draw anchor is non-finite or outside 0..1; the renderer clamps it. |
+| `custom-start-offset-invalid` | WARNING | An active legacy custom start offset is non-finite or outside 0..1; alignment and draw anchoring clamp it. |
+| `stagger-delay-invalid` | WARNING | Configuration or animation stagger delay is negative or non-finite and is ignored. |
+| `custom-callback-missing` | WARNING | A custom stroke/fill reveal mode or `missingPath = CUSTOM` requires an animation callback; callback output remains runtime-dependent. |
+| `custom-order-unused` | WARNING | `customDrawOrder` non-empty with no active consumer: render ordering requires `drawOrder = CUSTOM` and `keepRenderOrder = false`, or a path-scoped timeline whose resolved `staggerOrder = CUSTOM` is consumed by a positive delay or `timing = BY_PATH`. |
 | `missing-path-under-crossfade` | WARNING | `missingPath != FADE` under `fallback = CROSSFADE`/`SCALE_CROSSFADE` — crossfades discard the behavior. |
 | `fill-direction-ignored` | WARNING | A `FADE`/`RADIAL` fill reveal declares a travel direction its mode ignores. |
 | `fallback-throw-scope` | INFO | `fallback = THROW` throws only when one side has no paths at all; other artifacts degrade silently — check the plan report. |
-| `draw-order-not-rendered` | INFO | A non-default `drawOrder` shapes reveal timing while `keepRenderOrder = true` keeps declaration paint (z-)order. |
-| `stagger-order-without-delay` | INFO | `staggerOrder` set while `staggerDelay == 0f` — the order needs a delay to do anything. |
+| `draw-order-not-rendered` | INFO | A non-default `drawOrder` does not change z-order while `keepRenderOrder = true`; it also does not control stagger timing (`staggerOrder` does). |
+| `stagger-order-without-delay` | INFO | A non-default configured `staggerOrder` has no resolved path-scoped consumer: it needs a positive resolved stagger delay or `timing = BY_PATH`. A timeline delay can activate a configured order that overrides the timeline order. |
 | `sweep-direction-on-stroke` | INFO | `CENTER_OUT`/`OUTSIDE_IN` on a stroke reveal (fill-sweep start-angle selectors only). |
 | `custom-mappings-unused` | INFO | `customMappings` under a matching strategy other than `AUTO`/`CUSTOM`. |
+| `custom-mapping-name-empty` | WARNING | An active `AUTO`/`CUSTOM` mapping has a blank source or target selector. |
+| `custom-mapping-source-duplicate` | WARNING | An active mapping source occurs more than once; the first mapping wins and shadows later entries. |
+| `custom-mapping-target-duplicate` | WARNING | Multiple active mappings claim one target; the first source to claim it wins. |
+| `custom-order-name-empty` | WARNING | An active custom draw-order entry is blank. |
+| `custom-order-name-duplicate` | WARNING | An active custom draw-order name repeats; the last occurrence supplies its rank. |
+| `segment-budget-clamped` | INFO | `segmentBudget` is below the planner minimum of 2 and is raised to 2. |
+| `simplification-tolerance-invalid` | WARNING | `simplificationTolerance` is negative or non-finite; planning treats it as zero to prevent an accidental unrestricted merge. |
+| `simplification-tolerance-unused` | INFO | A non-default `simplificationTolerance` has no effect while `segmentBudget = null`. |
 
-Plan-level warnings escape through `MorphPlan.report.issues` instead — e.g. a crossfade
-fallback that discards `missingPath` surfaces on the affected FADE pairs as a WARNING in
-the `missing` category, message `"FallbackStrategy <strategy> crossfades every pair;
-missingPath <behavior> is ignored"`.
+Active custom offset values are checked only when their consumer exists; inactive maps report the unused-map finding instead. Custom callback presence is checked statically, but callback results cannot be validated without rendering.
+
+The five custom selector integrity categories above are configuration-only and are emitted
+only when their custom mapping/order list has a consumer. Inactive lists retain their
+existing `custom-mappings-unused` / `custom-order-unused` finding without additional content
+warnings. Duplicate selectors are diagnosed but never rejected or rewritten.
+
+Vector-aware custom selector references are checked during planning and appear as WARNING
+issues in `MorphPlan.report.issues` (and therefore in `MorphValidator.validate(from, to,
+config)`):
+
+| Category | Severity | When |
+| --- | --- | --- |
+| `custom-mapping-source-not-found` | WARNING | An active mapping source is not in the source vector. |
+| `custom-mapping-target-not-found` | WARNING | An active mapping target is not in the target vector. |
+| `custom-order-name-not-found` | WARNING | An active custom-order name matches no resolved pair representative (`toPath ?: fromPath`). |
+
+Unknown mapping endpoints and unknown order names are reported without rejecting the plan;
+existing matching/fallback behavior remains in effect, and unknown order names remain ignored
+by rank resolution. A partial custom order is valid: omitted path names are not warned about,
+and their pairs retain stable prior order.
+
+Other plan-level warnings appear through `MorphPlan.report.issues` as well — e.g. a
+crossfade fallback that discards `missingPath` surfaces on the affected FADE pairs as a
+WARNING in the `missing` category, message `"FallbackStrategy <strategy> crossfades every
+pair; missingPath <behavior> is ignored"`.
 
 The showcase app surfaces both lists in the plan-report card.
 

@@ -166,6 +166,40 @@ class PathMatcherTest {
     }
 
     @Test
+    fun duplicateSourceMappingKeepsTheFirstEntryWinner() {
+        val from = vector("from", "source" to triangle())
+        val to = vector("to", "first-target" to triangle(1f), "second-target" to bigSquare())
+
+        val (matches, _) = match(
+            PathMatchingStrategy.CUSTOM, from, to,
+            mappings = listOf(
+                PathMapping("source", "first-target"),
+                PathMapping("source", "second-target"),
+            ),
+        )
+
+        assertEquals("first-target", matches.single { it.from?.name == "source" }.to?.name)
+        assertNotNull(matches.singleOrNull { it.to?.name == "second-target" && it.from == null })
+    }
+
+    @Test
+    fun duplicateTargetMappingLeavesTheLaterSourceUnmatched() {
+        val from = vector("from", "first-source" to triangle(), "second-source" to bigSquare())
+        val to = vector("to", "shared-target" to triangle(1f))
+
+        val (matches, _) = match(
+            PathMatchingStrategy.CUSTOM, from, to,
+            mappings = listOf(
+                PathMapping("first-source", "shared-target"),
+                PathMapping("second-source", "shared-target"),
+            ),
+        )
+
+        assertEquals("shared-target", matches.single { it.from?.name == "first-source" }.to?.name)
+        assertNotNull(matches.singleOrNull { it.from?.name == "second-source" && it.to == null })
+    }
+
+    @Test
     fun customMappingsPairExplicitlyAndLeaveUnmappedSidesToFades() {
         val from = vector("from", "outline" to triangle(), "detail" to line())
         val to = vector("to", "body" to bigSquare())

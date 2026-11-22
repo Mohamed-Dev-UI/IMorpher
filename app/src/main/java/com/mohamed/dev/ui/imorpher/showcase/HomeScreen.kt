@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -29,11 +31,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.mohamed.dev.ui.imorpher.showcase.topics.ContentTransitionHomePreview
 import com.imorpher.vectormorph.compose.DrawIcon
 import com.imorpher.vectormorph.compose.MorphIcon
+import com.imorpher.vectormorph.compose.MorphPaint
+import com.imorpher.vectormorph.compose.MorphShape
 import com.imorpher.vectormorph.compose.MorphVector
 import com.imorpher.vectormorph.compose.VectorAnimationDefinition
 import com.imorpher.vectormorph.compose.VectorAnimator
@@ -106,6 +115,8 @@ private fun TopicCard(topic: TopicDescriptor, onClick: () -> Unit) {
                         TopicId.MORPH_VECTOR -> MorphVectorHomePreview()
                         TopicId.VECTOR_ANIMATOR -> AnimatorHomePreview()
                         TopicId.DRAW_ICON -> DrawIconHomePreview()
+                        TopicId.SHAPE_PAINT -> ShapePaintHomePreview()
+                        TopicId.CONTENT_TRANSITION -> ContentTransitionHomePreview()
                     }
                 }
             }
@@ -117,7 +128,13 @@ private fun TopicCard(topic: TopicDescriptor, onClick: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    if (topic.playgroundId == null) "${topic.items.size} diagnostic screens" else "${topic.items.size - 1} showcases · 1 playground",
+                    if (topic.playgroundId == null) {
+                        "${topic.items.size} diagnostic screens"
+                    } else if (topic.items.size == 1) {
+                        "1 playground"
+                    } else {
+                        "${topic.items.size - 1} showcases · 1 playground"
+                    },
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -232,6 +249,50 @@ private fun DrawIconHomePreview() {
             height = 56.dp,
         )
     }
+}
+
+/** Stable shape endpoint for the home preview, so each animation frame reuses it. */
+private val ShapePaintHomeFrom = CutCornerShape(percent = 18)
+
+/** Repeating gradient-and-stroke shape morph preview for the Shape & Path card. */
+@Composable
+private fun ShapePaintHomePreview() {
+    val playhead = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            playhead.snapTo(0f)
+            playhead.animateTo(1f, tween(1600))
+            delay(450)
+        }
+    }
+    val paintFrom = remember {
+        MorphPaint(
+            fill = Brush.linearGradient(listOf(ShowcaseColors.indigo, ShowcaseColors.cyan)),
+            stroke = SolidColor(ShowcaseColors.amber),
+            strokeWidth = 1.5.dp,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round,
+        )
+    }
+    val paintTo = remember {
+        MorphPaint(
+            fill = Brush.linearGradient(listOf(ShowcaseColors.cyan, ShowcaseColors.coral)),
+            stroke = SolidColor(ShowcaseColors.coral),
+            strokeWidth = 1.5.dp,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round,
+        )
+    }
+    MorphShape(
+        from = ShapePaintHomeFrom,
+        to = CircleShape,
+        progress = playhead.value,
+        paintFrom = paintFrom,
+        paintTo = paintTo,
+        contentDescription = null,
+        width = 56.dp,
+        height = 56.dp,
+    )
 }
 
 /** Repeating clip-reveal preview for the Diagnostics card. */

@@ -91,6 +91,34 @@ class SubdividerReduceTest {
     }
 
     @Test
+    fun invalidSimplificationToleranceUsesZeroDuringPlanning() {
+        val from = VectorCompiler.compile(polygonVector("from", radius = 9f))
+        val to = VectorCompiler.compile(polygonVector("to", radius = 6f))
+
+        val invalidPlan = MorphPlanner.plan(
+            from,
+            to,
+            MorphConfiguration(segmentBudget = 8, simplificationTolerance = Float.NaN),
+        )
+        val zeroTolerancePlan = MorphPlanner.plan(
+            from,
+            to,
+            MorphConfiguration(segmentBudget = 8, simplificationTolerance = 0f),
+        )
+
+        val invalidCounts = invalidPlan.pairs.flatMap { it.contourPairs }
+            .map { it.from.segmentCount to it.to.segmentCount }
+        val zeroToleranceCounts = zeroTolerancePlan.pairs.flatMap { it.contourPairs }
+            .map { it.from.segmentCount to it.to.segmentCount }
+        assertTrue("the fixture must exercise at least one contour pair", invalidCounts.isNotEmpty())
+        assertEquals("invalid tolerance is normalized to zero", zeroToleranceCounts, invalidCounts)
+        assertTrue(
+            "the target budget may be exceeded rather than violate zero tolerance",
+            invalidCounts.any { (fromCount, toCount) -> fromCount > 8 || toCount > 8 },
+        )
+    }
+
+    @Test
     fun defaultConfigurationLeavesSegmentCountsUntouched() {
         val from = VectorCompiler.compile(polygonVector("from", radius = 9f))
         val to = VectorCompiler.compile(polygonVector("to", radius = 6f))

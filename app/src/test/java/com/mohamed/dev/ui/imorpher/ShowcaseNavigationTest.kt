@@ -376,4 +376,30 @@ class ShowcaseNavigationTest {
         clickFirstText("Replay")
         assertReachable(hasContentDescription("Clip reveal icon"), "clip preview")
     }
+
+    // ------------------------------------------------------------------ shape/path paint playground
+
+    @Test
+    fun shapePaintPlaygroundRendersGradientAndStrokeControls() {
+        renderShowcase(TopicId.SHAPE_PAINT, "shape-paint-playground")
+        assertReachable(hasContentDescription("Shape paint morph"), "shape paint preview")
+        assertReachable(hasText("Geometry: Compose Shape"), "geometry control")
+        assertReachable(hasText("Fill: Linear"), "gradient fill control")
+        assertReachable(hasText("From fill"), "from-fill colors")
+        assertReachable(hasText("Stroke width", substring = true), "stroke width control")
+        assertReachable(hasText("Cap: Round"), "stroke cap control")
+        assertReachable(hasText("Join: Round"), "stroke join control")
+    }
+
+    @Test
+    fun shapePaintPlaygroundSwitchesToPathGeometry() {
+        renderShowcase(TopicId.SHAPE_PAINT, "shape-paint-playground")
+        // Popup menus add a second semantics root, which the shared on-screen helper does
+        // not accept; drive this dropdown with its own direct finders instead.
+        composeRule.onAllNodesWithText("Geometry: Compose Shape")[0].performClick()
+        composeRule.waitForIdle()
+        composeRule.onAllNodesWithText("Compose Path")[0].performClick()
+        composeRule.waitForIdle()
+        assertReachable(hasContentDescription("Path paint morph"), "path paint preview")
+    }
 }

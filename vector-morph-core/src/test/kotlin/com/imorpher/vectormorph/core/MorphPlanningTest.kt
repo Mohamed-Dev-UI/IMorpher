@@ -29,6 +29,7 @@ import com.imorpher.vectormorph.core.model.PathStart
 import com.imorpher.vectormorph.core.model.TimingMode
 import com.imorpher.vectormorph.core.plan.MorphPlanner
 import com.imorpher.vectormorph.core.plan.PairKind
+import com.imorpher.vectormorph.core.reveal.DrawOrder
 import com.imorpher.vectormorph.core.validation.MorphValidator
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -66,6 +67,94 @@ class MorphPlanningTest {
         assertTrue(plan.pairs.any { it.toPath?.name == "badge" && it.fromPath == null })
         assertEquals(listOf("badge"), plan.report.unmatchedTargetPaths)
         assertTrue(MorphValidator.validate(from, to).isNotEmpty())
+    }
+
+    @Test
+    fun customMappingReferencesAreReportedInPlanAndValidator() {
+        val from = vector("source", "source" to triangle())
+        val to = vector("target", "target" to triangle(1f))
+        val config = MorphConfiguration(
+            pathMatching = PathMatchingStrategy.CUSTOM,
+            customMappings = listOf(
+                PathMapping("missing-source", "target"),
+                PathMapping("source", "missing-target"),
+            ),
+        )
+
+        val plan = MorphPlanner.plan(VectorCompiler.compile(from), VectorCompiler.compile(to), config)
+        val planIssues = plan.report.issues
+        val validatedIssues = MorphValidator.validate(from, to, config)
+
+        val missingSource = planIssues.single { it.category == "custom-mapping-source-not-found" }
+        val missingTarget = planIssues.single { it.category == "custom-mapping-target-not-found" }
+        assertEquals(listOf("missing-source"), missingSource.pathNames)
+        assertEquals(listOf("missing-target"), missingTarget.pathNames)
+        assertEquals(com.imorpher.vectormorph.core.plan.IssueSeverity.WARNING, missingSource.severity)
+        assertEquals(com.imorpher.vectormorph.core.plan.IssueSeverity.WARNING, missingTarget.severity)
+        assertTrue(validatedIssues.any { it.category == "custom-mapping-source-not-found" })
+        assertTrue(validatedIssues.any { it.category == "custom-mapping-target-not-found" })
+        assertTrue(plan.report.compatibility.warnings.contains(missingSource.message))
+        assertTrue(plan.report.compatibility.warnings.contains(missingTarget.message))
+        assertEquals(2, plan.pairs.size)
+        assertTrue(plan.pairs.any { it.kind == PairKind.FADE_OUT && it.fromPath?.name == "source" })
+        assertTrue(plan.pairs.any { it.kind == PairKind.FADE_IN && it.toPath?.name == "target" })
+    }
+
+    @Test
+    fun customOrderUnknownNamesAreReportedButPartialOrdersRemainValid() {
+        val vector = vector("order", "left" to triangle(), "right" to triangle(2f))
+        val prepared = VectorCompiler.compile(vector)
+        val plan = MorphPlanner.plan(
+            prepared,
+            prepared,
+            MorphConfiguration(
+                drawOrder = DrawOrderStrategy.CUSTOM,
+                keepRenderOrder = false,
+                customDrawOrder = listOf("ghost", "right"),
+            ),
+        )
+
+        val issue = plan.report.issues.single { it.category == "custom-order-name-not-found" }
+        assertEquals(listOf("ghost"), issue.pathNames)
+        assertEquals(com.imorpher.vectormorph.core.plan.IssueSeverity.WARNING, issue.severity)
+        assertTrue(plan.report.compatibility.warnings.contains(issue.message))
+        val order = DrawOrder.orderIndices(plan, DrawOrderStrategy.CUSTOM, listOf("ghost", "right"))
+        assertEquals(listOf("right", "left"), order.map { plan.pairs[it].toPath?.name ?: plan.pairs[it].fromPath?.name })
+
+        val partialPlan = MorphPlanner.plan(
+            prepared,
+            prepared,
+            MorphConfiguration(
+                drawOrder = DrawOrderStrategy.CUSTOM,
+                keepRenderOrder = false,
+                customDrawOrder = listOf("right"),
+            ),
+        )
+        assertTrue(partialPlan.report.issues.none { it.category == "custom-order-name-not-found" })
+        val partialOrder = DrawOrder.orderIndices(partialPlan, DrawOrderStrategy.CUSTOM, listOf("right"))
+        assertEquals(
+            listOf("right", "left"),
+            partialOrder.map { partialPlan.pairs[it].toPath?.name ?: partialPlan.pairs[it].fromPath?.name },
+        )
+    }
+
+    @Test
+    fun blankCustomMappingIsNotDuplicatedAsMissingEndpointFinding() {
+        val from = vector("source", "source" to triangle())
+        val to = vector("target", "target" to triangle(1f))
+        val plan = MorphPlanner.plan(
+            VectorCompiler.compile(from),
+            VectorCompiler.compile(to),
+            MorphConfiguration(
+                pathMatching = PathMatchingStrategy.CUSTOM,
+                customMappings = listOf(PathMapping("", "target")),
+            ),
+        )
+
+        assertTrue(plan.report.issues.none {
+            it.category == "custom-mapping-source-not-found" ||
+                it.category == "custom-mapping-target-not-found"
+        })
     }
 
     @Test
@@ -545,6 +634,36 @@ class MorphPlanningTest {
         }
         val evaluator = TimelineEvaluator(animation, plan, ColorInterpolationSpace.SRGB, timingMode = TimingMode.UNIFORM)
         return evaluator to EvaluatedFrame(plan)
+    }
+
+@Test
+    fun customStartAlignmentsResolveBeforeTheDeprecatedOffsetsMap() {
+        val square = listOf(
+            PathNode.MoveTo(2f, 2f),
+            PathNode.LineTo(22f, 2f),
+            PathNode.LineTo(22f, 22f),
+            PathNode.Close,
+        )
+        val from = VectorCompiler.compile(vector("from", "p" to square))
+        val to = VectorCompiler.compile(vector("to", "p" to square))
+
+        fun alignedOffset(alignments: Map<String, Float>, legacy: Map<String, Float>): Float =
+            MorphPlanner.plan(
+                from,
+                to,
+                MorphConfiguration(
+                    startPoint = com.imorpher.vectormorph.core.model.StartPointStrategy.CUSTOM,
+                    customStartAlignments = alignments,
+                    customStartOffsets = legacy,
+                ),
+            ).pairs.single().contourPairs!!.single().startAlignmentOffset
+
+        // The modern home reproduces the legacy alignment exactly.
+        assertEquals(0.25f, alignedOffset(alignments = emptyMap(), legacy = mapOf("p" to 0.25f)), 1e-3f)
+        assertEquals(0.25f, alignedOffset(alignments = mapOf("p" to 0.25f), legacy = emptyMap()), 1e-3f)
+
+        // ...and wins over the deprecated map when both are populated.
+        assertEquals(0.0f, alignedOffset(alignments = mapOf("p" to 0.0f), legacy = mapOf("p" to 0.25f)), 1e-3f)
     }
 
     private fun triangle(offset: Float = 0f) = listOf(

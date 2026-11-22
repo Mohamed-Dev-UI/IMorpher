@@ -1,5 +1,6 @@
 package com.imorpher.vectormorph.core.validation
 
+import com.imorpher.vectormorph.core.animation.AnimationTarget
 import com.imorpher.vectormorph.core.animation.DrawConfig
 import com.imorpher.vectormorph.core.animation.FillRevealConfig
 import com.imorpher.vectormorph.core.animation.PropKey
@@ -13,6 +14,8 @@ import com.imorpher.vectormorph.core.model.MorphConfiguration
 import com.imorpher.vectormorph.core.model.PathMatchingStrategy
 import com.imorpher.vectormorph.core.model.PathStart
 import com.imorpher.vectormorph.core.model.PreparedVector
+import com.imorpher.vectormorph.core.model.StartPointStrategy
+import com.imorpher.vectormorph.core.model.TimingMode
 import com.imorpher.vectormorph.core.plan.IssueSeverity
 import com.imorpher.vectormorph.core.plan.MorphIssue
 import com.imorpher.vectormorph.core.plan.MorphPlan
@@ -51,11 +54,21 @@ object MorphValidator {
      * map-level conflicts AND any embedded reveal payload; pass `null` explicitly to
      * audit only the maps.
      *
-     * Categories follow [validatePlan]'s lowercase style:
-     * WARNING `custom-anchors-unused`, `custom-order-unused`, `missing-path-under-crossfade`,
-     * `fill-direction-ignored`; INFO `fallback-throw-scope`, `draw-order-not-rendered`,
-     * `stagger-order-without-delay`, `sweep-direction-on-stroke`, `custom-mappings-unused`.
+     * Categories follow [validatePlan]'s lowercase style. Selector integrity warnings are
+     * `custom-mapping-name-empty`, `custom-mapping-source-duplicate`,
+     * `custom-mapping-target-duplicate`, `custom-order-name-empty`, and
+     * `custom-order-name-duplicate`; endpoint-aware selector findings are added to the plan
+     * report by [validateSelectorReferences]. Other WARNING categories are `custom-anchors-unused`,
+     * `custom-start-offsets-unused`, `custom-draw-anchor-invalid`, `custom-start-offset-invalid`,
+     * `custom-start-alignments-unused`, `custom-start-alignment-invalid`, `custom-start-alignment-conflict`,
+     * `stagger-delay-invalid`, `custom-callback-missing`, `custom-order-unused`,
+     * `missing-path-under-crossfade`, `fill-direction-ignored`, and `simplification-tolerance-invalid`;
+     * INFO categories are `fallback-throw-scope`,
+     * `draw-order-not-rendered`, `stagger-order-without-delay` (legacy category name; also covers
+     * inactive BY_PATH ordering), `segment-budget-clamped`, `simplification-tolerance-unused`,
+     * `sweep-direction-on-stroke`, and `custom-mappings-unused`.
      */
+    @Suppress("DEPRECATION") // audits the legacy customStartOffsets alignment and anchor fallback
     fun validateConfiguration(
         config: MorphConfiguration,
         animation: VectorAnimation? = config.animation,
@@ -67,23 +80,141 @@ object MorphValidator {
         val hasCustomStart = reveals.any { (prop, reveal) ->
             prop === PropKey.DRAW_PROGRESS && reveal is DrawConfig && reveal.start == PathStart.CUSTOM
         }
+        // Mirror PlanRemember's field-by-field resolution: a non-default config order
+        // overrides the timeline order even when its delay is inherited from the timeline.
+        val orderResolution = resolveCustomOrder(config, animation)
+        val customOrderIsConsumed = orderResolution.customOrderIsConsumed
 
         if (config.customDrawAnchors.isNotEmpty() && !hasCustomStart) {
             issues.add(
                 MorphIssue(
                     IssueSeverity.WARNING, "custom-anchors-unused", emptyList(),
-                    "customDrawAnchors is never consulted: no reveal segment requests PathStart.CUSTOM " +
-                        "(the legacy customStartOffsets fallback is equally idle without one)",
+                    "customDrawAnchors is never consulted: no reveal segment requests PathStart.CUSTOM",
                 ),
             )
         }
 
-        if (config.customDrawOrder.isNotEmpty() && config.drawOrder != DrawOrderStrategy.CUSTOM) {
+        val customOffsetsHaveConsumer = hasCustomStart || config.startPoint == StartPointStrategy.CUSTOM
+        if (config.customStartOffsets.isNotEmpty() && !customOffsetsHaveConsumer) {
+            issues.add(
+                MorphIssue(
+                    IssueSeverity.WARNING, "custom-start-offsets-unused", emptyList(),
+                    "customStartOffsets has no active consumer: it needs StartPointStrategy.CUSTOM " +
+                        "for geometry alignment or a PathStart.CUSTOM draw reveal as a legacy anchor fallback",
+                ),
+            )
+        }
+
+        if (hasCustomStart) {
+            config.customDrawAnchors.forEach { (name, value) ->
+                if (!value.isFinite() || value !in 0f..1f) {
+                    issues.add(
+                        MorphIssue(
+                            IssueSeverity.WARNING, "custom-draw-anchor-invalid", listOf(name),
+                            "customDrawAnchors['$name'] must be finite and in 0..1; finite out-of-range values are clamped, but NaN is not a valid anchor",
+                        ),
+                    )
+                }
+            }
+        }
+        if (customOffsetsHaveConsumer) {
+            config.customStartOffsets.forEach { (name, value) ->
+                if (!value.isFinite() || value !in 0f..1f) {
+                    issues.add(
+                        MorphIssue(
+                            IssueSeverity.WARNING, "custom-start-offset-invalid", listOf(name),
+                            "customStartOffsets['$name'] must be finite and in 0..1; finite out-of-range values are clamped, but NaN is not a valid offset",
+                        ),
+                    )
+                }
+            }
+        }
+
+        // The modern alignment home: geometric alignment only, never a draw anchor — its
+        // sole consumer is StartPointStrategy.CUSTOM.
+        if (config.customStartAlignments.isNotEmpty() && config.startPoint != StartPointStrategy.CUSTOM) {
+            issues.add(
+                MorphIssue(
+                    IssueSeverity.WARNING, "custom-start-alignments-unused", emptyList(),
+                    "customStartAlignments has no active consumer: it only moves geometry under StartPointStrategy.CUSTOM",
+                ),
+            )
+        }
+        if (config.startPoint == StartPointStrategy.CUSTOM) {
+            config.customStartAlignments.forEach { (name, value) ->
+                if (!value.isFinite() || value !in 0f..1f) {
+                    issues.add(
+                        MorphIssue(
+                            IssueSeverity.WARNING, "custom-start-alignment-invalid", listOf(name),
+                            "customStartAlignments['$name'] must be finite and in 0..1; finite out-of-range values are clamped, but NaN is not a valid offset",
+                        ),
+                    )
+                }
+            }
+        }
+        config.customStartAlignments.forEach { (name, value) ->
+            val legacy = config.customStartOffsets[name]
+            if (legacy != null && legacy != value) {
+                issues.add(
+                    MorphIssue(
+                        IssueSeverity.WARNING, "custom-start-alignment-conflict", listOf(name),
+                        "customStartAlignments['$name']=$value and customStartOffsets['$name']=$legacy disagree; " +
+                            "alignment reads customStartAlignments first, customStartOffsets keeps the legacy fallback",
+                    ),
+                )
+            }
+        }
+
+        val invalidConfigStagger = !config.staggerDelay.isFinite() || config.staggerDelay < 0f
+        val invalidAnimationStagger = animation?.staggerDelay?.let { !it.isFinite() || it < 0f } == true
+        if (invalidConfigStagger || invalidAnimationStagger) {
+            val invalidSources = buildList {
+                if (invalidConfigStagger) add("MorphConfiguration.staggerDelay=${config.staggerDelay}")
+                if (invalidAnimationStagger) add("VectorAnimation.staggerDelay=${animation?.staggerDelay}")
+            }
+            issues.add(
+                MorphIssue(
+                    IssueSeverity.WARNING, "stagger-delay-invalid", emptyList(),
+                    "stagger delays must be finite and non-negative; invalid values can disable or corrupt the stagger schedule: ${invalidSources.joinToString()}",
+                ),
+            )
+        }
+
+        val needsCustomStrokeGeometry = reveals.any { (prop, reveal) ->
+            prop === PropKey.DRAW_PROGRESS && reveal is DrawConfig &&
+                (reveal.mode == com.imorpher.vectormorph.core.model.DrawMode.CUSTOM ||
+                    reveal.direction == DrawDirection.CUSTOM)
+        }
+        val needsCustomFillGeometry = reveals.any { (prop, reveal) ->
+            prop === PropKey.FILL_PROGRESS && reveal is FillRevealConfig &&
+                reveal.fillDirection == DrawDirection.CUSTOM
+        }
+        val needsCustomMissingPath = config.missingPath == MissingPathBehavior.CUSTOM &&
+            config.fallback != FallbackStrategy.CROSSFADE &&
+            config.fallback != FallbackStrategy.SCALE_CROSSFADE
+        if (animation?.customizer == null &&
+            (needsCustomStrokeGeometry || needsCustomFillGeometry || needsCustomMissingPath)
+        ) {
+            val requirements = buildList {
+                if (needsCustomStrokeGeometry) add("custom stroke reveal geometry")
+                if (needsCustomFillGeometry) add("custom fill reveal geometry")
+                if (needsCustomMissingPath) add("custom missing-path geometry when an orphan path is rendered")
+            }
+            issues.add(
+                MorphIssue(
+                    IssueSeverity.WARNING, "custom-callback-missing", emptyList(),
+                    "${requirements.joinToString(" and ")} requires a CustomVectorAnimation callback",
+                ),
+            )
+        }
+
+        if (config.customDrawOrder.isNotEmpty() && !customOrderIsConsumed) {
             issues.add(
                 MorphIssue(
                     IssueSeverity.WARNING, "custom-order-unused", emptyList(),
-                    "customDrawOrder is ignored: drawOrder is ${config.drawOrder}, but only " +
-                        "DrawOrderStrategy.CUSTOM consults the list",
+                    "customDrawOrder has no active consumer: render ordering needs " +
+                        "drawOrder=CUSTOM with keepRenderOrder=false, or path-scoped tracks with " +
+                        "resolved staggerOrder=CUSTOM and a positive delay or timing=BY_PATH",
                 ),
             )
         }
@@ -114,17 +245,20 @@ object MorphValidator {
             issues.add(
                 MorphIssue(
                     IssueSeverity.INFO, "draw-order-not-rendered", emptyList(),
-                    "drawOrder ${config.drawOrder} shapes the reveal timing; keepRenderOrder=true keeps " +
-                        "painting in declaration order (z-order unchanged)",
+                    "drawOrder ${config.drawOrder} does not change z-order while keepRenderOrder=true; " +
+                        "it does not control stagger timing (staggerOrder does)",
                 ),
             )
         }
 
-        if (config.staggerDelay == 0f && config.staggerOrder != DrawOrderStrategy.TOP_LEFT_TO_BOTTOM_RIGHT) {
+        if (orderResolution.effectiveStaggerOrder != MorphConfiguration.Default.staggerOrder &&
+            !orderResolution.pathOrderIsConsumed
+        ) {
             issues.add(
                 MorphIssue(
                     IssueSeverity.INFO, "stagger-order-without-delay", emptyList(),
-                    "staggerOrder ${config.staggerOrder} needs a staggerDelay > 0 to have any effect",
+                    "resolved staggerOrder ${orderResolution.effectiveStaggerOrder} has no active path-scoped consumer: " +
+                        "a resolved stagger delay or TimingMode.BY_PATH is required",
                 ),
             )
         }
@@ -159,9 +293,9 @@ object MorphValidator {
             )
         }
 
-        if (config.customMappings.isNotEmpty() &&
-            config.pathMatching != PathMatchingStrategy.AUTO && config.pathMatching != PathMatchingStrategy.CUSTOM
-        ) {
+        val customMappingsAreConsumed = config.pathMatching == PathMatchingStrategy.AUTO ||
+            config.pathMatching == PathMatchingStrategy.CUSTOM
+        if (config.customMappings.isNotEmpty() && !customMappingsAreConsumed) {
             issues.add(
                 MorphIssue(
                     IssueSeverity.INFO, "custom-mappings-unused", emptyList(),
@@ -171,6 +305,192 @@ object MorphValidator {
             )
         }
 
+        if (customMappingsAreConsumed) {
+            config.customMappings.forEachIndexed { index, mapping ->
+                if (mapping.source.isBlank() || mapping.target.isBlank()) {
+                    val emptySides = buildList {
+                        if (mapping.source.isBlank()) add("source")
+                        if (mapping.target.isBlank()) add("target")
+                    }.joinToString(" and ")
+                    issues.add(
+                        MorphIssue(
+                            IssueSeverity.WARNING, "custom-mapping-name-empty",
+                            listOf(mapping.source, mapping.target).filter { it.isNotBlank() },
+                            "customMappings[$index] has a blank $emptySides name; this mapping cannot resolve reliably",
+                        ),
+                    )
+                }
+            }
+            config.customMappings.asSequence().map { it.source }.filter { it.isNotBlank() }
+                .groupingBy { it }.eachCount().filterValues { it > 1 }.keys.forEach { source ->
+                    issues.add(
+                        MorphIssue(
+                            IssueSeverity.WARNING, "custom-mapping-source-duplicate", listOf(source),
+                            "customMappings repeats source '$source'; the first mapping for this source wins and later entries are shadowed",
+                        ),
+                    )
+                }
+            config.customMappings.asSequence().map { it.target }.filter { it.isNotBlank() }
+                .groupingBy { it }.eachCount().filterValues { it > 1 }.keys.forEach { target ->
+                    issues.add(
+                        MorphIssue(
+                            IssueSeverity.WARNING, "custom-mapping-target-duplicate", listOf(target),
+                            "multiple customMappings claim target '$target'; the first source to claim it wins and later sources remain unmatched",
+                        ),
+                    )
+                }
+        }
+
+        if (customOrderIsConsumed) {
+            config.customDrawOrder.forEachIndexed { index, name ->
+                if (name.isBlank()) {
+                    issues.add(
+                        MorphIssue(
+                            IssueSeverity.WARNING, "custom-order-name-empty", emptyList(),
+                            "customDrawOrder[$index] is blank and cannot identify a path",
+                        ),
+                    )
+                }
+            }
+            config.customDrawOrder.asSequence().filter { it.isNotBlank() }
+                .groupingBy { it }.eachCount().filterValues { it > 1 }.keys.forEach { name ->
+                    issues.add(
+                        MorphIssue(
+                            IssueSeverity.WARNING, "custom-order-name-duplicate", listOf(name),
+                            "customDrawOrder repeats '$name'; the rank map uses its last occurrence",
+                        ),
+                    )
+                }
+        }
+
+        if (config.segmentBudget != null && config.segmentBudget < 2) {
+            issues.add(
+                MorphIssue(
+                    IssueSeverity.INFO, "segment-budget-clamped", emptyList(),
+                    "segmentBudget ${config.segmentBudget} is below the planner minimum of 2 and is raised to 2",
+                ),
+            )
+        }
+
+        if (!config.simplificationTolerance.isFinite() || config.simplificationTolerance < 0f) {
+            issues.add(
+                MorphIssue(
+                    IssueSeverity.WARNING, "simplification-tolerance-invalid", emptyList(),
+                    "simplificationTolerance must be finite and non-negative; planning treats invalid values as 0",
+                ),
+            )
+        } else if (config.segmentBudget == null && config.simplificationTolerance != MorphConfiguration.Default.simplificationTolerance) {
+            issues.add(
+                MorphIssue(
+                    IssueSeverity.INFO, "simplification-tolerance-unused", emptyList(),
+                    "simplificationTolerance has no effect without segmentBudget",
+                ),
+            )
+        }
+
+        return issues
+    }
+
+    private data class CustomOrderResolution(
+        val effectiveStaggerOrder: DrawOrderStrategy,
+        val pathOrderIsConsumed: Boolean,
+        val customOrderIsConsumed: Boolean,
+    )
+
+    /** Resolves whether an active custom order is consumed by paint or path timeline ordering. */
+    private fun resolveCustomOrder(
+        config: MorphConfiguration,
+        animation: VectorAnimation? = config.animation,
+    ): CustomOrderResolution {
+        // Mirror PlanRemember's field-by-field resolution: a non-default config order
+        // overrides the timeline order even when its delay is inherited from the timeline.
+        val configSuppliesStagger = config.staggerDelay > 0f ||
+            config.staggerOrder != MorphConfiguration.Default.staggerOrder
+        val effectiveStaggerDelay = if (config.staggerDelay > 0f) config.staggerDelay
+            else animation?.staggerDelay ?: 0f
+        val effectiveStaggerOrder = if (configSuppliesStagger) config.staggerOrder
+            else animation?.staggerOrder ?: MorphConfiguration.Default.staggerOrder
+        val hasPairScopedTracks = animation?.tracks?.any { track ->
+            track.target !is AnimationTarget.Vector && track.target !is AnimationTarget.Group
+        } == true || animation?.brushTracks?.any { track ->
+            track.target !is AnimationTarget.Vector && track.target !is AnimationTarget.Group
+        } == true
+        // The evaluator uses path order for stagger offsets and for BY_PATH clock ranks;
+        // group and vector tracks have their own shared clocks and do not consume this order.
+        val pathOrderIsConsumed = hasPairScopedTracks &&
+            (effectiveStaggerDelay > 0f || config.timing == TimingMode.BY_PATH)
+        return CustomOrderResolution(
+            effectiveStaggerOrder = effectiveStaggerOrder,
+            pathOrderIsConsumed = pathOrderIsConsumed,
+            customOrderIsConsumed =
+                (config.drawOrder == DrawOrderStrategy.CUSTOM && !config.keepRenderOrder) ||
+                    (effectiveStaggerOrder == DrawOrderStrategy.CUSTOM && pathOrderIsConsumed),
+        )
+    }
+
+    /** Whether an active custom order is consumed by paint ordering or path timeline ordering. */
+    internal fun isCustomOrderConsumed(
+        config: MorphConfiguration,
+        animation: VectorAnimation? = config.animation,
+    ): Boolean = resolveCustomOrder(config, animation).customOrderIsConsumed
+
+    /**
+     * Reports active custom selectors that do not resolve against the supplied vectors or
+     * resolved pair representatives. This is additive diagnostics only; it never changes pairs.
+     */
+    internal fun validateSelectorReferences(
+        config: MorphConfiguration,
+        from: PreparedVector,
+        to: PreparedVector,
+        pairs: List<PathPairPlan>,
+        animation: VectorAnimation? = config.animation,
+    ): List<MorphIssue> {
+        val issues = ArrayList<MorphIssue>()
+        if (config.pathMatching == PathMatchingStrategy.AUTO ||
+            config.pathMatching == PathMatchingStrategy.CUSTOM
+        ) {
+            val fromNames = from.paths.mapTo(HashSet()) { it.name }
+            val toNames = to.paths.mapTo(HashSet()) { it.name }
+            config.customMappings.asSequence()
+                .map { it.source }
+                .filter { it.isNotBlank() && it !in fromNames }
+                .distinct()
+                .forEach { name ->
+                    issues.add(
+                        MorphIssue(
+                            IssueSeverity.WARNING, "custom-mapping-source-not-found", listOf(name),
+                            "customMappings references missing source path '$name'; existing matching/fallback behavior is retained",
+                        ),
+                    )
+                }
+            config.customMappings.asSequence()
+                .map { it.target }
+                .filter { it.isNotBlank() && it !in toNames }
+                .distinct()
+                .forEach { name ->
+                    issues.add(
+                        MorphIssue(
+                            IssueSeverity.WARNING, "custom-mapping-target-not-found", listOf(name),
+                            "customMappings references missing target path '$name'; existing matching/fallback behavior is retained",
+                        ),
+                    )
+                }
+        }
+
+        if (config.customDrawOrder.isNotEmpty() && isCustomOrderConsumed(config, animation)) {
+            val representedNames = pairs.mapNotNull { (it.toPath ?: it.fromPath)?.name }.toHashSet()
+            config.customDrawOrder.asSequence()
+                .filter { it.isNotBlank() && it !in representedNames }
+                .distinct()
+                .forEach { name ->
+                    issues.add(
+                        MorphIssue(
+                            IssueSeverity.WARNING, "custom-order-name-not-found", listOf(name),
+                            "customDrawOrder references '$name', which is not a resolved pair representative; the name is ignored by custom ordering",
+                        ),
+                    )
+                }
+        }
         return issues
     }
 

@@ -1,6 +1,6 @@
 # DrawConfig Structural Cleanup (C6 Follow-up) Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Split the one-size-fits-all `DrawConfig` (5 fields, attached to DRAW_PROGRESS / FILL_PROGRESS / CLIP_PROGRESS tracks alike) into per-purpose typed reveal configs, so each property carries only the fields its renderer actually consumes — ending the "fill config with never-consumed mode/start/direction" trap (plan C6).
 
@@ -59,7 +59,7 @@
 **Interfaces:**
 - Produces (for Task 2): the typed API surface `Reveal`/`DrawConfig`/`FillRevealConfig`/`ClipRevealConfig`, `strokeRevealFor`/`fillRevealFor`, deprecated `drawConfigFor` shim.
 
-- [ ] **Step 1: Write the failing shape tests** (core)
+- [x] **Step 1: Write the failing shape tests** (core)
 
 ```kotlin
 // RevealTypeShapeTest.kt
@@ -87,19 +87,19 @@
 }
 ```
 
-- [ ] **Step 2: Run — expect compile FAIL** — `.\gradlew :vector-morph-core:testDebugUnitTest --tests "...RevealTypeShapeTest"`
+- [x] **Step 2: Run — expect compile FAIL** — `.\gradlew :vector-morph-core:testDebugUnitTest --tests "...RevealTypeShapeTest"`
 
-- [ ] **Step 3: Implement the core split** — Reveal types; `Segment.reveal`; builder per-prop constructors (`cfg` split: stroke sites → `DrawConfig(mode, start, direction)`, `fill()` → `FillRevealConfig(fillMode = mode, fillDirection = direction)`, `clipReveal` → `ClipRevealConfig(direction)`; keep the CUSTOM-direction `require`); fill-inheritance in build() via `request.reveal as? DrawConfig` (gate unchanged: `prop == DRAW_PROGRESS && reveal != null && direction != AUTO` → first per target) and produce `FillRevealConfig(fillMode = (existing as? FillRevealConfig)?.fillMode, fillDirection = inherited)`; `PathFrameValues` three slots + copy; evaluator assignment by prop (exhaustive when).
+- [x] **Step 3: Implement the core split** — Reveal types; `Segment.reveal`; builder per-prop constructors (`cfg` split: stroke sites → `DrawConfig(mode, start, direction)`, `fill()` → `FillRevealConfig(fillMode = mode, fillDirection = direction)`, `clipReveal` → `ClipRevealConfig(direction)`; keep the CUSTOM-direction `require`); fill-inheritance in build() via `request.reveal as? DrawConfig` (gate unchanged: `prop == DRAW_PROGRESS && reveal != null && direction != AUTO` → first per target) and produce `FillRevealConfig(fillMode = (existing as? FillRevealConfig)?.fillMode, fillDirection = inherited)`; `PathFrameValues` three slots + copy; evaluator assignment by prop (exhaustive when).
 
-- [ ] **Step 4: Update the codec to typed encode/decode with IDENTICAL bytes** — encode: per-prop dispatch as in Target shape 5; decode: read the 5-field record then map by prop (`DRAW_PROGRESS → as? payload → DrawConfig(mode, start, direction)` ignoring fill pair; `FILL → FillRevealConfig(fillMode, fillDirection)` ignoring the three placeholder strings; `CLIP → ClipRevealConfig(direction)`). No VERSION change. Also write the golden-bytes test: hand-build a V1 byte blob for one DRAW + one FILL + one CLIP segment (literal bytes, comments mapping fields), decode → typed assertions.
+- [x] **Step 4: Update the codec to typed encode/decode with IDENTICAL bytes** — encode: per-prop dispatch as in Target shape 5; decode: read the 5-field record then map by prop (`DRAW_PROGRESS → as? payload → DrawConfig(mode, start, direction)` ignoring fill pair; `FILL → FillRevealConfig(fillMode, fillDirection)` ignoring the three placeholder strings; `CLIP → ClipRevealConfig(direction)`). No VERSION change. Also write the golden-bytes test: hand-build a V1 byte blob for one DRAW + one FILL + one CLIP segment (literal bytes, comments mapping fields), decode → typed assertions.
 
-- [ ] **Step 5: Write the failing slot-merge test + update existing core tests** — `FrameSlotMergeTest`: evaluate a frame where an `allPaths` group and a path track both set strokes → per-frame slots resolve first-writer-wins exactly as the old array did (mirror the group-merge rule from renderer:689 semantics — read renderer lines and mirror in evaluator-level test); update `FillDirectionInheritanceTest` reads (`segments.single().reveal as? FillRevealConfig !!`-style), `PathStartAutoTest` (unchanged semantics — compiles), any `TimelineEvaluator*`/`VectorAnimation*` test touching `.draw`.
+- [x] **Step 5: Write the failing slot-merge test + update existing core tests** — `FrameSlotMergeTest`: evaluate a frame where an `allPaths` group and a path track both set strokes → per-frame slots resolve first-writer-wins exactly as the old array did (mirror the group-merge rule from renderer:689 semantics — read renderer lines and mirror in evaluator-level test); update `FillDirectionInheritanceTest` reads (`segments.single().reveal as? FillRevealConfig !!`-style), `PathStartAutoTest` (unchanged semantics — compiles), any `TimelineEvaluator*`/`VectorAnimation*` test touching `.draw`.
 
-- [ ] **Step 6: Migrate the renderer's 15 consumer sites** — mechanical: DRAW reads take the stroke slot (same type), FILL reads take `fillReveal` (fillMode/fillDirection), CLIP reads take `clipReveal.direction`; static-side fallback uses the new `strokeRevealFor/fillRevealFor` (deprecated `drawConfigFor` shim still compiles); group merge at `689` becomes three slot merges.
+- [x] **Step 6: Migrate the renderer's 15 consumer sites** — mechanical: DRAW reads take the stroke slot (same type), FILL reads take `fillReveal` (fillMode/fillDirection), CLIP reads take `clipReveal.direction`; static-side fallback uses the new `strokeRevealFor/fillRevealFor` (deprecated `drawConfigFor` shim still compiles); group merge at `689` becomes three slot merges.
 
-- [ ] **Step 7: Run all suites + probes** — `.\gradlew :vector-morph-core:test`, `.\gradlew :vector-morph-compose:testDebugUnitTest --rerun`, `.\gradlew :app:testDebugUnitTest` — expectation: identical totals to baseline (338) OR ≥ with new tests added, 0 failures; pixel probes pin parity.
+- [x] **Step 7: Run all suites + probes** — `.\gradlew :vector-morph-core:test`, `.\gradlew :vector-morph-compose:testDebugUnitTest --rerun`, `.\gradlew :app:testDebugUnitTest` — expectation: identical totals to baseline (338) OR ≥ with new tests added, 0 failures; pixel probes pin parity.
 
-- [ ] **Step 8: Commit** — `feat: typed reveal configs per progress property (DrawConfig/FillRevealConfig/ClipRevealConfig)`
+- [x] **Step 8: Commit** — `feat: typed reveal configs per progress property (DrawConfig/FillRevealConfig/ClipRevealConfig)`
 
 ### Task 2: API-surface sweep + docs + deprecation pin
 
@@ -110,9 +110,9 @@
 - Modify: `README.md` (one sentence in the Drawing/fill sections: fill tracks carry fill-mode/direction only; stroke draws carry mode/start/direction; codec format unchanged)
 - Modify: `docs/superpowers/plans/2026-10-20-start-direction-coordination.md` — NO; instead append a resolution note to THIS plan's file? No — keep plan docs immutable; the README + KDoc note suffices.
 
-- [ ] **Step 1: Write the failing shim test** — construct animation with a DRAW stroke on path; assert `drawConfigFor(name, occurrence...)` returns the same DrawConfig and `strokeRevealFor` equals it; FILL property → null from shim but a FillRevealConfig from `fillRevealFor`.
-- [ ] **Step 2: README + KDoc sentences** — per file list.
-- [ ] **Step 3: Run all suites** — green; **Step 4: Commit** — `docs: typed reveal API surface notes and deprecated drawConfigFor pin`
+- [x] **Step 1: Write the failing shim test** — construct animation with a DRAW stroke on path; assert `drawConfigFor(name, occurrence...)` returns the same DrawConfig and `strokeRevealFor` equals it; FILL property → null from shim but a FillRevealConfig from `fillRevealFor`.
+- [x] **Step 2: README + KDoc sentences** — per file list.
+- [x] **Step 3: Run all suites** — green; **Step 4: Commit** — `docs: typed reveal API surface notes and deprecated drawConfigFor pin`
 
 ## Rollback & verification
 

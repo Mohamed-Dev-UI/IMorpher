@@ -34,8 +34,15 @@ closed contours are untouched (their control stays the `CLOCKWISE`/
 **What changed:** `MorphConfiguration.customDrawAnchors` (new) is the source for
 `PathStart.CUSTOM` pen anchoring. `customStartOffsets` is deprecated but still works:
 for any path with no `customDrawAnchors` entry, the renderer falls back to
-`customStartOffsets` (one release window), preserving 0.1.x pixels. The deprecated
-map keeps its alignment role for `StartPointStrategy.CUSTOM` correspondences.
+`customStartOffsets` (one release window), preserving 0.1.x pixels.
+
+**0.3 alignment home:** `customStartAlignments` is the modern home for the
+`StartPointStrategy.CUSTOM` alignment role. Geometry alignment reads that new map
+first and `customStartOffsets` keeps serving as its legacy fallback for paths the new
+map leaves unmapped, so entries can migrate one at a time without pixel changes. The
+new map never anchors pens; disagreeing values for the same path are warned
+(`custom-start-alignment-conflict`) and idle maps are reported
+(`custom-start-alignments-unused`) when `StartPointStrategy.CUSTOM` is inactive.
 
 ```kotlin
 // 0.1.x — alignment map doing double duty:
@@ -54,6 +61,17 @@ MorphConfiguration(
 
 **Restore 0.1.x drawing behavior:** keep populating `customStartOffsets` and leave
 `customDrawAnchors` empty; remove those uses still before 0.3.0.
+
+```kotlin
+// 0.3.0 — alignment moved to its own map:
+MorphConfiguration(
+    startPoint = StartPointStrategy.CUSTOM,
+    customStartAlignments = mapOf("p" to 0.75f),          // modern alignment home
+    customStartOffsets = mapOf("p" to 0.75f),             // legacy fallback; remove once moved
+    customDrawAnchors = mapOf("p" to 0.75f),              // pen anchor, when wanted
+)
+```
+
 
 ## 3. `PathStart.START` vs `PathStart.AUTO`
 
@@ -113,7 +131,7 @@ keep 0.1.x full detail) and aligned group-clip-mask morphing (previously clip ma
 switched; they now morph when both sides declare the same clip count, which is
 strictly more faithful).
 
-## 8. 0.3.0 (unreleased) deprecation sweep
+## 8. 0.3.0 deprecation sweep
 
 Behavioral fixes land in the same release; the new/renamed pieces of this release are
 documented here, the behavior list in [CHANGELOG.md](../CHANGELOG.md).

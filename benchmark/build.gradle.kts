@@ -10,7 +10,11 @@ android {
 
     defaultConfig {
         minSdk = 23
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // AndroidBenchmarkRunner provides the IsolationActivity that keeps benchmarks free of
+        // interference from other visible apps; EMULATOR is suppressed because local/CI runs
+        // measure on an emulator (each suppression trades accuracy for run-ability, recorded here).
+        testInstrumentationRunner = "androidx.benchmark.junit4.AndroidBenchmarkRunner"
+        testInstrumentationRunnerArguments["androidx.benchmark.suppressErrors"] = "EMULATOR"
         // Only the benchmark variant is instrumented: release optimizations plus a signature
         // that lets AndroidX Benchmark report stable, comparable timings.
         testBuildType = "benchmark"

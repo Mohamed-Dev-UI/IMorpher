@@ -1,7 +1,9 @@
 package com.imorpher.vectormorph.core.api
 
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -17,6 +19,8 @@ import com.imorpher.vectormorph.core.geometry.ArcToCubic
 import com.imorpher.vectormorph.core.geometry.BooleanGeometry
 import com.imorpher.vectormorph.core.geometry.ContourData
 import com.imorpher.vectormorph.core.geometry.Cubic
+import com.imorpher.vectormorph.core.geometry.PathGeometry
+import com.imorpher.vectormorph.core.geometry.PathGeometryResult
 import com.imorpher.vectormorph.core.geometry.PathNodeNormalizer
 import com.imorpher.vectormorph.core.geometry.Subdivider
 import com.imorpher.vectormorph.core.gradients.BrushSpec
@@ -48,6 +52,11 @@ import com.imorpher.vectormorph.core.plan.MorphPlanCache
 import com.imorpher.vectormorph.core.plan.MorphPlanner
 import com.imorpher.vectormorph.core.plan.MorphReport
 import com.imorpher.vectormorph.core.plan.planMorph
+import com.imorpher.vectormorph.core.transition.ContentEffect
+import com.imorpher.vectormorph.core.transition.ContentEndpoint
+import com.imorpher.vectormorph.core.transition.ContentTransition
+import com.imorpher.vectormorph.core.transition.ContentTransitionResolver
+import com.imorpher.vectormorph.core.transition.WipeDirection
 import com.imorpher.vectormorph.core.validation.MorphValidator
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -216,6 +225,50 @@ class CoreApiSurfaceTest {
         )
         assertEquals(1, matches.size)
         assertTrue(warnings.isEmpty())
+    }
+
+    // ------------------------------------------------------------------ shape/path geometry
+
+    @Test
+    fun shapePathGeometrySurfaceCompiles() {
+        val geometry: PathGeometryResult = PathGeometry.contours(
+            Outline.Rectangle(Rect(0f, 0f, 10f, 10f)),
+        )
+        assertTrue(!geometry.isEmpty)
+        assertEquals(0, geometry.openContourCount)
+        assertTrue(geometry.warnings.isEmpty())
+
+        val prepared = PathGeometry.preparedVector(
+            geometry = geometry,
+            viewportWidth = 10f,
+            viewportHeight = 10f,
+            name = "rect",
+            fill = SolidColor(Color.Red),
+        )
+        assertEquals(1, prepared.paths.size)
+        assertEquals("rect", prepared.paths.single().name)
+    }
+
+    // ------------------------------------------------------------------ content transitions
+
+    @Test
+    fun contentTransitionSurfaceCompiles() {
+        val transition = ContentTransition.Wipe(
+            direction = WipeDirection.TOP_TO_BOTTOM,
+            feather = 0.2f,
+            effects = listOf(ContentEffect.Scale(ContentEndpoint.TO, from = 0.5f, to = 1f)),
+        )
+        val resolved = ContentTransitionResolver.resolve(0.5f, transition)
+        assertEquals(WipeDirection.TOP_TO_BOTTOM, resolved.wipe!!.direction)
+        assertEquals(0.75f, resolved.to.scaleX, 0.0001f)
+        assertEquals(1f, resolved.from.alpha, 0f)
+
+        assertEquals(ContentTransition.Crossfade(), ContentTransition.Default)
+        assertNotNull(ContentTransition.FadeOver())
+        assertNotNull(ContentTransition.Wipe(WipeDirection.RIGHT_TO_LEFT, 0.1f))
+        assertNotNull(ContentEffect.Fade(ContentEndpoint.TO, from = 0f, to = 1f))
+        assertNotNull(ContentEffect.Translate(ContentEndpoint.FROM, toX = 0.5f, toY = -0.5f))
+        assertNotNull(ContentEffect.Rotate(ContentEndpoint.FROM, toDegrees = 90f))
     }
 
     // ------------------------------------------------------------------ animation

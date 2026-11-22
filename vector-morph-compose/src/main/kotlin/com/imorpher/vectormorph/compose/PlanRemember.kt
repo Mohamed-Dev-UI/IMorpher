@@ -6,7 +6,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
@@ -43,6 +45,7 @@ internal fun VectorPlanCanvas(
     tintFrom: Any?,
     tintTo: Any?,
     alignment: Alignment,
+    contentScale: ContentScale = ContentScale.Fit,
 ) {
     // The [animation] parameter shadows [configuration.animation]; both callers pass the
     // identical value, so there is nothing to fall back through.
@@ -74,9 +77,15 @@ internal fun VectorPlanCanvas(
     val accessibleModifier = if (contentDescription == null) modifier else modifier.semantics {
         this.contentDescription = contentDescription
     }
-    Canvas(modifier = accessibleModifier.size(width, height)) {
+    // Cropping scales (Crop / FillWidth / Inside) deliberately let viewport content overflow
+    // the canvas; clip it so it cannot paint over neighbouring UI. `Fit` never overflows, so
+    // the historical path stays untouched.
+    val clipper = if (contentScale === ContentScale.Fit) Modifier else Modifier.clipToBounds()
+    Canvas(modifier = accessibleModifier.size(width, height).then(clipper)) {
         evaluator?.evaluate(progress.coerceIn(0f, 1f), frame)
-        renderer.render(this, plan, frame, progress, configuration, tintFrom, tintTo, alignment)
+        renderer.render(
+            this, plan, frame, progress, configuration, tintFrom, tintTo, alignment, contentScale,
+        )
     }
 }
 
@@ -105,6 +114,26 @@ internal fun rememberPlan(
         val preparedTo = prepared(to)
         planCache.getOrPut(preparedFrom, preparedTo, key) {
             MorphPlanner.plan(preparedFrom, preparedTo, planningConfiguration)
+        }
+    }
+}
+
+/**
+ * Plans two already-prepared vectors against [configuration], sharing the structural plan cache
+ * with the `ImageVector` entry points. Used by geometry adapters (`MorphShape`, `MorphPath`)
+ * whose inputs never pass through [VectorCompiler].
+ */
+@Composable
+internal fun rememberPlan(
+    from: PreparedVector,
+    to: PreparedVector,
+    configuration: MorphConfiguration,
+): MorphPlan {
+    val planningConfiguration = configuration.copy(animation = null)
+    val key = planningConfiguration.planningKey()
+    return remember(from, to, key) {
+        planCache.getOrPut(from, to, key) {
+            MorphPlanner.plan(from, to, planningConfiguration)
         }
     }
 }

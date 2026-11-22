@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.imorpher.vectormorph.core.animation.VectorAnimation as VectorAnimationSpec
@@ -103,6 +104,7 @@ fun VectorAnimation(
     width: Dp = vector.defaultWidth,
     height: Dp = vector.defaultHeight,
     alignment: Alignment = Alignment.Center,
+    contentScale: ContentScale = ContentScale.Fit,
 ) {
     val automaticProgress by rememberAutoPlayProgress(
         vector = vector,
@@ -116,8 +118,10 @@ fun VectorAnimation(
         progress = progress ?: automaticProgress,
         modifier = modifier,
         contentDescription = contentDescription,
+        alignment = alignment,
         width = width,
         height = height,
+        contentScale = contentScale,
     )
 }
 
@@ -141,6 +145,7 @@ fun VectorAnimation(
     width: Dp = vector.defaultWidth,
     height: Dp = vector.defaultHeight,
     alignment: Alignment = Alignment.Center,
+    contentScale: ContentScale = ContentScale.Fit,
 ) {
     val automaticProgress by rememberAutoPlayProgress(
         vector = vector,
@@ -159,6 +164,7 @@ fun VectorAnimation(
         contentDescription = contentDescription,
         width = width,
         height = height,
+        contentScale = contentScale,
     )
 }
 
@@ -184,6 +190,7 @@ fun VectorAnimation(
     width: Dp = vector.defaultWidth,
     height: Dp = vector.defaultHeight,
     alignment: Alignment = Alignment.Center,
+    contentScale: ContentScale = ContentScale.Fit,
 ) {
     val automaticProgress by rememberAutoPlayProgress(
         vector = vector,
@@ -202,6 +209,7 @@ fun VectorAnimation(
         contentDescription = contentDescription,
         width = width,
         height = height,
+        contentScale = contentScale,
     )
 }
 
@@ -258,6 +266,7 @@ fun DrawIcon(
     width: Dp = vector.defaultWidth,
     height: Dp = vector.defaultHeight,
     alignment: Alignment = Alignment.Center,
+    contentScale: ContentScale = ContentScale.Fit,
 ) = VectorAnimation(
     vector = vector,
     animation = animation,
@@ -269,6 +278,7 @@ fun DrawIcon(
     width = width,
     height = height,
     alignment = alignment,
+    contentScale = contentScale,
 )
 
 /** Convenience drawing entry point with a color tint that transitions from [tintFrom] to [tintTo]. */
@@ -286,6 +296,7 @@ fun DrawIcon(
     width: Dp = vector.defaultWidth,
     height: Dp = vector.defaultHeight,
     alignment: Alignment = Alignment.Center,
+    contentScale: ContentScale = ContentScale.Fit,
 ) = VectorAnimation(
     vector = vector,
     animation = animation,
@@ -299,6 +310,7 @@ fun DrawIcon(
     width = width,
     height = height,
     alignment = alignment,
+    contentScale = contentScale,
 )
 
 /** Convenience drawing entry point with a gradient tint that transitions from [tintFrom] to [tintTo]. */
@@ -316,6 +328,7 @@ fun DrawIcon(
     width: Dp = vector.defaultWidth,
     height: Dp = vector.defaultHeight,
     alignment: Alignment = Alignment.Center,
+    contentScale: ContentScale = ContentScale.Fit,
 ) = VectorAnimation(
     vector = vector,
     animation = animation,
@@ -329,4 +342,5 @@ fun DrawIcon(
     width = width,
     height = height,
     alignment = alignment,
+    contentScale = contentScale,
 )

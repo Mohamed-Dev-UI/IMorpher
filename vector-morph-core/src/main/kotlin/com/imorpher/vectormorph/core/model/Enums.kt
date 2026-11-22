@@ -129,7 +129,11 @@ enum class StartPointStrategy {
     MATCH_TARGET,
     /** Both aligned to the same geometric feature (e.g. dominant extreme point) before matching. */
     BEST_GEOMETRIC_MATCH,
-    /** Uses [MorphConfiguration.customStartOffsets] (normalized arc fraction per path). */
+    /**
+     * Uses the custom start-alignment maps (normalized arc fraction per path):
+     * [MorphConfiguration.customStartAlignments] first, the deprecated
+     * [MorphConfiguration.customStartOffsets] as its legacy fallback.
+     */
     CUSTOM,
 }
 

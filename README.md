@@ -22,7 +22,7 @@ published to Maven Central:
 
 ```toml
 [versions]
-imorpher = "0.2.0"
+imorpher = "0.3.0"
 
 [libraries]
 imorpher-compose = { group = "io.github.mohamed-dev-ui", name = "vector-morph-compose", version.ref = "imorpher" }
@@ -41,7 +41,7 @@ types directly. Without a catalog:
 
 ```kotlin
 dependencies {
-    implementation("io.github.mohamed-dev-ui:vector-morph-compose:0.2.0")
+    implementation("io.github.mohamed-dev-ui:vector-morph-compose:0.3.0")
 }
 ```
 
@@ -89,36 +89,79 @@ MorphingIcon(
 )
 ```
 
+**Content transitions** — when the endpoints have no matching geometry (a raster image, an
+opaque `Painter`, or arbitrary composable content), composite them instead of morphing. The
+same caller-owned progress drives painters, bitmaps, and slots:
+
+```kotlin
+MorphImage(
+    from = startFrame,
+    to = endFrame,
+    progress = playbackProgress,
+    transition = ContentTransition.Wipe(
+        direction = WipeDirection.LEFT_TO_RIGHT,
+        feather = 0.2f,
+    ),
+    contentScale = ContentScale.Crop,
+)
+```
+
+Changing frames go through `FrameSource`/`MorphFrames` — the host pushes decoded frames into
+two latest-wins buffers while the caller owns `progress`:
+
+```kotlin
+MorphFrames(
+    from = leftDecoder,          // FrameSource fed with submit(frame)
+    to = rightDecoder,
+    progress = playbackProgress, // one caller-owned clock for both endpoints
+    transition = ContentTransition.Wipe(direction = WipeDirection.LEFT_TO_RIGHT),
+    width = 320.dp,
+    height = 180.dp,
+    contentScale = ContentScale.Crop,
+)
+```
+
 Single-vector drawing (`DrawIcon`, `VectorAnimation`), externally controlled timelines
 (`VectorAnimator`), and the full timeline DSL are covered in
 [the DSL guide](docs/TIMELINE-DSL.md) and
 [the configuration guide](docs/CONFIGURATION.md).
 
-## What's new in 0.2.0
+## What's new in 0.3.0
 
-- `directionTraversal` defaults to `HONOR_DIRECTION`: directional stroke reveals travel
-  toward their requested axis instead of the contour's raw point order (`LEGACY`).
-- Draw anchors split out of the morph-alignment map: `customDrawAnchors` drives
-  `PathStart.CUSTOM`; `customStartOffsets` is deprecated (still honored as the legacy
-  fallback for one release).
-- `PathStart.AUTO` becomes the derived-anchor sentinel; `START` is a literal arc-0 anchor.
-- Typed reveal records (`strokeRevealFor`/`fillRevealFor`) and wire format v2 in
-  `VectorAnimationCodec` (v1 bytes still decode).
-- `ViewportNormalization.FIT`, configurable segment budgets, and compatibility-aware
-  `FallbackStrategy` selection round out planning.
+- `MorphShape` and `MorphPath` extend geometry morphing to Compose `Shape`s and explicit
+  `Path`s, with exact rectangle/rounded-rectangle outlines, adaptive sampling, and
+  per-endpoint `MorphPaint` gradient/stroke paint.
+- Content transitions composite endpoints without interpolatable geometry:
+  `MorphPainter`, `MorphImage`, `MorphContent`, and `MorphingContent` support crossfade,
+  fade-over, directional wipes, and per-endpoint alpha/scale/translation/rotation.
+  `FrameSource`/`MorphFrames` add host-owned, latest-wins frame buffers for video and
+  animation playback.
+- `contentScale` + `alignment` on every vector entry (`Fit` is the default and keeps the
+  historical aspect-fit letterbox).
+- `customStartAlignments` is the modern alignment home for `StartPointStrategy.CUSTOM`;
+  deprecated `customStartOffsets` remains as the legacy fallback for one release.
+- `MorphValidator.validateConfiguration` audits conflicting parameter combinations, and
+  `VectorAnimation.stableKey()` keeps inline-DSL one-shots from restarting on
+  recomposition.
+- Fixes: staggered reveals are squeezed into their draw windows, `FillMode.LINEAR` and
+  `DIRECTIONAL` now render differently, `strokeFill = MORPH` implements its documented
+  choreography, and direction/timing/custom-anchor rules apply at every reveal site.
 
-See [docs/MIGRATION.md](docs/MIGRATION.md) for 0.1 → 0.2 code changes.
+See [docs/MIGRATION.md](docs/MIGRATION.md) for 0.1 → 0.2 code changes and the 0.3.0
+deprecation sweep.
 
 ## Feature matrix
 
 | Area | What you get | Guide |
 | --- | --- | --- |
-| Composables | `MorphIcon`, `MorphVector`, `MorphingIcon`, `VectorAnimator`, `VectorAnimation`, `DrawIcon` — untinted, color-tint, and gradient-tint overloads | [DSL guide](docs/TIMELINE-DSL.md) |
+| Composables | `MorphIcon`, `MorphVector`, `MorphingIcon`, `VectorAnimator`, `VectorAnimation`, `DrawIcon` — untinted, color-tint, and gradient-tint overloads; `contentScale` + `alignment` place the icon viewport in its box (`Fit` default) | [DSL guide](docs/TIMELINE-DSL.md) |
 | Morph intelligence | 8 path-matching strategies, winding normalization, start-point alignment, viewport normalization, compatibility scoring, automatic fallbacks | [Configuration guide](docs/CONFIGURATION.md) |
 | Drawing & reveal | Stroke reveals (forward/reverse/center-out/outside-in/radial), fill sweeps (linear/radial/angular/path traversal), clip reveals, stagger | [Configuration guide](docs/CONFIGURATION.md) |
 | Paint animation | Color and gradient interpolation in `SRGB`/`LINEAR_SRGB`/`OKLAB`/`OKLCH`, gradient geometry + stops, stroke↔fill strategies | [DSL guide](docs/TIMELINE-DSL.md) |
 | Timelines | Vector/path/group/all-path tracks, keyframes, spring easings, stagger, codec serialization | [DSL guide](docs/TIMELINE-DSL.md) |
 | Custom geometry | Per-path override callbacks, custom draw/fill contours, boolean path ops | [Custom geometry](docs/CUSTOM-GEOMETRY.md) |
+| Shape & path morphing | `MorphShape`, `MorphPath` — true geometry morphs for Compose shapes and explicit paths, with exact rectangle/rounded-rectangle outlines, adaptive path sampling, gradient fills, and strokes | [Shape & path guide](docs/SHAPE-PATH-MORPHING.md) |
+| Content transitions | `MorphPainter`, `MorphImage`, `MorphFrames`, `MorphContent` — crossfade, fade-over, directional wipe, and per-endpoint alpha/scale/translation/rotation for opaque content and host-fed frames | [Content transitions](docs/CONTENT-TRANSITIONS.md) |
 | Diagnostics | Compatibility reports, validation, debug overlays, plan cache control, precompilation | [Diagnostics guide](docs/DIAGNOSTICS.md) |
 
 ## Configuration overview
@@ -149,7 +192,8 @@ plans and renders a sane geometry morph. Every field has a full entry in
 | `segmentBudget` / `simplificationTolerance` | `null` / `0.25f` | Cap cubic segments per contour pair; tolerance bounds detail loss. |
 | `viewportNormalization` | `STRETCH` | `STRETCH` scales target axes independently; `FIT` letterboxes uniformly. |
 | `debug` | `null` | `MorphDebugOptions` overlay set for development (see [diagnostics](docs/DIAGNOSTICS.md)). |
-| `customStartOffsets` | `{}` | **Deprecated** — today's `StartPointStrategy.CUSTOM` alignment reads only this map (`customDrawAnchors` never moves geometry); interim until the 0.3 alignment home lands. |
+| `customStartOffsets` | `{}` | **Deprecated** — legacy alignment fallback under `StartPointStrategy.CUSTOM`; the modern home is `customStartAlignments` (new map wins per path). Also the draw-anchor fallback for `PathStart.CUSTOM` when `customDrawAnchors` has no entry. |
+| `customStartAlignments` | `{}` | Per-path 0..1 arc-fraction start overrides for `StartPointStrategy.CUSTOM` geometry alignment; never anchors draws. |
 
 ## Performance
 
@@ -188,8 +232,10 @@ Details and numbers live in [docs/DIAGNOSTICS.md](docs/DIAGNOSTICS.md).
 The `app` module is a runnable tour: every configuration parameter has a control in the
 shared playground panel, and dedicated screens cover `MorphingIcon`, fill reveals,
 gradient endpoints, plan diagnostics, precompile/cache, codec round-trips, and custom
-geometry. Open the project in Android Studio and run the `app` configuration — a tour
-of the screens is in [docs/SHOWCASE-APP.md](docs/SHOWCASE-APP.md).
+geometry. A shape/path paint playground exercises `MorphShape` and `MorphPath` with
+linear/radial/sweep/solid fills, endpoint colors, opacity, and stroke width/cap/join.
+Open the project in Android Studio and run the `app` configuration — a tour of the
+screens is in [docs/SHOWCASE-APP.md](docs/SHOWCASE-APP.md).
 
 ## Documentation
 
@@ -200,6 +246,7 @@ of the screens is in [docs/SHOWCASE-APP.md](docs/SHOWCASE-APP.md).
 | [docs/TIMELINE-DSL.md](docs/TIMELINE-DSL.md) | Building timelines, reveals, gradients, springs, codec. |
 | [docs/DIAGNOSTICS.md](docs/DIAGNOSTICS.md) | Validation (`validate` + `validateConfiguration` categories), reports, debug overlays, cache and precompiler. |
 | [docs/CUSTOM-GEOMETRY.md](docs/CUSTOM-GEOMETRY.md) | Override callbacks, custom contours, clips and boolean operations. |
+| [docs/SHAPE-PATH-MORPHING.md](docs/SHAPE-PATH-MORPHING.md) | `MorphShape`/`MorphPath`: exact outlines, path sampling, viewport rules, gradient/stroke paint, and fallback reporting. |
 | [docs/MIGRATION.md](docs/MIGRATION.md) | 0.1 → 0.2 changes plus the 0.3 deprecation sweep (`BY_POSITION`, `MorphIcon.animation`, `rememberVectorAnimation(definition)`). |
 | [docs/SHOWCASE-APP.md](docs/SHOWCASE-APP.md) | Tour of the demo application. |
 

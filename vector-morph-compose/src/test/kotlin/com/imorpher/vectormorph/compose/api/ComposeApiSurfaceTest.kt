@@ -4,14 +4,31 @@ import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathNode
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import com.imorpher.vectormorph.compose.DrawIcon
+import com.imorpher.vectormorph.compose.FrameSource
 import com.imorpher.vectormorph.compose.MorphCaches
+import com.imorpher.vectormorph.compose.MorphContent
+import com.imorpher.vectormorph.compose.MorphingContent
+import com.imorpher.vectormorph.compose.MorphFrames
 import com.imorpher.vectormorph.compose.MorphIcon
+import com.imorpher.vectormorph.compose.MorphImage
+import com.imorpher.vectormorph.compose.MorphPaint
+import com.imorpher.vectormorph.compose.MorphPainter
+import com.imorpher.vectormorph.compose.MorphPath
 import com.imorpher.vectormorph.compose.MorphPrecompiler
+import com.imorpher.vectormorph.compose.MorphShape
 import com.imorpher.vectormorph.compose.MorphVector
 import com.imorpher.vectormorph.compose.MorphingIcon
 import com.imorpher.vectormorph.compose.VectorAnimation
@@ -22,6 +39,10 @@ import com.imorpher.vectormorph.compose.rememberVectorAnimation
 import com.imorpher.vectormorph.core.animation.VectorAnimation as VectorAnimationDsl
 import com.imorpher.vectormorph.core.model.MorphConfiguration
 import com.imorpher.vectormorph.core.model.MotionPreference
+import com.imorpher.vectormorph.core.transition.ContentEffect
+import com.imorpher.vectormorph.core.transition.ContentEndpoint
+import com.imorpher.vectormorph.core.transition.ContentTransition
+import com.imorpher.vectormorph.core.transition.WipeDirection
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -149,6 +170,7 @@ private fun composableApiSurfaceProbe(
         width = 24.dp,
         height = 24.dp,
         alignment = Alignment.TopStart,
+        contentScale = ContentScale.Crop,
     )
 
     MorphIcon(
@@ -164,6 +186,7 @@ private fun composableApiSurfaceProbe(
         width = 24.dp,
         height = 24.dp,
         alignment = Alignment.Center,
+        contentScale = ContentScale.Crop,
     )
 
     MorphingIcon(
@@ -176,6 +199,183 @@ private fun composableApiSurfaceProbe(
         width = 24.dp,
         height = 24.dp,
         alignment = Alignment.BottomEnd,
+        contentScale = ContentScale.Crop,
+    )
+
+    MorphPainter(
+        from = null,
+        to = null,
+        progress = progress.value,
+        modifier = Modifier,
+        transition = ContentTransition.Wipe(direction = WipeDirection.LEFT_TO_RIGHT, feather = 0.1f),
+        contentDescription = "probe",
+        width = 24.dp,
+        height = 24.dp,
+        alignment = Alignment.Center,
+        contentScale = ContentScale.Fit,
+        motionPreference = MotionPreference.FULL,
+    )
+
+    MorphImage(
+        from = null,
+        to = null,
+        progress = progress.value,
+        modifier = Modifier,
+        transition = ContentTransition.Default,
+        contentDescription = "probe",
+        width = 24.dp,
+        height = 24.dp,
+        alignment = Alignment.Center,
+        contentScale = ContentScale.Crop,
+        motionPreference = MotionPreference.REDUCED,
+    )
+
+    MorphFrames(
+        from = FrameSource(),
+        to = null,
+        progress = progress.value,
+        modifier = Modifier,
+        transition = ContentTransition.Default,
+        contentDescription = "probe",
+        width = 24.dp,
+        height = 24.dp,
+        alignment = Alignment.Center,
+        contentScale = ContentScale.Crop,
+        motionPreference = MotionPreference.FULL,
+    )
+
+    MorphShape(
+        from = RectangleShape,
+        to = RectangleShape,
+        progress = progress.value,
+        modifier = Modifier,
+        configuration = MorphConfiguration.Default,
+        fillFrom = Color.Red,
+        fillTo = Color.Blue,
+        contentDescription = "probe",
+        width = 24.dp,
+        height = 24.dp,
+        alignment = Alignment.Center,
+        contentScale = ContentScale.Crop,
+    )
+
+    MorphShape(
+        from = RectangleShape,
+        to = RectangleShape,
+        progress = progress.value,
+        paintFrom = MorphPaint(
+            fill = Brush.linearGradient(
+                colors = listOf(Color.Red, Color.Blue),
+                start = Offset.Zero,
+                end = Offset(24f, 24f),
+            ),
+            fillAlpha = 0.9f,
+            stroke = SolidColor(Color.Black),
+            strokeAlpha = 0.5f,
+            strokeWidth = 1.dp,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round,
+            strokeLineMiter = 2f,
+        ),
+        paintTo = MorphPaint.solid(Color.Blue),
+        modifier = Modifier,
+        configuration = MorphConfiguration.Default,
+        contentDescription = "probe",
+        width = 24.dp,
+        height = 24.dp,
+        alignment = Alignment.Center,
+        contentScale = ContentScale.Crop,
+    )
+
+    MorphPath(
+        from = Path(),
+        to = Path(),
+        progress = progress.value,
+        modifier = Modifier,
+        configuration = MorphConfiguration.Default,
+        fillFrom = Color.Red,
+        fillTo = Color.Blue,
+        contentDescription = "probe",
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+        width = 24.dp,
+        height = 24.dp,
+        alignment = Alignment.Center,
+        contentScale = ContentScale.Crop,
+    )
+
+    MorphPath(
+        from = Path(),
+        to = Path(),
+        progress = progress.value,
+        paintFrom = MorphPaint(
+            fill = Brush.radialGradient(
+                colors = listOf(Color.Yellow, Color.Magenta),
+                center = Offset(12f, 12f),
+                radius = 12f,
+            ),
+            stroke = Brush.sweepGradient(
+                colors = listOf(Color.Green, Color.Cyan),
+                center = Offset(12f, 12f),
+            ),
+            strokeWidth = 2.dp,
+        ),
+        modifier = Modifier,
+        configuration = MorphConfiguration.Default,
+        pathFillType = androidx.compose.ui.graphics.PathFillType.EvenOdd,
+        contentDescription = "probe",
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+        width = 24.dp,
+        height = 24.dp,
+        alignment = Alignment.Center,
+        contentScale = ContentScale.Crop,
+    )
+
+    MorphContent(
+        progress = progress.value,
+        from = {},
+        to = {},
+        modifier = Modifier,
+        transition = ContentTransition.Crossfade(
+            effects = listOf(ContentEffect.Scale(ContentEndpoint.TO, from = 0.5f, to = 1f)),
+        ),
+        contentAlignment = Alignment.Center,
+        contentDescription = "probe",
+    )
+
+    MorphingContent(
+        target = "probe",
+        to = {},
+        modifier = Modifier,
+        animationSpec = tween(350),
+        transition = ContentTransition.Default,
+        contentAlignment = Alignment.Center,
+        contentDescription = "probe",
+        motionPreference = preference,
+    )
+
+    VectorAnimation(
+        vector = to,
+        animation = VectorAnimationDsl { at(0f) { alpha = 1f } },
+        progress = 1f,
+        modifier = Modifier,
+        contentDescription = "probe",
+        width = 24.dp,
+        height = 24.dp,
+        alignment = Alignment.Center,
+        contentScale = ContentScale.Crop,
+    )
+
+    DrawIcon(
+        vector = to,
+        animation = VectorAnimationDsl { at(0f) { alpha = 1f } },
+        modifier = Modifier,
+        contentDescription = "probe",
+        width = 24.dp,
+        height = 24.dp,
+        alignment = Alignment.Center,
+        contentScale = ContentScale.Fit,
     )
 
     // Referenced so the derived values are not optimized away in review; no runtime meaning.

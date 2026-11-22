@@ -1,6 +1,6 @@
 # Documentation Index
 
-Guides for **ImageVector Morph 0.3.0 (unreleased)**. The top-level
+Guides for **ImageVector Morph 0.3.0**. The top-level
 [README](../README.md) is the entry point; this directory holds the deep dives.
 
 | Document | Purpose |
@@ -9,6 +9,9 @@ Guides for **ImageVector Morph 0.3.0 (unreleased)**. The top-level
 | [TIMELINE-DSL.md](TIMELINE-DSL.md) | Building and wiring animation timelines: targets, tracks, keyframes, easings, stagger, gradient specs, serialization. |
 | [DIAGNOSTICS.md](DIAGNOSTICS.md) | Plan reports, validation (`validate` + `validateConfiguration` issue categories), debug overlays, resolution warnings, cache control (`planningKey` keying), precompilation, custom-callback health. |
 | [CUSTOM-GEOMETRY.md](CUSTOM-GEOMETRY.md) | The per-frame override callback, custom draw/fill contours, clip reveals and morphing masks, boolean path operations. |
+| [CONTENT-TRANSITIONS.md](CONTENT-TRANSITIONS.md) | Visual transitions for opaque painters, raster images, host-fed frame sources (`FrameSource`/`MorphFrames`), and composable slots: modes, effects, progress/semantics/lifecycle contracts, and limits. |
+| [SHAPE-PATH-MORPHING.md](SHAPE-PATH-MORPHING.md) | Geometry morphing for Compose `Shape` and `Path`: exact outlines, sampling, coordinate/viewport rules, gradient/stroke paint, diagnostics, and limits. |
+| [BENCHMARKS.md](BENCHMARKS.md) | Measured microbenchmark budgets (device codec/evaluator/planner/subdivider timings and allocations), the recorded environment, and how to re-run. |
 | [MIGRATION.md](MIGRATION.md) | 0.1.x → 0.2.0 changes with restore recipes, plus the 0.3.0 deprecation sweep. |
 | [SHOWCASE-APP.md](SHOWCASE-APP.md) | Tour of the demo application and its parameter coverage. |
 | [CHANGELOG](../CHANGELOG.md) | Release history. |

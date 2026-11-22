@@ -129,6 +129,7 @@ object MorphPlanner {
 
         val validatorIssues = MorphValidator.validatePlan(pairs, from, normalizedTo)
         issues.addAll(validatorIssues)
+        issues.addAll(MorphValidator.validateSelectorReferences(config, from, normalizedTo, pairs))
 
         val scores = pairs.map { it.score }
         val compatScore = if (scores.isEmpty()) 1f else scores.sum() / scores.size
@@ -525,7 +526,8 @@ object MorphPlanner {
     /**
      * Aligns one contour pair for interpolation: winding normalization (skipped when
      * [preserveTargetWinding] — see [planMorphPair]'s parity guard), start-point alignment
-     * (honoring [MorphConfiguration.customStartOffsets]), arc-length-proportional subdivision
+     * (honoring the custom start-alignment maps — see
+     * [MorphConfiguration.customStartAlignments]), arc-length-proportional subdivision
      * to a common segment count, optional re-alignment for large command-count mismatches,
      * and packing into the per-frame float arrays.
      */
@@ -542,8 +544,8 @@ object MorphPlanner {
         targetContour = t.contours[ti],
         config = config,
         preserveTargetWinding = preserveTargetWinding,
-        customSourceOffset = config.customStartOffsets[f.name],
-        customTargetOffset = config.customStartOffsets[t.name],
+        customSourceOffset = config.customStartAlignments[f.name] ?: config.customStartOffsets[f.name],
+        customTargetOffset = config.customStartAlignments[t.name] ?: config.customStartOffsets[t.name],
     )
 
     /** Aligns two contours (winding, start point, subdivision, packing) for interpolation. */
@@ -575,11 +577,13 @@ object MorphPlanner {
         //    when the caller set a cheaper segment budget.
         val natural = maxOf(source.segments.size, target.segments.size)
         val budget = config.segmentBudget?.coerceAtLeast(2)?.let { minOf(it, natural) } ?: natural
-        var a = fitToBudget(source, budget, config.simplificationTolerance)
-        var b = fitToBudget(target, budget, config.simplificationTolerance)
+        val tolerance = config.simplificationTolerance
+            .takeIf { it.isFinite() && it >= 0f } ?: 0f
+        var a = fitToBudget(source, budget, tolerance)
+        var b = fitToBudget(target, budget, tolerance)
         if (a.segments.size != b.segments.size) {
             // Error-driven reduction may stop at different counts; interpolation requires equal
-            // counts, so lift the smaller side to the larger (both stay within the budget).
+            // counts, so lift the smaller side to the larger (which can exceed the target budget).
             val common = maxOf(a.segments.size, b.segments.size)
             a = Subdivider.equalize(a, common)
             b = Subdivider.equalize(b, common)

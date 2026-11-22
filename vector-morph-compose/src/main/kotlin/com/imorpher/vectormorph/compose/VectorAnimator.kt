@@ -5,6 +5,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 
 /** Fully manual animation driver: the caller owns progress and can seek deterministically. */
@@ -17,6 +18,7 @@ fun VectorAnimator(
     width: Dp = animation.vector.defaultWidth,
     height: Dp = animation.vector.defaultHeight,
     alignment: Alignment = Alignment.Center,
+    contentScale: ContentScale = ContentScale.Fit,
 ) {
     VectorAnimatorCore(
         animation = animation,
@@ -24,6 +26,7 @@ fun VectorAnimator(
         tintFrom = null,
         tintTo = null,
         alignment = alignment,
+        contentScale = contentScale,
         modifier = modifier,
         contentDescription = contentDescription,
         width = width,
@@ -47,6 +50,7 @@ fun VectorAnimator(
     width: Dp = animation.vector.defaultWidth,
     height: Dp = animation.vector.defaultHeight,
     alignment: Alignment = Alignment.Center,
+    contentScale: ContentScale = ContentScale.Fit,
 ) {
     VectorAnimatorCore(
         animation = animation,
@@ -54,6 +58,7 @@ fun VectorAnimator(
         tintFrom = tintFrom,
         tintTo = tintTo,
         alignment = alignment,
+        contentScale = contentScale,
         modifier = modifier,
         contentDescription = contentDescription,
         width = width,
@@ -78,6 +83,7 @@ fun VectorAnimator(
     width: Dp = animation.vector.defaultWidth,
     height: Dp = animation.vector.defaultHeight,
     alignment: Alignment = Alignment.Center,
+    contentScale: ContentScale = ContentScale.Fit,
 ) {
     VectorAnimatorCore(
         animation = animation,
@@ -85,6 +91,7 @@ fun VectorAnimator(
         tintFrom = tintFrom,
         tintTo = tintTo,
         alignment = alignment,
+        contentScale = contentScale,
         modifier = modifier,
         contentDescription = contentDescription,
         width = width,
@@ -107,6 +114,7 @@ private fun VectorAnimatorCore(
     tintFrom: Any?,
     tintTo: Any?,
     alignment: Alignment,
+    contentScale: ContentScale,
     modifier: Modifier,
     contentDescription: String?,
     width: Dp,
@@ -126,5 +134,6 @@ private fun VectorAnimatorCore(
         tintFrom = tintFrom,
         tintTo = tintTo,
         alignment = alignment,
+        contentScale = contentScale,
     )
 }

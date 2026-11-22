@@ -1,6 +1,6 @@
 # IMorpher Hardening & Roadmap — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Systematically remediate all 20 limitations identified in the 2026-10-24 code review: release hygiene, caching correctness, renderer perf, geometry quality, compose API improvements, breaking 0.2 release prep, and ecosystem tooling. KMP migration is deferred to a separate plan.
 
@@ -43,7 +43,7 @@
 - Consumes: nothing
 - Produces: CI runs tests, assemble, apiCheck on push/PR
 
-- [ ] **Step 1: Write the CI workflow file**
+- [x] **Step 1: Write the CI workflow file**
 
 ```yaml
 name: CI
@@ -66,13 +66,13 @@ jobs:
         run: ./gradlew apiCheck
 ```
 
-- [ ] **Step 2: Verify file is valid YAML**
+- [x] **Step 2: Verify file is valid YAML**
 
 ```bash
 python -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add .github/workflows/ci.yml
@@ -90,7 +90,7 @@ git commit -m "ci: add CI workflow running tests and assemble on push/PR"
 - Consumes: `BrushSpec.from(brush: Brush?): BrushSpec?` (unchanged)
 - Produces: consumer-rules.pro with keep directives; test verifies Unknown→crossfade path
 
-- [ ] **Step 1: Write consumer-rules.pro**
+- [x] **Step 1: Write consumer-rules.pro**
 
 Create `vector-morph-core/consumer-rules.pro`:
 ```pro
@@ -106,7 +106,7 @@ Create `vector-morph-core/consumer-rules.pro`:
 }
 ```
 
-- [ ] **Step 2: Write the fallback test**
+- [x] **Step 2: Write the fallback test**
 
 ```kotlin
 // vector-morph-core/src/test/kotlin/com/imorpher/vectormorph/core/gradients/BrushSpecFallbackTest.kt
@@ -147,7 +147,7 @@ class BrushSpecFallbackTest {
 }
 ```
 
-- [ ] **Step 3: Run test to verify it fails**
+- [x] **Step 3: Run test to verify it fails**
 
 ```bash
 .\gradlew :vector-morph-core:testDebugUnitTest --tests "BrushSpecFallbackTest"
@@ -155,7 +155,7 @@ class BrushSpecFallbackTest {
 
 Expected: FAIL — `keepRulesFileExistsAndContainsRequiredEntries` fails (file not yet created).
 
-- [ ] **Step 4: Implement consumer-rules.pro and test the SolidColor path**
+- [x] **Step 4: Implement consumer-rules.pro and test the SolidColor path**
 
 Create `vector-morph-core/consumer-rules.pro` (Step 1), then add a test for `SolidColor` extraction path:
 
@@ -168,13 +168,13 @@ Create `vector-morph-core/consumer-rules.pro` (Step 1), then add a test for `Sol
 }
 ```
 
-- [ ] **Step 5: Run all core tests to verify pass**
+- [x] **Step 5: Run all core tests to verify pass**
 
 ```bash
 .\gradlew :vector-morph-core:testDebugUnitTest
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add vector-morph-core/consumer-rules.pro vector-morph-core/src/test/kotlin/com/imorpher/vectormorph/core/gradients/BrushSpecFallbackTest.kt
@@ -191,7 +191,7 @@ git commit -m "fix: add consumer R8 keep rules for gradient reflection and verif
 - Consumes: all public types from core module
 - Produces: compile-time fixture verifying every public symbol compiles with exact signatures
 
-- [ ] **Step 1: Write the core API fixture**
+- [x] **Step 1: Write the core API fixture**
 
 ```kotlin
 // vector-morph-core/src/test/kotlin/com/imorpher/vectormorph/core/api/CoreApiSurfaceTest.kt
@@ -378,7 +378,7 @@ class CoreApiSurfaceTest {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 ```bash
 .\gradlew :vector-morph-core:testDebugUnitTest --tests "CoreApiSurfaceTest"
@@ -386,7 +386,7 @@ class CoreApiSurfaceTest {
 
 Expected: FAIL — `VectorAnimation.DrawConfig()` constructor signature mismatch (fields changed since last write). Inspect exact compile error and adjust constructor call.
 
-- [ ] **Step 3: Fix constructor calls** based on actual signatures, then:
+- [x] **Step 3: Fix constructor calls** based on actual signatures, then:
 
 ```bash
 .\gradlew :vector-morph-core:testDebugUnitTest --tests "CoreApiSurfaceTest"
@@ -394,7 +394,7 @@ Expected: FAIL — `VectorAnimation.DrawConfig()` constructor signature mismatch
 
 Expected: PASS.
 
-- [ ] **Step 4: Write the compose API fixture**
+- [x] **Step 4: Write the compose API fixture**
 
 ```kotlin
 // vector-morph-compose/src/test/kotlin/com/imorpher/vectormorph/compose/api/ComposeApiSurfaceTest.kt
@@ -514,13 +514,13 @@ class ComposeApiSurfaceTest {
 }
 ```
 
-- [ ] **Step 5: Run compose tests**
+- [x] **Step 5: Run compose tests**
 
 ```bash
 .\gradlew :vector-morph-compose:testDebugUnitTest
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add vector-morph-core/src/test/kotlin/com/imorpher/vectormorph/core/api/CoreApiSurfaceTest.kt vector-morph-compose/src/test/kotlin/com/imorpher/vectormorph/compose/api/ComposeApiSurfaceTest.kt
@@ -538,7 +538,7 @@ git commit -m "test: add API surface fixture files to catch accidental signature
 - Consumes: `PreparedPath.blendMode` field
 - Produces: removed field, all call sites cleaned up
 
-- [ ] **Step 1: Verify blendMode is always SrcOver everywhere**
+- [x] **Step 1: Verify blendMode is always SrcOver everywhere**
 
 ```bash
 .\gradlew :vector-morph-core:testDebugUnitTest :vector-morph-compose:testDebugUnitTest
@@ -546,7 +546,7 @@ git commit -m "test: add API surface fixture files to catch accidental signature
 
 Expected: PASS (baseline).
 
-- [ ] **Step 2: Remove blendMode from PreparedPath class declaration**
+- [x] **Step 2: Remove blendMode from PreparedPath class declaration**
 
 Remove line 52 from `PreparedVector.kt`:
 ```kotlin
@@ -554,15 +554,15 @@ Remove line 52 from `PreparedVector.kt`:
 ```
 And remove the import `import androidx.compose.ui.graphics.BlendMode` if no longer used.
 
-- [ ] **Step 3: Remove blendMode assignment in VectorCompiler.kt:176**
+- [x] **Step 3: Remove blendMode assignment in VectorCompiler.kt:176**
 
 Remove line `blendMode = BlendMode.SrcOver,` from the PreparedPath constructor call.
 
-- [ ] **Step 4: Remove blendMode from normalizeViewport copy**
+- [x] **Step 4: Remove blendMode from normalizeViewport copy**
 
 Remove `blendMode = path.blendMode,` from `MorphPlanner.kt` line ~208.
 
-- [ ] **Step 5: Run tests to verify compile and pass**
+- [x] **Step 5: Run tests to verify compile and pass**
 
 ```bash
 .\gradlew :vector-morph-core:testDebugUnitTest :vector-morph-compose:testDebugUnitTest
@@ -570,7 +570,7 @@ Remove `blendMode = path.blendMode,` from `MorphPlanner.kt` line ~208.
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add vector-morph-core/src/main/kotlin/com/imorpher/vectormorph/core/compiler/VectorCompiler.kt vector-morph-core/src/main/kotlin/com/imorpher/vectormorph/core/model/PreparedVector.kt vector-morph-core/src/main/kotlin/com/imorpher/vectormorph/core/plan/MorphPlanner.kt
@@ -588,7 +588,7 @@ git commit -m "refactor: remove dead blendMode field from PreparedPath (always h
 - Produces: `MorphPlanCache(maxEntries: Int, maxBytes: Long)` with `trimToBytes(bytes: Long)` + `fun estimateBytes(plan: MorphPlan): Long`
   Compose module: `object MorphCaches { fun trim() }`
 
-- [ ] **Step 1: Write the byte-budget tests**
+- [x] **Step 1: Write the byte-budget tests**
 
 ```kotlin
 // vector-morph-core/src/test/kotlin/com/imorpher/vectormorph/core/plan/MorphPlanCacheByteBudgetTest.kt
@@ -643,7 +643,7 @@ class MorphPlanCacheByteBudgetTest {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 ```bash
 .\gradlew :vector-morph-core:testDebugUnitTest --tests "MorphPlanCacheByteBudgetTest"
@@ -651,7 +651,7 @@ class MorphPlanCacheByteBudgetTest {
 
 Expected: FAIL — `MorphPlanCache` constructor doesn't accept `maxBytes` param, `estimateBytes` doesn't exist.
 
-- [ ] **Step 3: Implement byte budget in MorphPlanCache**
+- [x] **Step 3: Implement byte budget in MorphPlanCache**
 
 Modify `vector-morph-core/src/main/kotlin/com/imorpher/vectormorph/core/plan/MorphPlanner.kt`:
 - Change `MorphPlanCache(maxEntries: Int = 32)` → `MorphPlanCache(maxEntries: Int = 32, maxBytes: Long = 16 * 1024 * 1024)`
@@ -699,7 +699,7 @@ class MorphPlanCache(
 }
 ```
 
-- [ ] **Step 4: Implement MorphCaches in compose module**
+- [x] **Step 4: Implement MorphCaches in compose module**
 
 Create `vector-morph-compose/src/main/kotlin/com/imorpher/vectormorph/compose/MorphCaches.kt`:
 ```kotlin
@@ -721,13 +721,13 @@ object MorphCaches {
 
 Also change `private val planCache` → `internal val planCache` in `VectorAnimation.kt:722`.
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 ```bash
 .\gradlew :vector-morph-core:testDebugUnitTest :vector-morph-compose:testDebugUnitTest
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add vector-morph-core/src/main/kotlin/com/imorpher/vectormorph/core/plan/MorphPlanner.kt vector-morph-compose/src/main/kotlin/com/imorpher/vectormorph/compose/MorphCaches.kt vector-morph-compose/src/main/kotlin/com/imorpher/vectormorph/compose/VectorAnimation.kt vector-morph-core/src/test/kotlin/com/imorpher/vectormorth/core/plan/MorphPlanCacheByteBudgetTest.kt
@@ -750,7 +750,7 @@ git commit -m "perf: add byte budget eviction to MorphPlanCache and public trim 
 - Consumes: nothing new
 - Produces: `PreparedVector.contentKey: String` (FNV-1a 64-bit hex), MorphPlanCache keys by contentKey
 
-- [ ] **Step 1: Write the structural key test**
+- [x] **Step 1: Write the structural key test**
 
 ```kotlin
 // vector-morph-core/src/test/kotlin/com/imorth/core/model/StructuralKeyTest.kt
@@ -781,7 +781,7 @@ class StructuralKeyTest {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 ```bash
 .\gradlew :vector-morph-core:testDebugUnitTest --tests "StructuralKeyTest"
@@ -789,7 +789,7 @@ class StructuralKeyTest {
 
 Expected: FAIL — `contentKey` doesn't exist.
 
-- [ ] **Step 3: Add contentKey to PreparedVector**
+- [x] **Step 3: Add contentKey to PreparedVector**
 
 In `PreparedVector.kt`, add:
 ```kotlin
@@ -877,13 +877,13 @@ val contentKey: String by lazy {
 }
 ```
 
-- [ ] **Step 3: Run test**
+- [x] **Step 3: Run test**
 
 ```bash
 .\gradlew :vector-morph-core:testDebugUnitTest --tests "StructuralKeyTest"
 ```
 
-- [ ] **Step 4: Update MorphPlanCache to use contentKey**
+- [x] **Step 4: Update MorphPlanCache to use contentKey**
 
 Change `MorphPlanCache.Key` to use `contentKey` strings instead of `PreparedVector` instances:
 ```kotlin
@@ -893,17 +893,17 @@ data class Key(
 ```
 Update `getOrPut` to extract `contentKey` from prepared vectors.
 
-- [ ] **Step 5: Update compose rememberPlan to pass contentKey**
+- [x] **Step 5: Update compose rememberPlan to pass contentKey**
 
 In `VectorAnimation.kt`, the compose cache currently passes PreparedVector instances to `planCache.getOrPut`. Since we changed Key to use contentKey strings, the callers just pass the same PreparedVector and `getOrPut` reads its `.contentKey` — no API change for callers. Just update the internal implementation.
 
-- [ ] **Step 6: Run all tests**
+- [x] **Step 6: Run all tests**
 
 ```bash
 .\gradlew CORE COMPOSE APP
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add vector-morph-core/src/main/kotlin/com/imorpher/vectormorph/core/model/PreparedVector.kt vector-morph-core/src/main/kotlin/com/imorpher/vectormorph/core/plan/MorphPlanner.kt vector-morph-core/src/test/kotlin/com/imorpher/vectormorph/core/model/StructuralKeyTest.kt
@@ -928,32 +928,32 @@ git commit -m "perf: add structural contentKey to PreparedVector and key plan ca
 - Consumes: private members of MorphRenderer
 - Produces: 5 internal classes + MorphRenderer delegates to them
 
-- [ ] **Step 1: Extract FillPass** — move fill-related private members/functions:
+- [x] **Step 1: Extract FillPass** — move fill-related private members/functions:
   Members: `contourPathCache`, `combinedFillPathCache`, `staticContourCache`, `fillPath`
   Functions: `paintFillWithReveal`, `contoursFillPath`, `staticFillPath`
   New: `internal class FillPass` takes needed scratch from MorphRenderer constructor.
 
-- [ ] **Step 2: Extract StrokePass** — move: `strokePath`, `measure`, reveal extraction, `paintStroke`, `PathMeasure` usage, directional reveal logic.
+- [x] **Step 2: Extract StrokePass** — move: `strokePath`, `measure`, reveal extraction, `paintStroke`, `PathMeasure` usage, directional reveal logic.
   New: `internal class StrokePass`.
 
-- [ ] **Step 3: Extract ClipPass** — move: `maskPath`, `wedgePath`, `radialPath`, `withClipReveal`, `withRadialClip`.
+- [x] **Step 3: Extract ClipPass** — move: `maskPath`, `wedgePath`, `radialPath`, `withClipReveal`, `withRadialClip`.
   New: `internal class ClipPass`.
 
-- [ ] **Step 4: Extract StaticSidePass** — move: `drawStaticContents`, static fade-leg drawing.
+- [x] **Step 4: Extract StaticSidePass** — move: `drawStaticContents`, static fade-leg drawing.
   New: `internal class StaticSidePass`.
 
-- [ ] **Step 5: Extract DebugOverlay** — move: `drawDebugOverlay`, warning banner, anchor dots.
+- [x] **Step 5: Extract DebugOverlay** — move: `drawDebugOverlay`, warning banner, anchor dots.
   New: `internal class DebugOverlay`.
 
 Each extracted class is `internal` in the same package, takes `DrawScope`, `MorphPlan`, `EvaluatedFrame`, `MorphConfiguration`, and scratch fields as constructor params. MorphRenderer constructs them in `render()` and delegates.
 
-- [ ] **Step 6: Run full test suite to verify pixel-identical behavior**
+- [x] **Step 6: Run full test suite to verify pixel-identical behavior**
 
 ```bash
 .\gradlew CORE COMPOSE APP
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add vector-morph-compose/src/main/kotlin/com/imorth/vectormorph/compose/renderer/MorphRenderer.kt vector-morph-compose/src/main/kotlin/com/imorth/vectormorph/compose/renderer/FillPass.kt vector-morph-compose/src/main/kotlin/com/imorth/vectormorph/compose/renderer/StrokePass.kt vector-morph-compose/src/main/kotlin/com/imorth/vectormorph/compose/renderer/ClipPass.kt vector-morph-compose/src/main/kotlin/com/imorth/vectormorph/compose/renderer/StaticSidePass.kt vector-morph-compose/src/main/kotlin/com/imorth/vectormorph/compose/renderer/DebugOverlay.kt
@@ -970,7 +970,7 @@ git commit -m "refactor: split MorphRenderer (2350-line monolith) into 5 focused
 - Consumes: MorphRenderer fields
 - Produces: tight rect helper + solid-color fast path in tint rendering
 
-- [ ] **Step 1: Write tests for tight bounds**
+- [x] **Step 1: Write tests for tight bounds**
 
 ```kotlin
 // vector-morph-compose/src/test/kotlin/com/imorth/vectormorph/compose/renderer/TintBoundsTest.kt
@@ -986,7 +986,7 @@ class TintBoundsTest {
 }
 ```
 
-- [ ] **Step 2: Implement tight bounds computation**
+- [x] **Step 2: Implement tight bounds computation**
 
 In `MorphRenderer.render()`, replace the generous padding:
 ```kotlin
@@ -1001,7 +1001,7 @@ val layerRect = Rect(
 )
 ```
 
-- [ ] **Step 3: Implement solid tint fast path**
+- [x] **Step 3: Implement solid tint fast path**
 
 When both tint endpoints are `BrushSpec.Solid`:
 ```kotlin
@@ -1020,13 +1020,13 @@ when (tintResult) {
 }
 ```
 
-- [ ] **Step 4: Run all tests**
+- [x] **Step 4: Run all tests**
 
 ```bash
 .\gradlew CORE COMPOSE APP
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add vector-morph-compose/src/main/kotlin/com/imorth/vectormorph/compose/renderer/MorphRenderer.kt
@@ -1042,7 +1042,7 @@ git commit -m "perf: tighten tint layer bounds and add solid-color fast path via
 - Consumes: FillPass, StrokePass (from Task 7)
 - Produces: early-out path for p=0/p=1 rendering resting frames
 
-- [ ] **Step 1: Write endpoint test**
+- [x] **Step 1: Write endpoint test**
 
 ```kotlin
 // Test that at p=0, the renderer uses static source contours (no lerp)
@@ -1051,7 +1051,7 @@ git commit -m "perf: tighten tint layer bounds and add solid-color fast path via
 // We verify by ensuring the static path cache is populated at p=0/p=1.
 ```
 
-- [ ] **Step 2: Implement static fast path in FillPass**
+- [x] **Step 2: Implement static fast path in FillPass**
 
 At the beginning of the fill rendering loop, add:
 ```kotlin
@@ -1066,17 +1066,17 @@ if (morphT <= 0f) {
 }
 ```
 
-- [ ] **Step 3: Implement static fast path in StrokePass**
+- [x] **Step 3: Implement static fast path in StrokePass**
 
 Similar early-out for stroke at p=0/p=1 when drawProgress == 1 (fully drawn).
 
-- [ ] **Step 4: Run all tests**
+- [x] **Step 4: Run all tests**
 
 ```bash
 .\gradlew CORE COMPOSE APP
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git commit -m "perf: reuse static geometry at progress endpoints p=0 and p=1"
@@ -1091,7 +1091,7 @@ git commit -m "perf: reuse static geometry at progress endpoints p=0 and p=1"
 - Consumes: `GradientInterpolator.Result` from `evaluateBrush`
 - Produces: per-track memo that reuses `Result` objects when progress doesn't cross quantization boundary
 
-- [ ] **Step 1: Write the brush memo test**
+- [x] **Step 1: Write the brush memo test**
 
 ```kotlin
 @Test fun brushResultMemoizedWithinQuantum() {
@@ -1099,7 +1099,7 @@ git commit -m "perf: reuse static geometry at progress endpoints p=0 and p=1"
 }
 ```
 
-- [ ] **Step 2: Implement memo**
+- [x] **Step 2: Implement memo**
 
 Add per-track memo fields to TimelineEvaluator init:
 ```kotlin
@@ -1118,13 +1118,13 @@ memo.lastResult = result
 return result
 ```
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 ```bash
 .\gradlew CORE COMPOSE
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git commit -m "perf: memoize brush interpolation results in TimelineEvaluator"
@@ -1139,7 +1139,7 @@ git commit -m "perf: memoize brush interpolation results in TimelineEvaluator"
 - Consumes: `VectorAnimation.customizer: CustomVectorAnimation?`
 - Produces: try/catch wrapper that logs once per callback instance, treats as null on subsequent calls
 
-- [ ] **Step 1: Write the crash guard test**
+- [x] **Step 1: Write the crash guard test**
 
 ```kotlin
 @Test fun throwingCustomCallbackDoesNotCrashRender() {
@@ -1148,7 +1148,7 @@ git commit -m "perf: memoize brush interpolation results in TimelineEvaluator"
 }
 ```
 
-- [ ] **Step 2: Implement guard**
+- [x] **Step 2: Implement guard**
 
 ```kotlin
 private val failedCallbacks = Collections.synchronizedSet(HashSet<CustomVectorAnimation>())
@@ -1167,13 +1167,13 @@ return try {
 }
 ```
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 ```bash
 .\gradlew COMPOSE
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git commit -m "fix: guard CustomVectorAnimation callback against crashes with log-once disable"
@@ -1193,7 +1193,7 @@ git commit -m "fix: guard CustomVectorAnimation callback against crashes with lo
 - Consumes: nothing (pure mechanical split)
 - Produces: same public API surface, just distributed across files
 
-- [ ] **Step 1: Mechanical file split**
+- [x] **Step 1: Mechanical file split**
 
 Move composable overloads to their own files:
 - `MorphIcon` (all 6 overloads) → MorphIcon.kt
@@ -1202,13 +1202,13 @@ Move composable overloads to their own files:
 - `VectorAnimation` + `DrawIcon` + `rememberVectorAnimation` → VectorAnimationEntry.kt
 - Shared plumbing: `rememberPlan`, `VectorPlanCanvas`, `rememberAutoPlayProgress`, `VectorAnimatorCore` → internal/PlanRemember.kt
 
-- [ ] **Step 2: Run tests**
+- [x] **Step 2: Run tests**
 
 ```bash
 .\gradlew COMPOSE
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git commit -m "refactor: split 749-line VectorAnimation.kt into focused modules"
@@ -1230,7 +1230,7 @@ git commit -m "refactor: split 749-line VectorAnimation.kt into focused modules"
 - Produces: `Subdivider.reduce(contour: ContourData, targetSegments: Int, tolerance: Float): ContourData`
   `MorphConfiguration(segmentBudget: Int? = null, simplificationTolerance: Float = 0.25f)`
 
-- [ ] **Step 1: Write segment reduction tests**
+- [x] **Step 1: Write segment reduction tests**
 
 ```kotlin
 @Test fun reducePreservesEndpoints() {
@@ -1250,7 +1250,7 @@ git commit -m "refactor: split 749-line VectorAnimation.kt into focused modules"
 }
 ```
 
-- [ ] **Step 2: Implement reduce algorithm**
+- [x] **Step 2: Implement reduce algorithm**
 
 Greedy bottom-up merge: for each pair of adjacent cubics, compute a merged cubic via least-squares midpoint-fit; error = max deviation of all source control points from merged curve; merge the pair with minimum error ≤ tolerance; repeat until target count reached.
 
@@ -1288,7 +1288,7 @@ private fun mergeCubics(a: Cubic, b: Cubic): Cubic {
 }
 ```
 
-- [ ] **Step 3: Wire budget into MorphConfiguration and alignContours**
+- [x] **Step 3: Wire budget into MorphConfiguration and alignContours**
 
 Add `segmentBudget: Int? = null` and `simplificationTolerance: Float = 0.25f` to `MorphConfiguration`.
 
@@ -1310,13 +1310,13 @@ val a2 = if (budgetedTarget >= source.segments.size) Subdivider.equalize(source,
          else Subdivider.reduce(source, budgetedTarget, config.simplificationTolerance)
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```bash
 .\gradlew CORE COMPOSE
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git commit -m "perf: add Subdivider.reduce with error tolerance and segment budget config"
@@ -1333,7 +1333,7 @@ git commit -m "perf: add Subdivider.reduce with error tolerance and segment budg
 - Produces: `internal object Assignment { fun solve(cost: Array<FloatArray>): IntArray }`
 - Consumed by: PathMatcher.matchByCost, MorphPlanner.matchContours
 
-- [ ] **Step 1: Write optimal assignment test**
+- [x] **Step 1: Write optimal assignment test**
 
 ```kotlin
 @Test fun optimalPicksCheaperGlobalAssignment() {
@@ -1349,7 +1349,7 @@ git commit -m "perf: add Subdivider.reduce with error tolerance and segment budg
 }
 ```
 
-- [ ] **Step 2: Implement Hungarian algorithm (O(n³))**
+- [x] **Step 2: Implement Hungarian algorithm (O(n³))**
 
 ```kotlin
 // Assignment.kt — O(n³) shortest-augmenting-path assignment
@@ -1362,7 +1362,7 @@ internal object Assignment {
 }
 ```
 
-- [ ] **Step 3: Wire into PathMatcher and MorphPlanner**
+- [x] **Step 3: Wire into PathMatcher and MorphPlanner**
 
 In both `PathMatcher.matchByCost` and `MorphPlanner.matchContours`:
 ```kotlin
@@ -1377,13 +1377,13 @@ if (from.size <= 32 && to.size <= 32) {
 }
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```bash
 .\gradlew CORE COMPOSE
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git commit -m "perf: use optimal Hungarian assignment for path/contour matching when n≤32"
@@ -1400,7 +1400,7 @@ git commit -m "perf: use optimal Hungarian assignment for path/contour matching 
 - Produces: `enum class ViewportNormalization { STRETCH, FIT }`
 - Consumed by: MorphConfiguration.viewportNormalization
 
-- [ ] **Step 1: Write FIT test**
+- [x] **Step 1: Write FIT test**
 
 ```kotlin
 @Test fun fitPreservesAspectOnDifferentViewport() {
@@ -1413,7 +1413,7 @@ git commit -m "perf: use optimal Hungarian assignment for path/contour matching 
 }
 ```
 
-- [ ] **Step 2: Implement FIT in normalizeViewport**
+- [x] **Step 2: Implement FIT in normalizeViewport**
 
 ```kotlin
 private fun normalizeViewport(vector: PreparedVector, width: Float, height: Float): PreparedVector {
@@ -1434,13 +1434,13 @@ private fun normalizeViewport(vector: PreparedVector, width: Float, height: Floa
 }
 ```
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 ```bash
 .\gradlew CORE COMPOSE
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git commit -m "feat: add ViewportNormalization.FIT option to preserve aspect ratio"
@@ -1457,7 +1457,7 @@ git commit -m "feat: add ViewportNormalization.FIT option to preserve aspect rat
 - Consumes: `PathPairPlan`, MorphPlanner.matchContours, renderer ClipPass
 - Produces: `PathPairPlan.clipPairs: List<ContourPairPlan>` — aligned clip contours
 
-- [ ] **Step 1: Write clip morph test**
+- [x] **Step 1: Write clip morph test**
 
 ```kotlin
 @Test fun clipPairsProducedWhenBothSidesHaveClips() {
@@ -1469,7 +1469,7 @@ git commit -m "feat: add ViewportNormalization.FIT option to preserve aspect rat
 }
 ```
 
-- [ ] **Step 2: Add clipPairs to PathPairPlan**
+- [x] **Step 2: Add clipPairs to PathPairPlan**
 
 ```kotlin
 class PathPairPlan(
@@ -1478,7 +1478,7 @@ class PathPairPlan(
 )
 ```
 
-- [ ] **Step 3: Add clip alignment to MorphPlanner.planMorphPair**
+- [x] **Step 3: Add clip alignment to MorphPlanner.planMorphPair**
 
 When both sides have clipContours:
 ```kotlin
@@ -1497,7 +1497,7 @@ val clipMatch = if (f.clipContours.isNotEmpty() && t.clipContours.isNotEmpty()) 
 
 Then pass `clipPairs = clipMatch` to `PathPairPlan`.
 
-- [ ] **Step 4: Interpolate clip in renderer ClipPass**
+- [x] **Step 4: Interpolate clip in renderer ClipPass**
 
 Replace the midpoint switch:
 ```kotlin
@@ -1510,13 +1510,13 @@ val clipContours = if (pair.clipPairs.isNotEmpty() && clipProgress >= 1f) {
 }
 ```
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 ```bash
 .\gradlew CORE COMPOSE APP
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git commit -m "feat: morph clip geometry between endpoints instead of midpoint switch"
@@ -1538,7 +1538,7 @@ git commit -m "feat: morph clip geometry between endpoints instead of midpoint s
   `MorphIcon(..., onSettled: ((Boolean) -> Unit)? = null)`
 - Consumes: Animatable
 
-- [ ] **Step 1: Write interruptibility + settled callback tests**
+- [x] **Step 1: Write interruptibility + settled callback tests**
 
 ```kotlin
 @Test fun onSettledFiresExactlyOnceWhenAnimationCompletes() {
@@ -1551,7 +1551,7 @@ git commit -m "feat: morph clip geometry between endpoints instead of midpoint s
 }
 ```
 
-- [ ] **Step 2: Implement ProgressController**
+- [x] **Step 2: Implement ProgressController**
 
 ```kotlin
 @Composable
@@ -1580,17 +1580,17 @@ fun rememberMorphAnimation(
 }
 ```
 
-- [ ] **Step 3: Wire onSettled into MorphIcon**
+- [x] **Step 3: Wire onSettled into MorphIcon**
 
 Add `onSettled: ((Boolean) -> Unit)? = null` param to all 3 MorphIcon overloads. Pass to `rememberMorphAnimation`.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```bash
 .\gradlew COMPOSE
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git commit -m "feat: add onSettled callback and rememberMorphAnimation with interruptible Animatable"
@@ -1608,7 +1608,7 @@ git commit -m "feat: add onSettled callback and rememberMorphAnimation with inte
 - Produces: `rememberMotionPreference(userPreference: MotionPreference? = null): MotionPreference`
   All composables: `motionPreference: MotionPreference? = null`
 
-- [ ] **Step 1: Implement rememberMotionPreference**
+- [x] **Step 1: Implement rememberMotionPreference**
 
 ```kotlin
 @Composable
@@ -1626,18 +1626,18 @@ fun rememberMotionPreference(userPreference: MotionPreference? = null): MotionPr
 }
 ```
 
-- [ ] **Step 2: Change all motionPreference params to nullable**
+- [x] **Step 2: Change all motionPreference params to nullable**
 
 In MorphIcon (6 overloads), VectorAnimation (6 overloads), DrawIcon (3 overloads):
 Change `motionPreference: MotionPreference` → `motionPreference: MotionPreference? = null`
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 ```bash
 .\gradlew COMPOSE
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git commit -m "feat: auto-resolve MotionPreference from system settings, nullable params"
@@ -1654,7 +1654,7 @@ git commit -m "feat: auto-resolve MotionPreference from system settings, nullabl
 - Produces: `@Composable fun MorphingIcon(target, ...): Unit`
   `object MorphPrecompiler { suspend fun warm(vararg pairs: Pair<ImageVector, ImageVector>, config: MorphConfiguration = Default) }`
 
-- [ ] **Step 1: Write MorphingIcon tests**
+- [x] **Step 1: Write MorphingIcon tests**
 
 ```kotlin
 @Test fun firstCompositionDrawsTargetAtProgress1() {
@@ -1671,7 +1671,7 @@ git commit -m "feat: auto-resolve MotionPreference from system settings, nullabl
 }
 ```
 
-- [ ] **Step 2: Implement MorphPrecompiler**
+- [x] **Step 2: Implement MorphPrecompiler**
 
 ```kotlin
 object MorphPrecompiler {
@@ -1695,7 +1695,7 @@ object MorphPrecompiler {
 }
 ```
 
-- [ ] **Step 3: Implement MorphingIcon**
+- [x] **Step 3: Implement MorphingIcon**
 
 ```kotlin
 @Composable
@@ -2204,7 +2204,7 @@ private fun MorphingIconInner(...) {
 
 Actually, this is getting convoluted. The simplest: MorphingIcon just manages its own state with a simple `Animatable` and calls `MorphVector` directly. Let me go with that approach. I'll keep the implementation simple in the task step 3.
 
-- [ ] **Step 3: Implement MorphingIcon (simple version)**
+- [x] **Step 3: Implement MorphingIcon (simple version)**
 
 ```kotlin
 @Composable
@@ -2252,13 +2252,13 @@ fun MorphingIcon(
 }
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```bash
 .\gradlew COMPOSE
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git commit -m "feat: add MorphingIcon (chain morph to any new target) and MorphPrecompiler.warm API"
@@ -2276,7 +2276,7 @@ git commit -m "feat: add MorphingIcon (chain morph to any new target) and MorphP
 - Produces: `alignment: Alignment = Alignment.Center` on MorphIcon, MorphVector, VectorAnimator, VectorAnimation, DrawIcon
 - Consumes: MorphRenderer dx/dy computation
 
-- [ ] **Step 1: Write alignment test**
+- [x] **Step 1: Write alignment test**
 
 ```kotlin
 @Test fun centerStartAlignmentShiftsPixelsLeft() {
@@ -2285,11 +2285,11 @@ git commit -m "feat: add MorphingIcon (chain morph to any new target) and MorphP
 }
 ```
 
-- [ ] **Step 2: Add alignment parameter to all composables**
+- [x] **Step 2: Add alignment parameter to all composables**
 
 Add `alignment: Alignment = Alignment.Center` to the 15 public overloads.
 
-- [ ] **Step 3: Wire into MorphRenderer**
+- [x] **Step 3: Wire into MorphRenderer**
 
 In MorphRenderer.render():
 ```kotlin
@@ -2310,13 +2310,13 @@ val (offsetX, offsetY) = alignment.align(
 // with: dx = offsetX
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```bash
 .\gradlew CORE COMPOSE APP
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git commit -m "feat: add Alignment parameter to all composables for custom icon positioning"
@@ -2333,7 +2333,7 @@ git commit -m "feat: add Alignment parameter to all composables for custom icon 
 - Consumes: `VectorAnimationBuilder.addScalar`, `addBrush`
 - Produces: `VectorAnimation.warnings: List<String>` with deprecation/build warnings
 
-- [ ] **Step 1: Write DSL warning tests**
+- [x] **Step 1: Write DSL warning tests**
 
 ```kotlin
 @Test fun degenerateIntervalEmitsWarning() {
@@ -2352,7 +2352,7 @@ git commit -m "feat: add Alignment parameter to all composables for custom icon 
 }
 ```
 
-- [ ] **Step 2: Add warnings to VectorAnimation class**
+- [x] **Step 2: Add warnings to VectorAnimation class**
 
 In `VectorAnimation.kt`, change constructor to include `warnings: List<String> = emptyList()` and add:
 ```kotlin
@@ -2367,17 +2367,17 @@ private val warnings = ArrayList<String>()
 // In build(): return VectorAnimation(..., warnings = warnings.toList())
 ```
 
-- [ ] **Step 3: Wire warnings into codec (don't serialize)**
+- [x] **Step 3: Wire warnings into codec (don't serialize)**
 
 In `VectorAnimationCodec.encode`, don't write warnings. In decode, warnings not included (decoded animations start with empty list).
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```bash
 .\gradlew CORE COMPOSE
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git commit -m "feat: emit build-time warnings for degenerate intervals and overlapping segments in DSL"
@@ -2399,7 +2399,7 @@ git commit -m "feat: emit build-time warnings for degenerate intervals and overl
 - Consumes: nothing
 - Produces: `directionTraversal` default → HONOR_DIRECTION, @Deprecated on legacy APIs, version bump to 0.2.0
 
-- [ ] **Step 1: Flip default and add deprecation**
+- [x] **Step 1: Flip default and add deprecation**
 
 In `MorphConfiguration.kt:60`:
 ```kotlin
@@ -2416,28 +2416,28 @@ In `MorphConfiguration.kt:39`:
 val customStartOffsets: Map<String, Float> = emptyMap(),
 ```
 
-- [ ] **Step 2: Bump version**
+- [x] **Step 2: Bump version**
 
 In `gradle.properties`: `VERSION_NAME=0.2.0`
 
-- [ ] **Step 3: Update tests that pin default behavior**
+- [x] **Step 3: Update tests that pin default behavior**
 
 In test files where default `directionTraversal` behavior is pinned:
 - `vector-morph-compose/src/test/kotlin/com/imorth/vectormorth/compose/TraversalPolicyApplicationTest.kt` — add `directionTraversal = DirectionTraversal.LEGACY` to test config
 - `vector-morph-core/src/test/kotlin/com/imorth/vectormorth/core/model/DirectionTraversalConfigTest.kt` — update default assertion
 - Any other tests pinned to LEGACY default
 
-- [ ] **Step 4: Run all tests**
+- [x] **Step 4: Run all tests**
 
 ```bash
 .\gradlew ALL
 ```
 
-- [ ] **Step 5: Update README direction contract section**
+- [x] **Step 5: Update README direction contract section**
 
 Update `README.md` section "Drawing and stroke reveal" and "Default" references to reflect HONOR_DIRECTION as the new default.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add gradle.properties vector-morph-core/src/main/kotlin/com/imorth/vectormorth/core/model/MorphConfiguration.kt vector-morph-core/src/main/kotlin/com/imorth/vectormorth/core/model/Enums.kt README.md vector-morph-core/src/test/.../*.kt vector-morph-compose/src/test/.../*.kt
@@ -2454,7 +2454,7 @@ git commit -m "feat: flip directionTraversal default to HONOR_DIRECTION, depreca
 - Consumes: existing v1 encode/decode
 - Produces: v2 encode/decode with typed reveal records, backward-compatible v1 decode
 
-- [ ] **Step 1: Dump golden v1 fixture**
+- [x] **Step 1: Dump golden v1 fixture**
 
 Before changing the encoder, generate and commit a v1 binary:
 
@@ -2475,11 +2475,11 @@ Before changing the encoder, generate and commit a v1 binary:
 
 Run this test, capture the bytes, commit as `vector-morph-core/src/test/resources/vman-v1-canonical.vman`.
 
-- [ ] **Step 2: Change VERSION to 2**
+- [x] **Step 2: Change VERSION to 2**
 
 In `VectorAnimationCodec.kt`: `private const val VERSION = 2`
 
-- [ ] **Step 3: Implement v2 typed records**
+- [x] **Step 3: Implement v2 typed records**
 
 In `encode`, write reveal records by property:
 - DRAW_PROGRESS: write mode, start, direction (3 UTF strings)
@@ -2495,7 +2495,7 @@ if (version == 1) {
 }
 ```
 
-- [ ] **Step 4: Test v1 decode and v2 round-trip**
+- [x] **Step 4: Test v1 decode and v2 round-trip**
 
 ```kotlin
 @Test fun v1FixtureDecodesSuccessfully() {
@@ -2512,13 +2512,13 @@ if (version == 1) {
 }
 ```
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 ```bash
 .\gradlew CORE COMPOSE
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add vector-morph-core/src/main/kotlin/com/imorth/vectormorph/core/animation/VectorAnimationCodec.kt vector-morph-core/src/test/resources/vman-v1-canonical.vman
@@ -2538,7 +2538,7 @@ git commit -m "feat: codec v2 with typed reveal records, backward-compatible v1 
 - Consumes: public composables
 - Produces: Robolectric compose tests for contentDescription, default size, INSTANT motion
 
-- [ ] **Step 1: Write compose tests**
+- [x] **Step 1: Write compose tests**
 
 ```kotlin
 @RunWith(RobolectricTestRunner::class)
@@ -2579,13 +2579,13 @@ class SemanticsAndSizeTest {
 }
 ```
 
-- [ ] **Step 2: Run tests**
+- [x] **Step 2: Run tests**
 
 ```bash
 .\gradlew COMPOSE
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add vector-morph-compose/src/test/kotlin/com/imorth/vectormorth/compose/SemanticsAndSizeTest.kt
@@ -2605,19 +2605,19 @@ git commit -m "test: add compose semantics and behavior tests for composables"
 - Consumes: nothing new in library modules
 - Produces: `:benchmark` module with 4 Microbenchmark classes
 
-- [ ] **Step 1: Add benchmark to settings.gradle.kts**
+- [x] **Step 1: Add benchmark to settings.gradle.kts**
 
 ```kotlin
 include(":benchmark")
 ```
 
-- [ ] **Step 2: Add benchmark dependency to catalog**
+- [x] **Step 2: Add benchmark dependency to catalog**
 
 ```toml
 benchmark = { group = "androidx.benchmark", name = "benchmark-junit4", version = "1.4.0" }
 ```
 
-- [ ] **Step 3: Create benchmark build.gradle.kts**
+- [x] **Step 3: Create benchmark build.gradle.kts**
 
 ```kotlin
 plugins {
@@ -2660,7 +2660,7 @@ plugins {
 }
 ```
 
-- [ ] **Step 4: Write 4 Microbenchmark classes**
+- [x] **Step 4: Write 4 Microbenchmark classes**
 
 ```java
 // PlannerBenchmark.java
@@ -2695,7 +2695,7 @@ public class PlannerBenchmark {
 
 Similar for `EvaluatorBenchmark`, `SubdividerBenchmark`, `CodecBenchmark`.
 
-- [ ] **Step 5: Run benchmark tests**
+- [x] **Step 5: Run benchmark tests**
 
 ```bash
 .\gradlew :benchmark:connectedBenchmarkAndroidTest
@@ -2703,7 +2703,7 @@ Similar for `EvaluatorBenchmark`, `SubdividerBenchmark`, `CodecBenchmark`.
 
 Expected: Requires a connected Android device. Document this in task.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add settings.gradle.kts gradle/libs.versions.toml benchmark/
@@ -2721,7 +2721,7 @@ git commit -m "feat: add benchmark module with Microbenchmark classes for core h
 - Consumes: existing dokka plugin
 - Produces: `dokkaHtmlMultiModule` task + publish workflow uploads docs artifact
 
-- [ ] **Step 1: Add dokka to root build.gradle.kts**
+- [x] **Step 1: Add dokka to root build.gradle.kts**
 
 If root has a build.gradle.kts, add:
 ```kotlin
@@ -2734,7 +2734,7 @@ tasks.register<DokkaMultiModuleTask>("dokkaHtmlMultiModule") {
 }
 ```
 
-- [ ] **Step 2: Update publish.yml to build docs**
+- [x] **Step 2: Update publish.yml to build docs**
 
 Add after assemble step:
 ```yaml
@@ -2747,13 +2747,13 @@ Add after assemble step:
     path: build/dokka/
 ```
 
-- [ ] **Step 3: Run docs build**
+- [x] **Step 3: Run docs build**
 
 ```bash
 .\gradlew dokkaHtmlMultiModule
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add build.gradle.kts .github/workflows/publish.yml
@@ -2769,7 +2769,7 @@ git commit -m "docs: add dokka multi-module aggregation and upload to publish wo
 - Consumes: existing README
 - Produces: updated Current boundaries, new Performance section, API surface updates
 
-- [ ] **Step 1: Update §Current boundaries**
+- [x] **Step 1: Update §Current boundaries**
 
 Replace with:
 ```markdown
@@ -2778,7 +2778,7 @@ Replace with:
 [Updated to reflect new features: Alignment, ViewportNormalization, segment budget, clip morphing, MorphingIcon, MorphPrecompiler, etc.]
 ```
 
-- [ ] **Step 2: Add new Performance section**
+- [x] **Step 2: Add new Performance section**
 
 ```markdown
 ## Performance
@@ -2786,11 +2786,11 @@ Replace with:
 [Updated with byte budget, structural keys, brush memoization, static endpoint reuse, tint fast path, segment budget, Hungarian matching, etc.]
 ```
 
-- [ ] **Step 3: Update §Installation**
+- [x] **Step 3: Update §Installation**
 
 VERSION → 0.2.0.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add README.md

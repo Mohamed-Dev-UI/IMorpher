@@ -4,7 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /** Identifies one public library function on the home screen and in navigation. */
-enum class TopicId { DIAGNOSTICS, MORPH_ICON, MORPH_VECTOR, VECTOR_ANIMATOR, DRAW_ICON }
+enum class TopicId { DIAGNOSTICS, MORPH_ICON, MORPH_VECTOR, VECTOR_ANIMATOR, DRAW_ICON, SHAPE_PAINT, CONTENT_TRANSITION }
 
 /**
  * One showcase screen inside a topic. [id] keys navigation; [title]/[description] render in
@@ -194,6 +194,46 @@ object TopicRegistry {
                     id = "draw-icon-playground",
                     title = "Playground",
                     description = "Every draw parameter live: icon, anchor, direction, mode, timing, tint.",
+                ),
+            ),
+        ),
+        TopicDescriptor(
+            id = TopicId.SHAPE_PAINT,
+            title = "Shape & Path",
+            api = "MorphShape(…) · MorphPath(…)",
+            description = "True geometry morphs for Compose shapes and authored paths, with gradient fills and strokes.",
+            previewIcon = IconCatalog.icon("SealSolid"),
+            playgroundId = "shape-paint-playground",
+            items = listOf(
+                ShowcaseItem(
+                    id = "shape-paint-playground",
+                    title = "Paint playground",
+                    description = "Switch between Shape and Path endpoints; tune fill gradients, colors, opacity, stroke width, cap, join, and size.",
+                ),
+            ),
+        ),
+        TopicDescriptor(
+            id = TopicId.CONTENT_TRANSITION,
+            title = "Content Transition",
+            api = "MorphContent(…) · MorphingContent(…) · MorphPainter(…)",
+            description = "Visual transitions for endpoints without geometry: composable slots, painters, and a state-driven wrapper.",
+            previewIcon = IconCatalog.icon("SealOutline"),
+            playgroundId = null,
+            items = listOf(
+                ShowcaseItem(
+                    id = "content-modes",
+                    title = "Progress-driven transition",
+                    description = "Crossfade, fade-over, and wipe modes composited over one caller-owned slider.",
+                ),
+                ShowcaseItem(
+                    id = "content-retarget",
+                    title = "State-driven chaining",
+                    description = "MorphingContent morphs from the last settled slot content when state changes.",
+                ),
+                ShowcaseItem(
+                    id = "content-painter",
+                    title = "Painter endpoints",
+                    description = "Any two Painters composite over the shared progress contract with per-endpoint effects.",
                 ),
             ),
         ),

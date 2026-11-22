@@ -12,6 +12,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import com.imorpher.vectormorph.core.model.FallbackStrategy
 import com.imorpher.vectormorph.core.model.MorphConfiguration
@@ -41,6 +42,7 @@ fun MorphingIcon(
     width: Dp = target.defaultWidth,
     height: Dp = target.defaultHeight,
     alignment: Alignment = Alignment.Center,
+    contentScale: ContentScale = ContentScale.Fit,
 ) {
     val preference = motionPreference ?: rememberMotionPreference()
     var displayed by remember { mutableStateOf(target) }
@@ -63,6 +65,7 @@ fun MorphingIcon(
         width = width,
         height = height,
         alignment = alignment,
+        contentScale = contentScale,
     )
 
     LaunchedEffect(target) {

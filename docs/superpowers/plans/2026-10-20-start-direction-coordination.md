@@ -1,6 +1,6 @@
 # Start/Direction Parameter Coordination Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Make `start: PathStart` and `direction: DrawDirection` two orthogonal, non-conflicting parameters resolved through one precedence contract, so a user's intent never silently depends on which parameter was set last.
 
@@ -66,7 +66,7 @@
 - Consumes: existing `PathStart`, `DrawDirection`, `VectorAnimation.DrawConfig` (unchanged field set).
 - Produces: `PathStart.AUTO` constant consumed by Tasks 3–7; `DrawConfig` default becomes `PathStart.AUTO`; DSL default start becomes `PathStart.AUTO` in `drawProgress`/`strokeReveal`.
 
-- [ ] **Step 1: Write the failing core test**
+- [x] **Step 1: Write the failing core test**
 
 ```kotlin
 // PathStartAutoTest.kt
@@ -79,11 +79,11 @@
 }
 ```
 
-- [ ] **Step 2: Run — expect compile FAIL** (`Unresolved reference: AUTO`)
+- [x] **Step 2: Run — expect compile FAIL** (`Unresolved reference: AUTO`)
 
 `.\gradlew :vector-morph-core:testDebugUnitTest --tests "com.imorpher.vectormorph.core.model.PathStartAutoTest"`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 - Add `AUTO` to `PathStart` with doc: "Derived from `DrawDirection` (top-left when direction is AUTO). Never a literal anchor itself."
 - Change `DrawConfig.start` default to `PathStart.AUTO` (VectorAnimation.kt:140). No other DrawConfig change (codec stays byte-compatible).
@@ -98,7 +98,7 @@ val resolvedStart = if (start == PathStart.AUTO || start == PathStart.START) whe
 
 - Replace the four `?: PathStart.START` renderer fallbacks (lines 853, 1136, 1356, 1810) with `?: PathStart.AUTO`.
 
-- [ ] **Step 4: Write the failing regression probe** (parity: new default must render identical to old explicit default)
+- [x] **Step 4: Write the failing regression probe** (parity: new default must render identical to old explicit default)
 
 ```kotlin
 // DrawDefaultAnchorRegressionTest.kt  (renderMorph helper exists in MorphParameterApplicationTest.kt)
@@ -111,9 +111,9 @@ val resolvedStart = if (start == PathStart.AUTO || start == PathStart.START) whe
 }
 ```
 
-- [ ] **Step 5: Run all core + compose tests** — `.\gradlew :vector-morph-core:test :vector-morph-compose:testDebugUnitTest` → PASS
+- [x] **Step 5: Run all core + compose tests** — `.\gradlew :vector-morph-core:test :vector-morph-compose:testDebugUnitTest` → PASS
 
-- [ ] **Step 6: Commit** — `git add -A && git commit -m "feat: add PathStart.AUTO sentinel with default-parity behavior"`
+- [x] **Step 6: Commit** — `git add -A && git commit -m "feat: add PathStart.AUTO sentinel with default-parity behavior"`
 
 ---
 
@@ -142,7 +142,7 @@ fun resolve(start: PathStart, direction: DrawDirection, mode: DrawMode): Resolve
 
 Resolution rules (pure, no path measurement): `start == AUTO` → anchor from direction table (AUTO→TOP_LEFT) with no warning; explicit start ≠ AUTO → that anchor, plus `START_OVERRIDES_DIRECTION` when start differs from the direction-table anchor and direction is a spatial value (corner/axis/CW/CCW); `mode == OUTSIDE_IN` → `ANCHOR_IGNORED_BY_MODE`; `direction == CENTER_OUT || OUTSIDE_IN` → `CENTER_OUT_DIRECTION_ON_STROKE` (fills keep them valid; stroke callers warn). `DirectionMath.axisFor`/`anchorFor`/`isDiagonal` stay untouched, including the documented diagonal fall-through (DrawOrderAndDirectionTest pins it).
 
-- [ ] **Step 1: Write the failing table test**
+- [x] **Step 1: Write the failing table test**
 
 ```kotlin
 @Test fun autoStartDerivesAnchorFromDirection() {
@@ -165,13 +165,13 @@ Resolution rules (pure, no path measurement): `start == AUTO` → anchor from di
 
 `DirectionMath.anchorPathStartOf(direction: DrawDirection): PathStart` = the mapping currently inlined at MorphRenderer.kt:1531–1541, extracted to core (public; reuse from Task 3).
 
-- [ ] **Step 2: Run — expect FAIL** — `.\gradlew :vector-morph-core:testDebugUnitTest --tests "com.imorpher.vectormorph.core.reveal.DirectionResolverTest"`
+- [x] **Step 2: Run — expect FAIL** — `.\gradlew :vector-morph-core:testDebugUnitTest --tests "com.imorpher.vectormorph.core.reveal.DirectionResolverTest"`
 
-- [ ] **Step 3: Implement `DirectionMath.resolve` + `anchorPathStartOf` in DrawOrder.kt** (extract table from MorphRenderer.kt:1531–1541 verbatim; renderer imports it — no copy)
+- [x] **Step 3: Implement `DirectionMath.resolve` + `anchorPathStartOf` in DrawOrder.kt** (extract table from MorphRenderer.kt:1531–1541 verbatim; renderer imports it — no copy)
 
-- [ ] **Step 4: Run — PASS**, then `.\gradlew :vector-morph-core:test` full suite → PASS (DrawOrderAndDirectionTest must stay green)
+- [x] **Step 4: Run — PASS**, then `.\gradlew :vector-morph-core:test` full suite → PASS (DrawOrderAndDirectionTest must stay green)
 
-- [ ] **Step 5: Commit** — `git commit -m "feat: add DirectionMath.resolve with explicit start/direction precedence"`
+- [x] **Step 5: Commit** — `git commit -m "feat: add DirectionMath.resolve with explicit start/direction precedence"`
 
 ---
 
@@ -187,7 +187,7 @@ Resolution rules (pure, no path measurement): `start == AUTO` → anchor from di
 
 `resolveStartFraction` keeps its `PathMeasure` sampling (nearest-point-to-anchor at 1547–1590) but obtains `anchor` from `DirectionMath.resolve(start, direction, mode)`.anchor instead of the inline 1530–1542 table.
 
-- [ ] **Step 1: Write the failing probe**
+- [x] **Step 1: Write the failing probe**
 
 ```kotlin
 // StrokeResolutionApplicationTest.kt  — open contour (chevron-like biped), FORWARD draw
@@ -211,13 +211,13 @@ Resolution rules (pure, no path measurement): `start == AUTO` → anchor from di
 
 (Implementation detail for the test author: probing `buildRevealedStrokePath` on a single contour Path directly is NOT sufficient — use the same Robolectric pixel-probe harness as `MorphParameterApplicationTest`; helper `litPixelsKey` = normalized lit-pixel centroid + count.)
 
-- [ ] **Step 2: Run — expect FAIL** — `.\gradlew :vector-morph-compose:testDebugUnitTest --tests "com.imorpher.vectormorph.compose.StrokeResolutionApplicationTest"`
+- [x] **Step 2: Run — expect FAIL** — `.\gradlew :vector-morph-compose:testDebugUnitTest --tests "com.imorpher.vectormorph.compose.StrokeResolutionApplicationTest"`
 
-- [ ] **Step 3: Implement** — swap the inline table for `DirectionMath.resolve` (signature per Task 2); pass a warnings collector through the three stroke call sites (pair pass 1150–1154, static side 852–856, traversal path 1353–1361) so Warning rows surface in Task 7. No behavioral changes other than warnings.
+- [x] **Step 3: Implement** — swap the inline table for `DirectionMath.resolve` (signature per Task 2); pass a warnings collector through the three stroke call sites (pair pass 1150–1154, static side 852–856, traversal path 1353–1361) so Warning rows surface in Task 7. No behavioral changes other than warnings.
 
-- [ ] **Step 4: Run** — Task 3 tests + Task 1 regression probe → PASS
+- [x] **Step 4: Run** — Task 3 tests + Task 1 regression probe → PASS
 
-- [ ] **Step 5: Commit** — `git commit -m "refactor: stroke reveal resolves anchors through DirectionMath.resolve"`
+- [x] **Step 5: Commit** — `git commit -m "refactor: stroke reveal resolves anchors through DirectionMath.resolve"`
 
 ---
 
@@ -236,18 +236,18 @@ Resolution rules (pure, no path measurement): `start == AUTO` → anchor from di
 
 Rule: when `HONOR_DIRECTION` and `mode == FORWARD` and drawProgress is mid-reveal, pick the traversal sign whose arc-chord direction (sample anchor → anchor + len/8 via existing `PathMeasure`) has a positive dot product with `DirectionMath.axisFor(direction)`'s travel vector `(axis[2]-axis[0], axis[3]-axis[1])`. `LEGACY` (default) and all non-FORWARD modes: unchanged. Closed contours: `shouldReverseWinding` runs first (unchanged precedence).
 
-- [ ] **Step 1: Write the failing config test**
+- [x] **Step 1: Write the failing config test**
 
 ```kotlin
 @Test fun defaultIsLegacy() = assertEquals(DirectionTraversal.LEGACY, MorphConfiguration().directionTraversal)
 @Test fun honorFlagSurvivesEquality() = assertEquals(MorphConfiguration(), MorphConfiguration())
 ```
 
-- [ ] **Step 2: Run — FAIL (Unresolved reference)** — `.\gradlew :vector-morph-core:testDebugUnitTest --tests "com.imorpher.vectormorph.core.model.DirectionTraversalConfigTest"`
+- [x] **Step 2: Run — FAIL (Unresolved reference)** — `.\gradlew :vector-morph-core:testDebugUnitTest --tests "com.imorpher.vectormorph.core.model.DirectionTraversalConfigTest"`
 
-- [ ] **Step 3: Implement enum + field** (`val directionTraversal: DirectionTraversal = DirectionTraversal.LEGACY`)
+- [x] **Step 3: Implement enum + field** (`val directionTraversal: DirectionTraversal = DirectionTraversal.LEGACY`)
 
-- [ ] **Step 4: Write the failing pixel probe**
+- [x] **Step 4: Write the failing pixel probe**
 
 ```kotlin
 // TraversalPolicyApplicationTest.kt — open contour authored right-to-left ("sandbox-bird" style path)
@@ -261,7 +261,7 @@ Rule: when `HONOR_DIRECTION` and `mode == FORWARD` and drawProgress is mid-revea
 }
 ```
 
-- [ ] **Step 5: Run — FAIL**, **Step 6: Implement** the chord-dot traversal sign in the non-RADIAL stroke branch (MorphRenderer.kt:1144–1159), feeding the existing REVERSE machinery (`-sign` selects mirrored segments); **Step 7: Run** both files → PASS; **Step 8: Commit** — `git commit -m "feat: add MorphConfiguration.directionTraversal to honor draw directions"`
+- [x] **Step 5: Run — FAIL**, **Step 6: Implement** the chord-dot traversal sign in the non-RADIAL stroke branch (MorphRenderer.kt:1144–1159), feeding the existing REVERSE machinery (`-sign` selects mirrored segments); **Step 7: Run** both files → PASS; **Step 8: Commit** — `git commit -m "feat: add MorphConfiguration.directionTraversal to honor draw directions"`
 
 ---
 
@@ -278,7 +278,7 @@ Rule: when `HONOR_DIRECTION` and `mode == FORWARD` and drawProgress is mid-revea
 
 Precedence (renderer-side, one private helper `drawAnchorFor(config, fromName, toName): Float = customDrawAnchors[fromName] ?: customDrawAnchors[toName] ?: customStartOffsets[fromName] ?: customStartOffsets[toName] ?: 0f`, single definition used by all three call sites — fixes C4's inconsistent precedence).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```kotlin
 // CustomDrawAnchorsTest.kt (core)
@@ -294,11 +294,11 @@ Precedence (renderer-side, one private helper `drawAnchorFor(config, fromName, t
 @Test fun alignmentMapDoesNotMovePenWhenNewMapPresent() { /* customStartOffsets populated for morph alignment + customDrawAnchors["p"]=0.0 → pen starts at arc 0 (not the alignment fraction) */ }
 ```
 
-- [ ] **Step 2: Run — FAIL** — `.\gradlew :vector-morph-core:test` + `:vector-morph-compose:testDebugUnitTest`
+- [x] **Step 2: Run — FAIL** — `.\gradlew :vector-morph-core:test` + `:vector-morph-compose:testDebugUnitTest`
 
-- [ ] **Step 3: Implement** field + precedence helper + call-site replacement (854, 1147–1149, 1810–1813).
+- [x] **Step 3: Implement** field + precedence helper + call-site replacement (854, 1147–1149, 1810–1813).
 
-- [ ] **Step 4: Run** both suites → PASS, **Step 5: Commit** — `git commit -m "feat: split customDrawAnchors from customStartOffsets with legacy fallback"`
+- [x] **Step 4: Run** both suites → PASS, **Step 5: Commit** — `git commit -m "feat: split customDrawAnchors from customStartOffsets with legacy fallback"`
 
 ---
 
@@ -314,7 +314,7 @@ Precedence (renderer-side, one private helper `drawAnchorFor(config, fromName, t
 
 Rule (implemented in `build()` step 2): for every compiled `PropKey.FILL_PROGRESS` segment whose `draw != null && draw.fillDirection == null`, set `fillDirection` to the `direction` of the **first** (declaration order) `PropKey.DRAW_PROGRESS` segment on the same `AnimationTarget`, else leave null.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```kotlin
 @Test fun perPathFillInheritsStrokeDirection() {
@@ -331,11 +331,11 @@ Rule (implemented in `build()` step 2): for every compiled `PropKey.FILL_PROGRES
 }
 ```
 
-- [ ] **Step 2: Run — FAIL** — `.\gradlew :vector-morph-core:testDebugUnitTest --tests "com.imorpher.vectormorph.core.animation.FillDirectionInheritanceTest"`
+- [x] **Step 2: Run — FAIL** — `.\gradlew :vector-morph-core:testDebugUnitTest --tests "com.imorpher.vectormorph.core.animation.FillDirectionInheritanceTest"`
 
-- [ ] **Step 3: Implement** — maker `fill()`/`PathAnimationScope.fill` parameter `direction: DrawDirection?` (callers passing nothing compile unchanged because default changes from a constant to null); apply the inheritance rule in `build()` before segment compilation; `reveal()` (builder line 179) already couples explicitly and is untouched.
+- [x] **Step 3: Implement** — maker `fill()`/`PathAnimationScope.fill` parameter `direction: DrawDirection?` (callers passing nothing compile unchanged because default changes from a constant to null); apply the inheritance rule in `build()` before segment compilation; `reveal()` (builder line 179) already couples explicitly and is untouched.
 
-- [ ] **Step 4: Run** — full core suite (codec round-trips unaffected: fillDirection was already nullable) → PASS, **Step 5: Commit** — `git commit -m "feat: per-path fill tracks inherit stroke draw direction at build time"`
+- [x] **Step 4: Run** — full core suite (codec round-trips unaffected: fillDirection was already nullable) → PASS, **Step 5: Commit** — `git commit -m "feat: per-path fill tracks inherit stroke draw direction at build time"`
 
 ---
 
@@ -349,9 +349,9 @@ Rule (implemented in `build()` step 2): for every compiled `PropKey.FILL_PROGRES
 - Consumes: `ResolvedDraw.warnings` collected in Task 3, `MorphDebugOptions.showDirection/showStartPoints` (MorphConfiguration.kt:59–60), `DirectionMath.axisFor`.
 - Produces: overlay draws (a) the resolved anchor marker at the active contour anchor, (b) a short arrow along `axisFor(direction)`, (c) a warning indicator whenever warnings are non-empty.
 
-- [ ] **Step 1: Write the failing probe** — same rendered scene with `debug = MorphDebugOptions(showStartPoints = true, showDirection = true)` produces extra lit pixels vs `debug = null`, and the delta appears at the resolved anchor location; pixels identical when debug is null.
+- [x] **Step 1: Write the failing probe** — same rendered scene with `debug = MorphDebugOptions(showStartPoints = true, showDirection = true)` produces extra lit pixels vs `debug = null`, and the delta appears at the resolved anchor location; pixels identical when debug is null.
 
-- [ ] **Step 2: Run — FAIL**, **Step 3: Implement** overlay drawing (reuse the existing debug paint path for bounding boxes), **Step 4: Run** → PASS, **Step 5: Commit** — `git commit -m "feat: debug overlay shows resolved draw anchors, axes, and conflicts"`
+- [x] **Step 2: Run — FAIL**, **Step 3: Implement** overlay drawing (reuse the existing debug paint path for bounding boxes), **Step 4: Run** → PASS, **Step 5: Commit** — `git commit -m "feat: debug overlay shows resolved draw anchors, axes, and conflicts"`
 
 ---
 
@@ -364,9 +364,9 @@ Rule (implemented in `build()` step 2): for every compiled `PropKey.FILL_PROGRES
 
 **Interfaces:** Consumes codec (`VectorAnimationCodec.encode/decode`), Task 1–6 API. Produces: documentation of the precedence contract.
 
-- [ ] **Step 1: Write the failing test** — round-trip an animation containing `PathStart.AUTO`, `DrawDirection.BOTTOM_TO_TOP`, and a FILL_PROGRESS segment with inherited direction; assert `decoded` renders the same mid-frame as the original (pixel probe via Robolectric as in existing codec render tests, or compare compiled track fields).
+- [x] **Step 1: Write the failing test** — round-trip an animation containing `PathStart.AUTO`, `DrawDirection.BOTTOM_TO_TOP`, and a FILL_PROGRESS segment with inherited direction; assert `decoded` renders the same mid-frame as the original (pixel probe via Robolectric as in existing codec render tests, or compare compiled track fields).
 
-- [ ] **Step 2: Run — FAIL**, **Step 3: Run existing codec suite** (must stay green: enum-name encoding already handles new constants), **Step 4: Update KDoc + README** — rewrite the paragraph at README:199–202 to the Target Contract (1–7 above), document `directionTraversal`, `customDrawAnchors`, `PathStart.AUTO`, and mark `DrawDirection.CENTER_OUT/OUTSIDE_IN` as fill-sweep-only (stroke use emits `CENTER_OUT_DIRECTION_ON_STROKE`). **Step 5: Commit** — `git commit -m "docs: document start/direction precedence contract"`.
+- [x] **Step 2: Run — FAIL**, **Step 3: Run existing codec suite** (must stay green: enum-name encoding already handles new constants), **Step 4: Update KDoc + README** — rewrite the paragraph at README:199–202 to the Target Contract (1–7 above), document `directionTraversal`, `customDrawAnchors`, `PathStart.AUTO`, and mark `DrawDirection.CENTER_OUT/OUTSIDE_IN` as fill-sweep-only (stroke use emits `CENTER_OUT_DIRECTION_ON_STROKE`). **Step 5: Commit** — `git commit -m "docs: document start/direction precedence contract"`.
 
 ---
 
@@ -381,7 +381,7 @@ Rule (implemented in `build()` step 2): for every compiled `PropKey.FILL_PROGRES
 - Consumes: `DirectionMath.resolve` (Task 2) to classify the currently selected combo in the showcase filter/preview layer.
 - Produces: showcase default `pathStart = PathStart.AUTO`; a computed `state.startDirectionCoherence` list of `DrawResolutionWarning` for the current selection, surfaced where the pickers already render (UI wiring follows the existing state observation pattern; no new UI framework).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```kotlin
 @Test fun defaultPathStartIsAuto() = assertEquals(PathStart.AUTO, ShowcaseState().pathStart)
@@ -391,11 +391,11 @@ Rule (implemented in `build()` step 2): for every compiled `PropKey.FILL_PROGRES
 }
 ```
 
-- [ ] **Step 2: Run — FAIL** — `.\gradlew :app:testDebugUnitTest --tests "com.mohamed.dev.ui.imorpher.showcase.DrawParamCoherenceTest"`
+- [x] **Step 2: Run — FAIL** — `.\gradlew :app:testDebugUnitTest --tests "com.mohamed.dev.ui.imorpher.showcase.DrawParamCoherenceTest"`
 
-- [ ] **Step 3: Implement** — default + `startDirectionWarnings(): List<DrawResolutionWarning>` calling `DirectionMath.resolve(state.pathStart, state.drawDirection, drawMode)`; render the warnings where the picker already shows labels (existing `drawDirections`/`pathStarts` lists need no change; `ShowcaseStatePersistence` parses `PathStart.entries` so the new constant persists correctly).
+- [x] **Step 3: Implement** — default + `startDirectionWarnings(): List<DrawResolutionWarning>` calling `DirectionMath.resolve(state.pathStart, state.drawDirection, drawMode)`; render the warnings where the picker already shows labels (existing `drawDirections`/`pathStarts` lists need no change; `ShowcaseStatePersistence` parses `PathStart.entries` so the new constant persists correctly).
 
-- [ ] **Step 4: Run** — app suite incl. `ShowcaseNavigationTest`, `IconPairMorphMatrixTest` → PASS, **Step 5: Commit** — `git commit -m "feat: showcase defaults to PathStart.AUTO and surfaces start/direction conflicts"`
+- [x] **Step 4: Run** — app suite incl. `ShowcaseNavigationTest`, `IconPairMorphMatrixTest` → PASS, **Step 5: Commit** — `git commit -m "feat: showcase defaults to PathStart.AUTO and surfaces start/direction conflicts"`
 
 ---
 

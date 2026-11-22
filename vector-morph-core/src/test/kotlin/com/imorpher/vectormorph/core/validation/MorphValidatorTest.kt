@@ -18,6 +18,7 @@ import com.imorpher.vectormorph.core.model.MorphConfiguration
 import com.imorpher.vectormorph.core.model.PathMapping
 import com.imorpher.vectormorph.core.model.PathMatchingStrategy
 import com.imorpher.vectormorph.core.model.PathStart
+import com.imorpher.vectormorph.core.model.TimingMode
 import com.imorpher.vectormorph.core.plan.IssueSeverity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -150,6 +151,17 @@ class MorphValidatorTest {
         }
     }
 
+    /** A per-path scalar track, with timeline stagger metadata for precedence tests. */
+    private fun pathAnimation(
+        staggerDelay: Float = 0f,
+        staggerOrder: DrawOrderStrategy = DrawOrderStrategy.TOP_LEFT_TO_BOTTOM_RIGHT,
+    ): VectorAnimation = VectorAnimation {
+        allPaths { alpha(from = 0f, to = 1f) }
+        if (staggerDelay > 0f || staggerOrder != DrawOrderStrategy.TOP_LEFT_TO_BOTTOM_RIGHT) {
+            stagger(staggerDelay, staggerOrder)
+        }
+    }
+
     @Test
     fun coherentDefaultConfigIsSilent() {
         val issues = MorphValidator.validateConfiguration(MorphConfiguration.Default)
@@ -176,6 +188,180 @@ class MorphValidatorTest {
     }
 
     @Test
+    fun invalidCustomAnchorValuesAreReportedOnlyWhenTheirConsumerIsActive() {
+        val values = mapOf(
+            "nan" to Float.NaN,
+            "infinite" to Float.POSITIVE_INFINITY,
+            "below" to -0.1f,
+            "above" to 1.1f,
+        )
+        val active = MorphValidator.validateConfiguration(
+            MorphConfiguration(
+                startPoint = com.imorpher.vectormorph.core.model.StartPointStrategy.CUSTOM,
+                customDrawAnchors = values,
+                customStartOffsets = values,
+                animation = strokeStart(PathStart.CUSTOM),
+            ),
+        )
+        assertEquals(4, active.count { it.category == "custom-draw-anchor-invalid" })
+        assertEquals(4, active.count { it.category == "custom-start-offset-invalid" })
+
+        val inactive = MorphValidator.validateConfiguration(
+            MorphConfiguration(customDrawAnchors = values, customStartOffsets = values),
+        )
+        assertTrue("inactive maps are reported as unused, not as active value errors: $inactive",
+            inactive.none { it.category == "custom-draw-anchor-invalid" || it.category == "custom-start-offset-invalid" })
+    }
+
+    @Test
+    fun legacyCustomStartOffsetsWarnWhenNeitherAlignmentNorDrawUsesThem() {
+        val inactive = MorphValidator.validateConfiguration(
+            MorphConfiguration(customStartOffsets = mapOf("a" to 0.5f)),
+        )
+        assertTrue("legacy offsets need CUSTOM alignment or a CUSTOM draw start: $inactive",
+            flagged(inactive, IssueSeverity.WARNING, "custom-start-offsets-unused"))
+
+        val alignment = MorphValidator.validateConfiguration(
+            MorphConfiguration(
+                startPoint = com.imorpher.vectormorph.core.model.StartPointStrategy.CUSTOM,
+                customStartOffsets = mapOf("a" to 0.5f),
+            ),
+        )
+        assertTrue("CUSTOM alignment consumes legacy offsets: $alignment",
+            alignment.none { it.category == "custom-start-offsets-unused" })
+
+        val draw = MorphValidator.validateConfiguration(
+            MorphConfiguration(
+                customStartOffsets = mapOf("a" to 0.5f),
+                animation = strokeStart(PathStart.CUSTOM),
+            ),
+        )
+        assertTrue("legacy offsets remain a draw-anchor fallback: $draw",
+            draw.none { it.category == "custom-start-offsets-unused" })
+    }
+
+@Test
+    fun customStartAlignmentsAreGeometryOnlyAndWarnWhenIdle() {
+        val inactive = MorphValidator.validateConfiguration(
+            MorphConfiguration(customStartAlignments = mapOf("a" to 0.5f)),
+        )
+        assertTrue("alignments need StartPointStrategy.CUSTOM: $inactive",
+            flagged(inactive, IssueSeverity.WARNING, "custom-start-alignments-unused"))
+        assertEquals(1, inactive.count { it.category == "custom-start-alignments-unused" })
+
+        // A PathStart.CUSTOM draw reveal is NOT enough: alignments never anchor the pen,
+        // that remains the customDrawAnchors/customStartOffsets fallback job.
+        val drawOnly = MorphValidator.validateConfiguration(
+            MorphConfiguration(
+                customStartAlignments = mapOf("a" to 0.5f),
+                animation = strokeStart(PathStart.CUSTOM),
+            ),
+        )
+        assertTrue(drawOnly.any { it.category == "custom-start-alignments-unused" })
+
+        val active = MorphValidator.validateConfiguration(
+            MorphConfiguration(
+                startPoint = com.imorpher.vectormorph.core.model.StartPointStrategy.CUSTOM,
+                customStartAlignments = mapOf("a" to 0.5f),
+            ),
+        )
+        assertTrue("CUSTOM alignment consumes the new map: $active",
+            active.none { it.category == "custom-start-alignments-unused" })
+    }
+
+    @Test
+    fun conflictingAlignmentMapsAreReportedAndAgreementIsSilent() {
+        val conflict = MorphValidator.validateConfiguration(
+            MorphConfiguration(
+                startPoint = com.imorpher.vectormorph.core.model.StartPointStrategy.CUSTOM,
+                customStartAlignments = mapOf("a" to 0.25f),
+                customStartOffsets = mapOf("a" to 0.75f),
+            ),
+        )
+        assertEquals(1, conflict.count { it.category == "custom-start-alignment-conflict" })
+
+        // Equal values are redundant but not contradictory.
+        val agrees = MorphValidator.validateConfiguration(
+            MorphConfiguration(
+                customStartAlignments = mapOf("a" to 0.5f),
+                customStartOffsets = mapOf("a" to 0.5f),
+            ),
+        )
+        assertTrue(agrees.none { it.category == "custom-start-alignment-conflict" })
+    }
+
+    @Test
+    fun invalidAlignmentValuesAreReportedOnlyWhenCustomStartIsActive() {
+        val values = mapOf(
+            "nan" to Float.NaN,
+            "below" to -0.1f,
+            "above" to 1.1f,
+        )
+        val active = MorphValidator.validateConfiguration(
+            MorphConfiguration(
+                startPoint = com.imorpher.vectormorph.core.model.StartPointStrategy.CUSTOM,
+                customStartAlignments = values,
+            ),
+        )
+        assertEquals(3, active.count { it.category == "custom-start-alignment-invalid" })
+
+        val inactive = MorphValidator.validateConfiguration(MorphConfiguration(customStartAlignments = values))
+        assertTrue(inactive.none { it.category == "custom-start-alignment-invalid" })
+    }
+
+    @Test
+    fun invalidStaggerDelaysAreReportedForConfigurationAndAnimation() {
+        val badValues = listOf(-0.1f, Float.NaN, Float.POSITIVE_INFINITY)
+        for (delay in badValues) {
+            val configIssue = MorphValidator.validateConfiguration(MorphConfiguration(staggerDelay = delay))
+            assertTrue("invalid configuration stagger $delay: $configIssue",
+                flagged(configIssue, IssueSeverity.WARNING, "stagger-delay-invalid"))
+
+            val animationIssue = MorphValidator.validateConfiguration(
+                MorphConfiguration.Default,
+                animation = VectorAnimation {
+                    allPaths { alpha(from = 0f, to = 1f) }
+                    stagger(delay, DrawOrderStrategy.TOP_LEFT_TO_BOTTOM_RIGHT)
+                },
+            )
+            assertTrue("invalid animation stagger $delay: $animationIssue",
+                flagged(animationIssue, IssueSeverity.WARNING, "stagger-delay-invalid"))
+        }
+    }
+
+    @Test
+    fun customRevealAndMissingPathModesRequireAnAnimationCallback() {
+        val missingStrokeCallback = MorphValidator.validateConfiguration(
+            MorphConfiguration(animation = VectorAnimation {
+                allPaths { drawProgress(mode = DrawMode.CUSTOM) }
+            }),
+        )
+        assertTrue("CUSTOM stroke reveal needs a callback: $missingStrokeCallback",
+            flagged(missingStrokeCallback, IssueSeverity.WARNING, "custom-callback-missing"))
+
+        val missingFillCallback = MorphValidator.validateConfiguration(
+            MorphConfiguration(animation = fillLine(FillMode.DIRECTIONAL, DrawDirection.CUSTOM)),
+        )
+        assertTrue("CUSTOM fill direction needs a callback: $missingFillCallback",
+            flagged(missingFillCallback, IssueSeverity.WARNING, "custom-callback-missing"))
+
+        val missingPathCallback = MorphValidator.validateConfiguration(
+            MorphConfiguration(missingPath = MissingPathBehavior.CUSTOM),
+        )
+        assertTrue("CUSTOM missing-path behavior needs a callback when an orphan is rendered: $missingPathCallback",
+            flagged(missingPathCallback, IssueSeverity.WARNING, "custom-callback-missing"))
+
+        val configuredCallback = MorphValidator.validateConfiguration(
+            MorphConfiguration(animation = VectorAnimation {
+                customAnimation { null }
+                allPaths { drawProgress(mode = DrawMode.CUSTOM) }
+            }),
+        )
+        assertTrue("a callback is present, even though its output is runtime-dependent: $configuredCallback",
+            configuredCallback.none { it.category == "custom-callback-missing" })
+    }
+
+    @Test
     fun unusedCustomDrawOrderWarnsOutsideCustomStrategy() {
         val ordered = MorphValidator.validateConfiguration(
             MorphConfiguration(customDrawOrder = listOf("b", "a")),
@@ -184,12 +370,72 @@ class MorphValidatorTest {
             "customDrawOrder only applies when drawOrder == CUSTOM: $ordered",
             flagged(ordered, IssueSeverity.WARNING, "custom-order-unused"),
         )
-        val honored = MorphValidator.validateConfiguration(
+        val renderOrder = MorphValidator.validateConfiguration(
+            MorphConfiguration(
+                customDrawOrder = listOf("b", "a"),
+                drawOrder = DrawOrderStrategy.CUSTOM,
+                keepRenderOrder = false,
+            ),
+        )
+        assertTrue(
+            "CUSTOM render ordering consumes the list when render order is enabled: $renderOrder",
+            renderOrder.none { it.category == "custom-order-unused" },
+        )
+        val noRenderConsumer = MorphValidator.validateConfiguration(
             MorphConfiguration(customDrawOrder = listOf("b", "a"), drawOrder = DrawOrderStrategy.CUSTOM),
         )
         assertTrue(
-            "a CUSTOM draw order consumes the list (the unrelated z-order note may still fire): $honored",
-            honored.none { it.category == "custom-order-unused" },
+            "CUSTOM draw order is not consumed when declaration paint order is retained: $noRenderConsumer",
+            flagged(noRenderConsumer, IssueSeverity.WARNING, "custom-order-unused"),
+        )
+        val timelineConsumer = MorphValidator.validateConfiguration(
+            MorphConfiguration(customDrawOrder = listOf("b", "a")),
+            animation = pathAnimation(staggerDelay = 0.2f, staggerOrder = DrawOrderStrategy.CUSTOM),
+        )
+        assertTrue(
+            "a CUSTOM timeline stagger consumes the list even when drawOrder is not CUSTOM: $timelineConsumer",
+            timelineConsumer.none { it.category == "custom-order-unused" },
+        )
+    }
+
+    @Test
+    fun geometryBudgetAndToleranceConflictsAreReported() {
+        val clampedBudget = MorphValidator.validateConfiguration(
+            MorphConfiguration(segmentBudget = 1),
+        )
+        assertTrue(
+            "budgets below the planner minimum are raised to two: $clampedBudget",
+            flagged(clampedBudget, IssueSeverity.INFO, "segment-budget-clamped"),
+        )
+
+        val invalidTolerances = listOf(Float.NaN, Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY, -0.1f)
+        for (tolerance in invalidTolerances) {
+            val issues = MorphValidator.validateConfiguration(
+                MorphConfiguration(segmentBudget = 8, simplificationTolerance = tolerance),
+            )
+            assertTrue(
+                "invalid tolerance $tolerance must report the safe planning fallback: $issues",
+                flagged(issues, IssueSeverity.WARNING, "simplification-tolerance-invalid"),
+            )
+        }
+
+        val unusedTolerance = MorphValidator.validateConfiguration(
+            MorphConfiguration(simplificationTolerance = 0.5f),
+        )
+        assertTrue(
+            "a non-default tolerance has no effect without a segment budget: $unusedTolerance",
+            flagged(unusedTolerance, IssueSeverity.INFO, "simplification-tolerance-unused"),
+        )
+
+        val activeTolerance = MorphValidator.validateConfiguration(
+            MorphConfiguration(segmentBudget = 8, simplificationTolerance = 0.5f),
+        )
+        assertTrue(
+            "a valid tolerance is potentially consumed when a segment budget is configured: $activeTolerance",
+            activeTolerance.none {
+                it.category == "simplification-tolerance-unused" ||
+                    it.category == "simplification-tolerance-invalid"
+            },
         )
     }
 
@@ -251,12 +497,52 @@ class MorphValidatorTest {
             "stagger order without a delay changes nothing: $ordered",
             flagged(ordered, IssueSeverity.INFO, "stagger-order-without-delay"),
         )
-        val timed = MorphValidator.validateConfiguration(
+        val configDelayWithoutAnimation = MorphValidator.validateConfiguration(
             MorphConfiguration(staggerOrder = DrawOrderStrategy.BY_NAME, staggerDelay = 0.2f),
         )
         assertTrue(
-            "a real delay activates the stagger order: $timed",
-            timed.none { it.category == "stagger-order-without-delay" },
+            "a config delay without a path timeline still has no consumer: $configDelayWithoutAnimation",
+            flagged(configDelayWithoutAnimation, IssueSeverity.INFO, "stagger-order-without-delay"),
+        )
+        val configDelay = MorphValidator.validateConfiguration(
+            MorphConfiguration(staggerOrder = DrawOrderStrategy.BY_NAME, staggerDelay = 0.2f),
+            animation = pathAnimation(),
+        )
+        assertTrue(
+            "a config delay activates path-scoped timeline ordering: $configDelay",
+            configDelay.none { it.category == "stagger-order-without-delay" },
+        )
+        val timelineDelay = MorphValidator.validateConfiguration(
+            MorphConfiguration(staggerOrder = DrawOrderStrategy.BY_NAME),
+            animation = pathAnimation(staggerDelay = 0.2f),
+        )
+        assertTrue(
+            "a timeline delay activates the config's resolved stagger order: $timelineDelay",
+            timelineDelay.none { it.category == "stagger-order-without-delay" },
+        )
+        val configOrderOverridesTimeline = MorphValidator.validateConfiguration(
+            MorphConfiguration(staggerOrder = DrawOrderStrategy.BY_NAME),
+            animation = pathAnimation(staggerDelay = 0.2f, staggerOrder = DrawOrderStrategy.CUSTOM),
+        )
+        assertTrue(
+            "the non-default config order overrides the timeline order while inheriting its delay: $configOrderOverridesTimeline",
+            configOrderOverridesTimeline.none { it.category == "stagger-order-without-delay" },
+        )
+        val timingOrder = MorphValidator.validateConfiguration(
+            MorphConfiguration(staggerOrder = DrawOrderStrategy.BY_NAME, timing = TimingMode.BY_PATH),
+            animation = pathAnimation(),
+        )
+        assertTrue(
+            "BY_PATH timing consumes its rank order without a stagger delay: $timingOrder",
+            timingOrder.none { it.category == "stagger-order-without-delay" },
+        )
+        val groupOnly = MorphValidator.validateConfiguration(
+            MorphConfiguration(staggerOrder = DrawOrderStrategy.BY_NAME, timing = TimingMode.BY_PATH),
+            animation = VectorAnimation { group("g") { alpha(from = 0f, to = 1f) } },
+        )
+        assertTrue(
+            "group tracks use a shared group clock, not path order ranks: $groupOnly",
+            flagged(groupOnly, IssueSeverity.INFO, "stagger-order-without-delay"),
         )
     }
 
@@ -330,5 +616,59 @@ class MorphValidatorTest {
             MorphConfiguration(customMappings = mappings, pathMatching = PathMatchingStrategy.CUSTOM),
         )
         assertTrue("CUSTOM matching is built on the mappings: $custom", custom.isEmpty())
+    }
+
+    @Test
+    fun activeCustomMappingsReportEmptyAndDuplicateSelectors() {
+        for (strategy in listOf(PathMatchingStrategy.AUTO, PathMatchingStrategy.CUSTOM)) {
+            val issues = MorphValidator.validateConfiguration(
+                MorphConfiguration(
+                    pathMatching = strategy,
+                    customMappings = listOf(
+                        PathMapping("", "target"),
+                        PathMapping("source", "  "),
+                        PathMapping("duplicate-source", "first-target"),
+                        PathMapping("duplicate-source", "second-target"),
+                        PathMapping("first-source", "duplicate-target"),
+                        PathMapping("second-source", "duplicate-target"),
+                    ),
+                ),
+            )
+            assertEquals(2, issues.count { it.category == "custom-mapping-name-empty" })
+            assertEquals(1, issues.count { it.category == "custom-mapping-source-duplicate" })
+            assertEquals(1, issues.count { it.category == "custom-mapping-target-duplicate" })
+            assertTrue(issues.all { it.severity == IssueSeverity.WARNING })
+        }
+    }
+
+    @Test
+    fun activeCustomOrderReportsEmptyAndDuplicateSelectors() {
+        val issues = MorphValidator.validateConfiguration(
+            MorphConfiguration(
+                customDrawOrder = listOf("", "  ", "repeat", "repeat"),
+                drawOrder = DrawOrderStrategy.CUSTOM,
+                keepRenderOrder = false,
+            ),
+        )
+
+        assertEquals(2, issues.count { it.category == "custom-order-name-empty" })
+        assertEquals(1, issues.count { it.category == "custom-order-name-duplicate" })
+        assertTrue(issues.all { it.severity == IssueSeverity.WARNING })
+    }
+
+    @Test
+    fun inactiveMalformedSelectorsOnlyReportUnusedConfiguration() {
+        val issues = MorphValidator.validateConfiguration(
+            MorphConfiguration(
+                pathMatching = PathMatchingStrategy.BY_NAME,
+                customMappings = listOf(PathMapping("", ""), PathMapping("", "target")),
+                customDrawOrder = listOf("", "repeat", "repeat"),
+            ),
+        )
+
+        assertTrue(issues.any { it.category == "custom-mappings-unused" })
+        assertTrue(issues.any { it.category == "custom-order-unused" })
+        assertTrue(issues.none { it.category.startsWith("custom-mapping-") && it.category != "custom-mappings-unused" })
+        assertTrue(issues.none { it.category.startsWith("custom-order-name-") })
     }
 }

@@ -1,9 +1,9 @@
 # Showcase app tour
 
-The `:app` module is a single-activity demo of everything **ImageVector Morph 0.2.0**
-can do. Every screen drives the real library APIs — nothing is mocked — and the four
-API playgrounds share one full-coverage configuration panel so you can learn each
-control once and know it everywhere.
+The `:app` module is a single-activity demo of everything **ImageVector Morph 0.3.0**
+can do. Every screen drives the real library APIs — nothing is mocked. The four
+icon/vector playgrounds share one full-coverage configuration panel, while the
+shape/path paint playground exposes the endpoint paint contract directly.
 
 Run it from the repository root:
 
@@ -15,11 +15,12 @@ Run it from the repository root:
 
 ## Home
 
-The home screen lists five topic cards. Each card plays one of the library's visual
+The home screen lists six topic cards. Each card plays one of the library's visual
 signatures (a clip reveal for Diagnostics, a state-driven icon morph for MorphIcon,
 a scrubbed morph for MorphVector, a keyframed playhead for VectorAnimator, a pen
-reveal for DrawIcon) and states what the topic covers: **N showcases · 1
-playground**, or **N diagnostic screens** for the Diagnostics topic, which
+reveal for DrawIcon, and a gradient/stroke shape morph for Shape & Path) and states
+what the topic covers: **N showcases · 1 playground**, **1 playground** for a
+topic with only a playground, or **N diagnostic screens** for Diagnostics, which
 intentionally has no state-driven playground.
 
 The top bar carries the shared **Reset playgrounds** action: it restores every
@@ -78,14 +79,32 @@ own back button) always returns the same way the system UI expects.
 | Clip reveal | `clipReveal` opens a named group's inherited mask along a directional edge. |
 | Playground | Every draw parameter live: start anchor, direction, mode, duration, and tint. |
 
+### Shape & Path — *geometry with endpoint paint*
+
+| Screen | What it demonstrates |
+| --- | --- |
+| Paint playground | Switch between a Compose `Shape` pair (cut-corner octagon → circle) and authored `Path` endpoints (star → squircle blob). Tune linear, radial, sweep, or solid fills; per-endpoint fill colors; fill and stroke opacity; stroke colors, width in dp, cap, and join; and the rendered size. Shape brush coordinates are layout pixels, path brushes use the authored 100 × 100 viewport. |
+
+### Content Transition — *endpoints without geometry*
+
+See [CONTENT-TRANSITIONS.md](CONTENT-TRANSITIONS.md) for the layer's contract.
+
+| Screen | What it demonstrates |
+| --- | --- |
+| Progress-driven transition | Two composable slots composited over one caller-owned slider with `Wipe` (plus a scale effect on the incoming endpoint), `Crossfade`, and `FadeOver`. |
+| State-driven chaining | `MorphingContent` under state changes: quick taps retarget, and the morph always restarts from the last settled slot content. |
+| Painter endpoints | `MorphPainter` over two opaque `ColorPainter`s with a crossfade and a `Fade` effect on the outgoing painter. |
+
 ---
 
 ## The shared configuration panel
 
-All four playgrounds render the same `ConfigurationPanel`: twelve collapsible
-sections (Matching and Start & direction start expanded), with **default-valued
-controls never posed as decisions** — you only see sections that can change the
-render's behavior, not a wall of knobs.
+The four icon/vector playgrounds render the same `ConfigurationPanel`: twelve
+collapsible sections (Matching and Start & direction start expanded), with
+**default-valued controls never posed as decisions** — you only see sections that
+can change the render's behavior, not a wall of knobs. The Shape & Path paint
+playground intentionally has its own compact paint controls instead: its inputs
+are geometry and endpoint brushes, not an `ImageVector` pairing.
 
 | Section | Controls |
 | --- | --- |

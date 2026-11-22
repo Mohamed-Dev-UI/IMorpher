@@ -12,19 +12,21 @@ import com.imorpher.vectormorph.core.animation.VectorAnimation
  * Precedence rules documented here and enforced since 0.3.0 (see docs/CONFIGURATION.md for
  * the reference table):
  * - **Ordering split.** [drawOrder] controls render z-order only when [keepRenderOrder] is
- *   false; stagger *timing* is always assigned from [staggerOrder] (+ [staggerDelay]).
+ *   false; stagger *timing* and `TimingMode.BY_PATH` ranks use [staggerOrder].
  *   Strategies reordering reveals never touch paint order while `keepRenderOrder = true`.
- * - **Stagger override rule.** the config's stagger fields supply the timeline's stagger
- *   only when [staggerDelay] > 0 **or** [staggerOrder] differs from the default; otherwise
- *   the [animation] timeline's own stagger stands. A config can override a timeline's
- *   stagger but cannot cancel it.
+ * - **Stagger override rule.** the config's order supplies the timeline order only when
+ *   [staggerDelay] > 0 or [staggerOrder] differs from the default. A positive config delay
+ *   overrides the timeline delay; otherwise its delay is inherited. Zero config delay does
+ *   not cancel a timeline delay.
  * - **[missingPath] under crossfade fallbacks.** whenever `fallback = CROSSFADE` /
  *   `SCALE_CROSSFADE` crossfades every pair, [missingPath] is ignored — the plan records a
  *   WARNING issue (see `MorphValidator.validateConfiguration` / `MorphPlan.report`).
  * - **Dead-wire warnings.** fields that only apply under a specific strategy or knob lane
  *   ([customDrawAnchors] needs a `PathStart.CUSTOM` draw track; [customDrawOrder] needs
- *   `drawOrder = CUSTOM`; [customMappings] only apply under `AUTO`/`CUSTOM` matching) are
- *   audited statically by `MorphValidator.validateConfiguration`.
+ *   `drawOrder = CUSTOM` with `keepRenderOrder = false`, or an active path timeline with a
+ *   resolved `staggerOrder = CUSTOM`; [customMappings] only apply under `AUTO`/`CUSTOM` matching;
+ *   [simplificationTolerance] needs [segmentBudget]) are audited statically by
+ *   `MorphValidator.validateConfiguration`.
  *
  * Planning/rendering split: only the fields `MorphPlanner` consumes participate in
  * `planningKey()` (`vector-morph-core/.../model/PlanningKey.kt`); render-only fields
@@ -36,11 +38,14 @@ data class MorphConfiguration(
     val startPoint: StartPointStrategy = StartPointStrategy.AUTO,
     val pathDirection: PathDirectionStrategy = PathDirectionStrategy.AUTO,
     /**
-     * Draw-order *timing* ranking, and render z-order only when `keepRenderOrder = false`.
-     * Stagger timing is always assigned from [staggerOrder] — this field never feeds it.
+     * Render z-order strategy, consulted only when [keepRenderOrder] is false. Timeline
+     * stagger offsets and `TimingMode.BY_PATH` ranks use [staggerOrder] instead.
      */
     val drawOrder: DrawOrderStrategy = DrawOrderStrategy.BY_INDEX,
-    /** Explicit order (path names) used when [drawOrder] == CUSTOM. */
+    /**
+     * Explicit path-name order consumed by CUSTOM render ordering or a CUSTOM timeline
+     * order when its path tracks use stagger delay or `TimingMode.BY_PATH` ranks.
+     */
     val customDrawOrder: List<String> = emptyList(),
     val missingPath: MissingPathBehavior = MissingPathBehavior.FADE,
     val fallback: FallbackStrategy = FallbackStrategy.AUTO,
@@ -49,7 +54,7 @@ data class MorphConfiguration(
     val strokeFill: StrokeFillStrategy = StrokeFillStrategy.AUTO,
     /** Optional timeline. When null, a plain geometry/color morph drives everything. */
     val animation: VectorAnimation? = null,
-    /** Stagger applied to vector-level draw/reveal intervals, in normalized timeline units. */
+    /** Positive normalized per-path timeline delay; overrides the embedded animation's delay. */
     val staggerDelay: Float = 0f,
     val staggerOrder: DrawOrderStrategy = DrawOrderStrategy.TOP_LEFT_TO_BOTTOM_RIGHT,
     /** Explicit source→target path name mappings (strategy CUSTOM, or overrides under AUTO). */
@@ -91,15 +96,19 @@ data class MorphConfiguration(
      */
     val directionTraversal: DirectionTraversal = DirectionTraversal.HONOR_DIRECTION,
     /**
-     * Optional cap on the cubic segments each contour pair uses. Null keeps the natural
-     * `max(source, target)` count. A budget trades silhouette detail for cheaper per-frame
-     * interpolation of dense icons; see [simplificationTolerance].
+     * Target ceiling for cubic segments per contour pair. Null keeps the natural
+     * `max(source, target)` count; values below 2 are raised to the planner minimum of 2.
+     * Reduction can stop above this target when another merge would exceed
+     * [simplificationTolerance], preserving silhouette quality at the expense of the budget.
      */
     val segmentBudget: Int? = null,
     /**
      * Maximum sampled deviation (in viewport units) tolerated while [segmentBudget] reduces a
-     * contour. When no merge stays within tolerance the two sides are re-equalized at the
-     * largest count that fits the budget, so interpolation still sees equal segment counts.
+     * contour. It has no effect when [segmentBudget] is null. Invalid values (negative or
+     * non-finite) are treated as zero during planning and reported by
+     * `MorphValidator.validateConfiguration`. When no merge stays within tolerance, each side
+     * may remain above the target budget; the sides are re-equalized at the largest surviving
+     * count so interpolation still sees equal segment counts.
      */
     val simplificationTolerance: Float = 0.25f,
     /**
@@ -108,6 +117,19 @@ data class MorphConfiguration(
      * target's aspect ratio and centres it instead.
      */
     val viewportNormalization: ViewportNormalization = ViewportNormalization.STRETCH,
+    /**
+     * Modern home for per-path normalized arc-fraction (0..1) start overrides under
+     * [StartPointStrategy.CUSTOM] — the morph-alignment data whose legacy home was the
+     * deprecated [customStartOffsets]. For a path name, this map wins and
+     * [customStartOffsets] keeps serving as its legacy fallback, so callers migrating off
+     * the deprecated map keep their 0.1.x pixels until every entry moves here.
+     *
+     * [customDrawAnchors] never moves geometry: the anchor map and this alignment map
+     * describe different concepts and must not cross. Populate both maps for the same
+     * path with different values and the validator reports `custom-start-alignment-conflict`
+     * so alignment never silently has two owners.
+     */
+    val customStartAlignments: Map<String, Float> = emptyMap(),
 ) {
     companion object {
         /** Plain, well-behaved default: geometry morph with auto strategies. */

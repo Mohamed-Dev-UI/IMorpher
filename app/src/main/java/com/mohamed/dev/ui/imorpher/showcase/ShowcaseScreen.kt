@@ -36,6 +36,9 @@ import com.mohamed.dev.ui.imorpher.showcase.topics.ChainedIconShowcase
 import com.mohamed.dev.ui.imorpher.showcase.topics.CachesShowcase
 import com.mohamed.dev.ui.imorpher.showcase.topics.ClipRevealShowcase
 import com.mohamed.dev.ui.imorpher.showcase.topics.CodecShowcase
+import com.mohamed.dev.ui.imorpher.showcase.topics.ContentPainterShowcase
+import com.mohamed.dev.ui.imorpher.showcase.topics.ContentRetargetShowcase
+import com.mohamed.dev.ui.imorpher.showcase.topics.ContentTransitionModesShowcase
 import com.mohamed.dev.ui.imorpher.showcase.topics.CustomAnimationShowcase
 import com.mohamed.dev.ui.imorpher.showcase.topics.DrawIconPlayground
 import com.mohamed.dev.ui.imorpher.showcase.topics.FillRevealShowcase
@@ -49,6 +52,7 @@ import com.mohamed.dev.ui.imorpher.showcase.topics.MorphVectorPlayground
 import com.mohamed.dev.ui.imorpher.showcase.topics.MotionPreferenceShowcase
 import com.mohamed.dev.ui.imorpher.showcase.topics.PenRevealShowcase
 import com.mohamed.dev.ui.imorpher.showcase.topics.PlanReportShowcase
+import com.mohamed.dev.ui.imorpher.showcase.topics.ShapePaintPlayground
 import com.mohamed.dev.ui.imorpher.showcase.topics.StaggerShowcase
 import com.mohamed.dev.ui.imorpher.showcase.topics.StrokeFillShowcase
 import com.mohamed.dev.ui.imorpher.showcase.topics.StateMorphShowcase
@@ -257,6 +261,10 @@ internal fun ShowcaseContent(topicId: TopicId, itemId: String, state: ShowcaseSt
         "draw-icon-follow-fill" -> FollowFillShowcase()
         "draw-icon-clip" -> ClipRevealShowcase()
         "draw-icon-playground" -> DrawIconPlayground(state)
+        "shape-paint-playground" -> ShapePaintPlayground()
+        "content-modes" -> ContentTransitionModesShowcase()
+        "content-retarget" -> ContentRetargetShowcase()
+        "content-painter" -> ContentPainterShowcase()
     }
 }
 
@@ -269,4 +277,6 @@ private fun ShowcaseContentDispatched(itemId: String): Boolean = itemId in setOf
     "vector-animator-keyframes", "vector-animator-stagger", "vector-animator-fill",
     "vector-animator-gradient", "vector-animator-playground",
     "draw-icon-pen", "draw-icon-follow-fill", "draw-icon-clip", "draw-icon-playground",
+    "shape-paint-playground",
+    "content-modes", "content-retarget", "content-painter",
 )
